@@ -1,8 +1,8 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.1.2
+-- Version: 2.1.3
 -- Purpose: Main document script with configuration, logging, and track management
 
-local VERSION = "2.1.2"
+local VERSION = "2.1.3"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -21,15 +21,12 @@ local useConsole = false  -- Fallback to console if no logger found
 local function findLogger()
     -- Try to find logger at root first
     logger = root:findByName("logger")
-    if logger then return logger end
-    
-    -- Search in all children recursively
-    local allControls = root:findAllByName("logger", true)
-    if allControls and #allControls > 0 then
-        logger = allControls[1]
-        return logger
+    if logger then 
+        return logger 
     end
     
+    -- If not found at root, logger might be in a pager or nested
+    -- For now, we'll use console as fallback
     return nil
 end
 
@@ -170,6 +167,8 @@ function init()
     
     if useConsole then
         log("No logger text object found - using console output")
+    else
+        log("Logger found - output will appear in logger text object")
     end
     
     -- Parse configuration
