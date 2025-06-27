@@ -1,16 +1,22 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.1.1
+-- Version: 1.1.2
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
 
 -- Version logging
-local SCRIPT_VERSION = "1.1.1"
+local SCRIPT_VERSION = "1.1.2"
 
--- Use global log function if available, otherwise fall back to print
+-- Use log function if available from helper script, otherwise fall back to print
 local function safeLog(...)
-    if _G.log then
-        _G.log(...)
+    if log then
+        log(...)
     else
-        print("[group_init.lua]", ...)
+        local args = {...}
+        local message = "[group_init.lua] "
+        for i, v in ipairs(args) do
+            message = message .. tostring(v)
+            if i < #args then message = message .. " " end
+        end
+        print(message)
     end
 end
 
