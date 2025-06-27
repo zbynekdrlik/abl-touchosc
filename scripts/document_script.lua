@@ -1,8 +1,8 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.5.4
+-- Version: 2.5.6
 -- Purpose: Main document script with configuration, logging, and track management
 
-local VERSION = "2.5.4"
+local VERSION = "2.5.6"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -49,12 +49,10 @@ local function parseConfiguration()
     end
     
     if not configText or not configText.values.text then
-        log("Configuration not found yet - waiting for registration")
         return false
     end
     
     local text = configText.values.text
-    log("Parsing configuration...")
     
     -- Clear old config
     config.connections = {}
@@ -103,7 +101,7 @@ local function parseConfiguration()
         end
     end
     
-    log("Config loaded: " .. connectionCount .. " connections, " .. unfoldCount .. " unfold groups")
+    log("Config: " .. connectionCount .. " connections, " .. unfoldCount .. " unfolds")
     return true
 end
 
@@ -122,7 +120,7 @@ function onReceiveNotify(action, value)
     elseif action == "register_configuration" then
         -- Configuration text is notifying us
         configText = value
-        log("Configuration registered")
+        log("Config registered")
         
         -- Parse the configuration immediately
         parseConfiguration()
@@ -139,7 +137,7 @@ function getConnectionForInstance(instance)
 end
 
 function refreshAllGroups()
-    log("=== GLOBAL REFRESH INITIATED ===")
+    log("=== GLOBAL REFRESH ===")
     
     -- Update status
     local status = root:findByName("global_status")
@@ -159,15 +157,14 @@ function refreshAllGroups()
     -- Trigger refresh on all groups
     for _, group in ipairs(groups) do
         group:notify("refresh_tracks")
-        log("Refreshing " .. group.name)
     end
+    
+    log("Refreshed " .. #groups .. " groups")
     
     -- Update status
     if status then
         status.values.text = "Ready"
     end
-    
-    log("=== GLOBAL REFRESH COMPLETE ===")
 end
 
 -- === OSC ROUTING HELPER ===
@@ -185,22 +182,16 @@ function init()
     
     -- Try to find logger
     logger = root:findByName("logger", true)
-    if logger then
-        log("Logger found")
-    end
     
     -- Try to parse configuration
-    if not parseConfiguration() then
-        log("Waiting for configuration...")
-    end
+    parseConfiguration()
     
     -- Original init commands
-    log("Initializing OSC connections...")
     sendOSC('/live/track/stop_listen/*', '*')
     sendOSC('/live/song/get/track_names')
     sendOSC('/live/song/start_listen/is_playing')
     
-    log("Init complete")
+    log("Ready")
 end
 
 -- === OSC RECEIVE HANDLER ===
