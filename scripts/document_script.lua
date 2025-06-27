@@ -1,8 +1,8 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.5.2
+-- Version: 2.5.3
 -- Purpose: Main document script with configuration, logging, and track management
 
-local VERSION = "2.5.2"
+local VERSION = "2.5.3"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -229,6 +229,13 @@ function onReceiveOSC(message, connections)
         
         log("Received track names from " .. (sourceInstance or "unknown") .. " (connection " .. (sourceConnection or "?") .. ")")
         
+        -- Debug: Log first few track names
+        local trackCount = #arguments
+        log("  Total tracks: " .. trackCount)
+        for i = 1, math.min(5, trackCount) do
+            log("  Track " .. (i-1) .. ": " .. arguments[i].value)
+        end
+        
         for i = 1, #arguments do
             local track_index = i - 1
             local track_name = arguments[i].value
@@ -238,11 +245,17 @@ function onReceiveOSC(message, connections)
                 if track_name == unfold_config.group_name then
                     -- Check if this unfold should apply to this instance
                     if unfold_config.instance == "all" or unfold_config.instance == sourceInstance then
-                        log("Unfolding group: " .. track_name .. " (track " .. track_index .. ") on " .. (sourceInstance or "all"))
+                        log("Found matching group: " .. track_name .. " (track " .. track_index .. ")")
+                        log("  Config instance: " .. unfold_config.instance .. ", Source instance: " .. (sourceInstance or "unknown"))
                         
-                        -- Send unfold command only to the source connection
-                        local targetConnections = createConnectionTable(sourceConnection)
-                        sendOSC('/live/track/set/fold_state', track_index, false, targetConnections)
+                        -- Only send unfold if we have a known source
+                        if sourceConnection and sourceInstance then
+                            log("  Sending unfold command to connection " .. sourceConnection)
+                            local targetConnections = createConnectionTable(sourceConnection)
+                            sendOSC('/live/track/set/fold_state', track_index, false, targetConnections)
+                        else
+                            log("  WARNING: Cannot unfold - unknown source connection/instance")
+                        end
                     end
                 end
             end
