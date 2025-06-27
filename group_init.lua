@@ -1,10 +1,10 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.2.3
+-- Version: 1.2.4
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
--- Fixed sendOSC syntax
+-- Using proper TouchOSC connection routing
 
 -- Version logging
-local SCRIPT_VERSION = "1.2.3"
+local SCRIPT_VERSION = "1.2.4"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -90,6 +90,12 @@ function init()
     connectionIndex = getConnectionIndex(instance)
     lastVerified = getMillis()
     
+    -- Set the object's connections property to route to specific connection
+    self.connections = {}
+    for i = 1, 10 do
+        self.connections[i] = (i == connectionIndex)
+    end
+    
     log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
     
     -- Initial track discovery
@@ -105,35 +111,29 @@ function refreshTrackMapping()
         self.children.status_indicator.color = {1, 1, 0}  -- Yellow = refreshing
     end
     
-    -- Request track names from specific connection
-    -- TouchOSC sendOSC format: sendOSC(path, arguments, connection1, connection2, ...)
-    -- We'll build the function call with only the specific connection enabled
-    if connectionIndex == 1 then
-        sendOSC('/live/song/get/track_names', {}, true, false, false, false, false, false, false, false, false, false)
-    elseif connectionIndex == 2 then
-        sendOSC('/live/song/get/track_names', {}, false, true, false, false, false, false, false, false, false, false)
-    elseif connectionIndex == 3 then
-        sendOSC('/live/song/get/track_names', {}, false, false, true, false, false, false, false, false, false, false)
-    elseif connectionIndex == 4 then
-        sendOSC('/live/song/get/track_names', {}, false, false, false, true, false, false, false, false, false, false)
-    else
-        -- Default to connection 1
-        sendOSC('/live/song/get/track_names', {}, true, false, false, false, false, false, false, false, false, false)
-    end
+    -- Request track names - will use the connections set on this object
+    sendOSC('/live/song/get/track_names')
 end
 
 function onReceiveOSC(message, connections)
-    -- Filter by connection
+    -- The connections parameter tells us which connection this message came from
+    -- Only process if it's from our configured connection
     if not connections[connectionIndex] then return end
     
     local path = message[1]
     if path == '/live/song/get/track_names' and needsRefresh then
-        log("Received track names for " .. self.name)
+        log("Received track names from connection " .. connectionIndex)
         local arguments = message[2]
+        
+        if not arguments then
+            log("ERROR: No track names received")
+            return
+        end
+        
         local trackFound = false
         
         for i = 1, #arguments do
-            if arguments[i].value == trackName then
+            if arguments[i] and arguments[i].value == trackName then
                 -- Found our track
                 trackNumber = i - 1
                 lastVerified = getMillis()
@@ -150,34 +150,11 @@ function onReceiveOSC(message, connections)
                 -- Store combined info in tag
                 self.tag = instance .. ":" .. trackNumber
                 
-                -- Start listeners - use same connection routing
-                if connectionIndex == 1 then
-                    sendOSC('/live/track/start_listen/volume', {trackNumber}, true, false, false, false, false, false, false, false, false, false)
-                    sendOSC('/live/track/start_listen/output_meter_level', {trackNumber}, true, false, false, false, false, false, false, false, false, false)
-                    sendOSC('/live/track/start_listen/mute', {trackNumber}, true, false, false, false, false, false, false, false, false, false)
-                    sendOSC('/live/track/start_listen/panning', {trackNumber}, true, false, false, false, false, false, false, false, false, false)
-                elseif connectionIndex == 2 then
-                    sendOSC('/live/track/start_listen/volume', {trackNumber}, false, true, false, false, false, false, false, false, false, false)
-                    sendOSC('/live/track/start_listen/output_meter_level', {trackNumber}, false, true, false, false, false, false, false, false, false, false)
-                    sendOSC('/live/track/start_listen/mute', {trackNumber}, false, true, false, false, false, false, false, false, false, false)
-                    sendOSC('/live/track/start_listen/panning', {trackNumber}, false, true, false, false, false, false, false, false, false, false)
-                elseif connectionIndex == 3 then
-                    sendOSC('/live/track/start_listen/volume', {trackNumber}, false, false, true, false, false, false, false, false, false, false)
-                    sendOSC('/live/track/start_listen/output_meter_level', {trackNumber}, false, false, true, false, false, false, false, false, false, false)
-                    sendOSC('/live/track/start_listen/mute', {trackNumber}, false, false, true, false, false, false, false, false, false, false)
-                    sendOSC('/live/track/start_listen/panning', {trackNumber}, false, false, true, false, false, false, false, false, false, false)
-                elseif connectionIndex == 4 then
-                    sendOSC('/live/track/start_listen/volume', {trackNumber}, false, false, false, true, false, false, false, false, false, false)
-                    sendOSC('/live/track/start_listen/output_meter_level', {trackNumber}, false, false, false, true, false, false, false, false, false, false)
-                    sendOSC('/live/track/start_listen/mute', {trackNumber}, false, false, false, true, false, false, false, false, false, false)
-                    sendOSC('/live/track/start_listen/panning', {trackNumber}, false, false, false, true, false, false, false, false, false, false)
-                else
-                    -- Default to connection 1
-                    sendOSC('/live/track/start_listen/volume', {trackNumber}, true, false, false, false, false, false, false, false, false, false)
-                    sendOSC('/live/track/start_listen/output_meter_level', {trackNumber}, true, false, false, false, false, false, false, false, false, false)
-                    sendOSC('/live/track/start_listen/mute', {trackNumber}, true, false, false, false, false, false, false, false, false, false)
-                    sendOSC('/live/track/start_listen/panning', {trackNumber}, true, false, false, false, false, false, false, false, false, false)
-                end
+                -- Start listeners
+                sendOSC('/live/track/start_listen/volume', trackNumber)
+                sendOSC('/live/track/start_listen/output_meter_level', trackNumber)
+                sendOSC('/live/track/start_listen/mute', trackNumber)
+                sendOSC('/live/track/start_listen/panning', trackNumber)
                 
                 -- Update label
                 if self.children["fdr_label"] then
@@ -190,6 +167,13 @@ function onReceiveOSC(message, connections)
         if not trackFound then
             -- Track not found
             log("ERROR: Track not found: " .. trackName)
+            log("Available tracks:")
+            for i = 1, #arguments do
+                if arguments[i] and arguments[i].value then
+                    log("  " .. i-1 .. ": " .. arguments[i].value)
+                end
+            end
+            
             if self.children["fdr_label"] then
                 self.children["fdr_label"].values.text = "???"
             end
