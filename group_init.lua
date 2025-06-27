@@ -1,10 +1,10 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.2.5
+-- Version: 1.3.0
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
--- Working within TouchOSC connection constraints
+-- Using proper sendOSC connections table
 
 -- Version logging
-local SCRIPT_VERSION = "1.2.5"
+local SCRIPT_VERSION = "1.3.0"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -67,6 +67,14 @@ local function getConnectionIndex(inst)
     return 1
 end
 
+local function buildConnectionTable(connIndex)
+    local connections = {}
+    for i = 1, 10 do
+        connections[i] = (i == connIndex)
+    end
+    return connections
+end
+
 local function parseGroupName(name)
     if name:sub(1, 5) == "band_" then
         return "band", name:sub(6)
@@ -91,7 +99,6 @@ function init()
     lastVerified = getMillis()
     
     log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
-    log("IMPORTANT: Make sure this group's connections are set to use Connection " .. connectionIndex .. " in the UI")
     
     -- Initial track discovery
     refreshTrackMapping()
@@ -106,88 +113,80 @@ function refreshTrackMapping()
         self.children.status_indicator.color = {1, 1, 0}  -- Yellow = refreshing
     end
     
-    -- Request track names - will use whatever connections are set on this object in the UI
-    sendOSC('/live/song/get/track_names')
-    log("Sent track names request - waiting for response on connection " .. connectionIndex)
+    -- Build connection table for our specific connection
+    local connections = buildConnectionTable(connectionIndex)
+    
+    -- Request track names - send only to our configured connection
+    sendOSC('/live/song/get/track_names', connections)
+    log("Sent track names request to connection " .. connectionIndex)
 end
 
 function onReceiveOSC(message, connections)
-    local path = message[1]
+    -- Only process if it's from our configured connection
+    if not connections[connectionIndex] then return end
     
-    -- Log which connections this message came from
-    if path == '/live/song/get/track_names' then
-        local activeConnections = {}
-        for i = 1, 10 do
-            if connections[i] then
-                table.insert(activeConnections, i)
-            end
-        end
-        log("Received track names from connections: " .. table.concat(activeConnections, ", "))
+    local path = message[1]
+    if path == '/live/song/get/track_names' and needsRefresh then
+        log("Received track names from connection " .. connectionIndex)
+        local arguments = message[2]
         
-        -- Only process if it's from our configured connection
-        if not connections[connectionIndex] then 
-            log("Ignoring - not from our connection (" .. connectionIndex .. ")")
-            return 
+        if not arguments then
+            log("ERROR: No track names received")
+            return
         end
         
-        if needsRefresh then
-            local arguments = message[2]
-            
-            if not arguments then
-                log("ERROR: No track names received")
-                return
-            end
-            
-            local trackFound = false
-            
-            for i = 1, #arguments do
-                if arguments[i] and arguments[i].value == trackName then
-                    -- Found our track
-                    trackNumber = i - 1
-                    lastVerified = getMillis()
-                    needsRefresh = false
-                    trackFound = true
-                    
-                    log("Found track '" .. trackName .. "' at index " .. trackNumber)
-                    
-                    -- Update status
-                    if self.children.status_indicator then
-                        self.children.status_indicator.color = {0, 1, 0}  -- Green = OK
-                    end
-                    
-                    -- Store combined info in tag
-                    self.tag = instance .. ":" .. trackNumber
-                    
-                    -- Start listeners
-                    sendOSC('/live/track/start_listen/volume', trackNumber)
-                    sendOSC('/live/track/start_listen/output_meter_level', trackNumber)
-                    sendOSC('/live/track/start_listen/mute', trackNumber)
-                    sendOSC('/live/track/start_listen/panning', trackNumber)
-                    
-                    -- Update label
-                    if self.children["fdr_label"] then
-                        self.children["fdr_label"].values.text = trackName:match("(%w+)(.*)")
-                    end
-                    break
-                end
-            end
-            
-            if not trackFound then
-                -- Track not found
-                log("ERROR: Track not found: " .. trackName)
-                log("Available tracks:")
-                for i = 1, #arguments do
-                    if arguments[i] and arguments[i].value then
-                        log("  " .. i-1 .. ": " .. arguments[i].value)
-                    end
+        local trackFound = false
+        
+        for i = 1, #arguments do
+            if arguments[i] and arguments[i].value == trackName then
+                -- Found our track
+                trackNumber = i - 1
+                lastVerified = getMillis()
+                needsRefresh = false
+                trackFound = true
+                
+                log("Found track '" .. trackName .. "' at index " .. trackNumber)
+                
+                -- Update status
+                if self.children.status_indicator then
+                    self.children.status_indicator.color = {0, 1, 0}  -- Green = OK
                 end
                 
+                -- Store combined info in tag
+                self.tag = instance .. ":" .. trackNumber
+                
+                -- Build connection table for our specific connection
+                local targetConnections = buildConnectionTable(connectionIndex)
+                
+                -- Start listeners - send only to our configured connection
+                sendOSC('/live/track/start_listen/volume', trackNumber, targetConnections)
+                sendOSC('/live/track/start_listen/output_meter_level', trackNumber, targetConnections)
+                sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
+                sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
+                
+                -- Update label
                 if self.children["fdr_label"] then
-                    self.children["fdr_label"].values.text = "???"
+                    self.children["fdr_label"].values.text = trackName:match("(%w+)(.*)")
                 end
-                if self.children.status_indicator then
-                    self.children.status_indicator.color = {1, 0, 0}  -- Red = Error
+                break
+            end
+        end
+        
+        if not trackFound then
+            -- Track not found
+            log("ERROR: Track not found: " .. trackName)
+            log("Available tracks:")
+            for i = 1, #arguments do
+                if arguments[i] and arguments[i].value then
+                    log("  " .. i-1 .. ": " .. arguments[i].value)
                 end
+            end
+            
+            if self.children["fdr_label"] then
+                self.children["fdr_label"].values.text = "???"
+            end
+            if self.children.status_indicator then
+                self.children.status_indicator.color = {1, 0, 0}  -- Red = Error
             end
         end
     end
