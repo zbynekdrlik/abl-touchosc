@@ -1,8 +1,8 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.1.1
+-- Version: 2.1.2
 -- Purpose: Main document script with configuration, logging, and track management
 
-local VERSION = "2.1.1"
+local VERSION = "2.1.2"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -15,6 +15,7 @@ local config = {
 local logger = nil
 local logLines = {}
 local maxLogLines = 20
+local useConsole = false  -- Fallback to console if no logger found
 
 -- === LOGGING FUNCTIONS ===
 local function findLogger()
@@ -33,9 +34,15 @@ local function findLogger()
 end
 
 local function log(message)
+    -- Always print to console for debugging
+    print(os.date("%H:%M:%S") .. " " .. message)
+    
     if not logger then
         findLogger()
-        if not logger then return end
+        if not logger then 
+            useConsole = true
+            return 
+        end
     end
     
     table.insert(logLines, os.date("%H:%M:%S") .. " " .. message)
@@ -160,6 +167,10 @@ function init()
     findLogger()
     
     log(SCRIPT_NAME .. " v" .. VERSION .. " loaded")
+    
+    if useConsole then
+        log("No logger text object found - using console output")
+    end
     
     -- Parse configuration
     parseConfiguration()
