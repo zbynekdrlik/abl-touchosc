@@ -1,10 +1,10 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.4.1
+-- Version: 1.4.2
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
--- Fixed color assignment using Color() function
+-- Added debug logging for OSC receiving
 
 -- Version logging
-local SCRIPT_VERSION = "1.4.1"
+local SCRIPT_VERSION = "1.4.2"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -120,77 +120,105 @@ function refreshTrackMapping()
     sendOSC('/live/song/get/track_names', connections)
     
     log("Sent track names request to connection " .. connectionIndex)
+    log("Waiting for response...")
 end
 
 function onReceiveOSC(message, connections)
-    -- Only process if it's from our configured connection
-    if not connections[connectionIndex] then return end
-    
     local path = message[1]
-    if path == '/live/song/get/track_names' and needsRefresh then
-        log("Received track names from connection " .. connectionIndex)
-        local arguments = message[2]
-        
-        if not arguments then
-            log("ERROR: No track names received")
-            return
+    
+    -- Debug log ALL incoming OSC messages
+    if path then
+        local conns = {}
+        for i = 1, 10 do
+            if connections[i] then table.insert(conns, i) end
         end
+        log("DEBUG: Received OSC: " .. path .. " from connection(s): " .. table.concat(conns, ","))
+    end
+    
+    -- Check if this is track names response
+    if path == '/live/song/get/track_names' then
+        log("Track names response received!")
         
-        log("Received " .. #arguments .. " track names")
-        
-        local trackFound = false
-        
-        for i = 1, #arguments do
-            if arguments[i] and arguments[i].value == trackName then
-                -- Found our track
-                trackNumber = i - 1
-                lastVerified = getMillis()
-                needsRefresh = false
-                trackFound = true
-                
-                log("Found track '" .. trackName .. "' at index " .. trackNumber)
-                
-                -- Update status - use Color() function!
-                if self.children.status_indicator then
-                    self.children.status_indicator.color = Color(0, 1, 0, 1)  -- Green = OK (RGBA)
-                end
-                
-                -- Store combined info in tag
-                self.tag = instance .. ":" .. trackNumber
-                
-                -- Build connection table for our specific connection
-                local targetConnections = buildConnectionTable(connectionIndex)
-                
-                -- Start listeners - send only to our configured connection
-                sendOSC('/live/track/start_listen/volume', trackNumber, targetConnections)
-                sendOSC('/live/track/start_listen/output_meter_level', trackNumber, targetConnections)
-                sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
-                sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
-                
-                -- Update label
-                if self.children["fdr_label"] then
-                    self.children["fdr_label"].values.text = trackName:match("(%w+)(.*)")
-                end
-                break
+        -- Log which connections this came from
+        for i = 1, 10 do
+            if connections[i] then
+                log("  From connection " .. i)
             end
         end
         
-        if not trackFound then
-            -- Track not found
-            log("ERROR: Track not found: " .. trackName)
-            log("Available tracks:")
+        -- Only process if it's from our configured connection
+        if not connections[connectionIndex] then 
+            log("Ignoring - not from our connection (" .. connectionIndex .. ")")
+            return 
+        end
+        
+        if needsRefresh then
+            local arguments = message[2]
+            
+            if not arguments then
+                log("ERROR: No track names in response")
+                return
+            end
+            
+            log("Processing " .. #arguments .. " track names...")
+            
+            local trackFound = false
+            
             for i = 1, #arguments do
                 if arguments[i] and arguments[i].value then
-                    log("  " .. i-1 .. ": " .. arguments[i].value)
+                    local trackNameValue = arguments[i].value
+                    log("  Track " .. (i-1) .. ": " .. trackNameValue)
+                    
+                    if trackNameValue == trackName then
+                        -- Found our track
+                        trackNumber = i - 1
+                        lastVerified = getMillis()
+                        needsRefresh = false
+                        trackFound = true
+                        
+                        log("FOUND our track '" .. trackName .. "' at index " .. trackNumber .. "!")
+                        
+                        -- Update status - use Color() function!
+                        if self.children.status_indicator then
+                            self.children.status_indicator.color = Color(0, 1, 0, 1)  -- Green = OK (RGBA)
+                        end
+                        
+                        -- Store combined info in tag
+                        self.tag = instance .. ":" .. trackNumber
+                        
+                        -- Build connection table for our specific connection
+                        local targetConnections = buildConnectionTable(connectionIndex)
+                        
+                        -- Start listeners - send only to our configured connection
+                        sendOSC('/live/track/start_listen/volume', trackNumber, targetConnections)
+                        sendOSC('/live/track/start_listen/output_meter_level', trackNumber, targetConnections)
+                        sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
+                        sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
+                        
+                        log("Started listeners for track " .. trackNumber)
+                        
+                        -- Update label
+                        if self.children["fdr_label"] then
+                            self.children["fdr_label"].values.text = trackName:match("(%w+)(.*)")
+                        end
+                        break
+                    end
                 end
             end
             
-            if self.children["fdr_label"] then
-                self.children["fdr_label"].values.text = "???"
+            if not trackFound then
+                -- Track not found
+                log("ERROR: Track not found: " .. trackName)
+                
+                if self.children["fdr_label"] then
+                    self.children["fdr_label"].values.text = "???"
+                end
+                if self.children.status_indicator then
+                    self.children.status_indicator.color = Color(1, 0, 0, 1)  -- Red = Error (RGBA)
+                end
             end
-            if self.children.status_indicator then
-                self.children.status_indicator.color = Color(1, 0, 0, 1)  -- Red = Error (RGBA)
-            end
+        else
+            log("Received track names but not in refresh mode - ignoring")
         end
     end
 end
@@ -214,3 +242,4 @@ end
 
 log("Group initialization script ready")
 log("Selective connection routing is ACTIVE!")
+log("onReceiveOSC is attached to: " .. self.name)
