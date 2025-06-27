@@ -1,8 +1,8 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.5.3
+-- Version: 2.5.4
 -- Purpose: Main document script with configuration, logging, and track management
 
-local VERSION = "2.5.3"
+local VERSION = "2.5.4"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -60,6 +60,10 @@ local function parseConfiguration()
     config.connections = {}
     config.unfold_groups = {}
     
+    -- Connection and unfold counts
+    local connectionCount = 0
+    local unfoldCount = 0
+    
     -- Parse connection mappings
     for line in text:gmatch("[^\r\n]+") do
         -- Skip comments and empty lines
@@ -68,7 +72,7 @@ local function parseConfiguration()
             local key, value = line:match("^%s*connection_(%w+):%s*(%d+)%s*$")
             if key and value then
                 config.connections[key] = tonumber(value)
-                log("  Connection: " .. key .. " -> " .. value)
+                connectionCount = connectionCount + 1
             end
             
             -- Parse unfold groups with connection prefix
@@ -81,7 +85,7 @@ local function parseConfiguration()
                     instance = unfold_instance,
                     group_name = unfold_group
                 })
-                log("  Unfold group: " .. unfold_instance .. " -> " .. unfold_group)
+                unfoldCount = unfoldCount + 1
             end
             
             -- Legacy format support (no prefix = unfold on all connections)
@@ -94,12 +98,12 @@ local function parseConfiguration()
                     instance = "all",
                     group_name = unfold_match
                 })
-                log("  Unfold group: all -> " .. unfold_match)
+                unfoldCount = unfoldCount + 1
             end
         end
     end
     
-    log("Configuration loaded: " .. #config.unfold_groups .. " unfold groups")
+    log("Config loaded: " .. connectionCount .. " connections, " .. unfoldCount .. " unfold groups")
     return true
 end
 
@@ -108,7 +112,7 @@ function onReceiveNotify(action, value)
     if action == "register_logger" then
         -- Logger is notifying us of its existence
         logger = value
-        log("Logger registered via notify")
+        log("Logger registered")
         
         -- Send all buffered messages to logger
         if logger and logger.values then
@@ -118,7 +122,7 @@ function onReceiveNotify(action, value)
     elseif action == "register_configuration" then
         -- Configuration text is notifying us
         configText = value
-        log("Configuration registered via notify")
+        log("Configuration registered")
         
         -- Parse the configuration immediately
         parseConfiguration()
@@ -182,25 +186,21 @@ function init()
     -- Try to find logger
     logger = root:findByName("logger", true)
     if logger then
-        log("Logger found during init")
+        log("Logger found")
     end
     
     -- Try to parse configuration
     if not parseConfiguration() then
-        log("Waiting for configuration registration...")
+        log("Waiting for configuration...")
     end
     
     -- Original init commands
-    log("Stopping all track listeners...")
+    log("Initializing OSC connections...")
     sendOSC('/live/track/stop_listen/*', '*')
-    
-    log("Requesting track names...")
     sendOSC('/live/song/get/track_names')
-    
-    log("Starting playback listener...")
     sendOSC('/live/song/start_listen/is_playing')
     
-    log("Initialization complete")
+    log("Init complete")
 end
 
 -- === OSC RECEIVE HANDLER ===
@@ -227,14 +227,8 @@ function onReceiveOSC(message, connections)
             end
         end
         
-        log("Received track names from " .. (sourceInstance or "unknown") .. " (connection " .. (sourceConnection or "?") .. ")")
-        
-        -- Debug: Log first few track names
-        local trackCount = #arguments
-        log("  Total tracks: " .. trackCount)
-        for i = 1, math.min(5, trackCount) do
-            log("  Track " .. (i-1) .. ": " .. arguments[i].value)
-        end
+        -- Count unfolds for this instance
+        local unfoldedCount = 0
         
         for i = 1, #arguments do
             local track_index = i - 1
@@ -245,20 +239,20 @@ function onReceiveOSC(message, connections)
                 if track_name == unfold_config.group_name then
                     -- Check if this unfold should apply to this instance
                     if unfold_config.instance == "all" or unfold_config.instance == sourceInstance then
-                        log("Found matching group: " .. track_name .. " (track " .. track_index .. ")")
-                        log("  Config instance: " .. unfold_config.instance .. ", Source instance: " .. (sourceInstance or "unknown"))
-                        
                         -- Only send unfold if we have a known source
                         if sourceConnection and sourceInstance then
-                            log("  Sending unfold command to connection " .. sourceConnection)
                             local targetConnections = createConnectionTable(sourceConnection)
                             sendOSC('/live/track/set/fold_state', track_index, false, targetConnections)
-                        else
-                            log("  WARNING: Cannot unfold - unknown source connection/instance")
+                            unfoldedCount = unfoldedCount + 1
                         end
                     end
                 end
             end
+        end
+        
+        -- Log summary instead of details
+        if unfoldedCount > 0 then
+            log("Unfolded " .. unfoldedCount .. " groups on " .. (sourceInstance or "unknown"))
         end
     end
     
