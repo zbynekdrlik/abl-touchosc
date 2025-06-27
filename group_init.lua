@@ -1,13 +1,23 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.1.0
+-- Version: 1.1.1
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
 
 -- Version logging
-local SCRIPT_VERSION = "1.1.0"
-print("[group_init.lua] [" .. os.date("%Y-%m-%d %H:%M:%S") .. "] Script version " .. SCRIPT_VERSION .. " loaded for " .. self.name)
+local SCRIPT_VERSION = "1.1.1"
+
+-- Use global log function if available, otherwise fall back to print
+local function safeLog(...)
+    if _G.log then
+        _G.log(...)
+    else
+        print("[group_init.lua]", ...)
+    end
+end
+
+safeLog("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
 
 function init()
-    print("[group_init.lua] Initializing group:", self.name)
+    safeLog("Initializing group: " .. self.name)
     
     -- Parse group name
     local instance, trackName = parseGroupName(self.name)
@@ -18,14 +28,14 @@ function init()
     self.connectionIndex = getConnectionIndex(instance)
     self.lastVerified = getMillis()
     
-    print("[group_init.lua] Group config - Instance:", instance, "Track:", trackName, "Connection:", self.connectionIndex)
+    safeLog("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. self.connectionIndex)
     
     -- Initial track discovery
     refreshTrackMapping()
 end
 
 function refreshTrackMapping()
-    print("[group_init.lua] Refreshing track mapping for:", self.name)
+    safeLog("Refreshing track mapping for: " .. self.name)
     self.needsRefresh = true
     
     -- Visual feedback
@@ -44,7 +54,7 @@ function onReceiveOSC(message, connections)
     
     local path = message[1]
     if path == '/live/song/get/track_names' and self.needsRefresh then
-        print("[group_init.lua] Received track names for", self.name)
+        safeLog("Received track names for " .. self.name)
         local arguments = message[2]
         local trackFound = false
         
@@ -56,7 +66,7 @@ function onReceiveOSC(message, connections)
                 self.needsRefresh = false
                 trackFound = true
                 
-                print("[group_init.lua] Found track", self.trackName, "at index", self.trackNumber)
+                safeLog("Found track '" .. self.trackName .. "' at index " .. self.trackNumber)
                 
                 -- Update status
                 if self.children.status_indicator then
@@ -83,7 +93,7 @@ function onReceiveOSC(message, connections)
         
         if not trackFound then
             -- Track not found
-            print("[group_init.lua] ERROR: Track not found:", self.trackName)
+            safeLog("ERROR: Track not found: " .. self.trackName)
             if self.children["fdr_label"] then
                 self.children["fdr_label"].values.text = "???"
             end
@@ -96,7 +106,7 @@ end
 
 function onNotify(param)
     if param == "refresh" then
-        print("[group_init.lua] Received refresh notification")
+        safeLog("Received refresh notification for " .. self.name)
         refreshTrackMapping()
     end
 end
@@ -111,4 +121,4 @@ function update()
     end
 end
 
-print("[group_init.lua] Group initialization script ready")
+safeLog("Group initialization script ready")
