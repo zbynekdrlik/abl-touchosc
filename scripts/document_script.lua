@@ -1,8 +1,8 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.5.1
+-- Version: 2.5.2
 -- Purpose: Main document script with configuration, logging, and track management
 
-local VERSION = "2.5.1"
+local VERSION = "2.5.2"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -15,7 +15,7 @@ local config = {
 local logger = nil
 local configText = nil
 local logLines = {}
-local maxLogLines = 20
+local maxLogLines = 60  -- Increased from 20 to 60 for full-height logger
 
 -- === LOGGING FUNCTIONS ===
 local function log(message)
