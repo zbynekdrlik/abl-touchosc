@@ -1,9 +1,10 @@
 -- TouchOSC Selective Connection Routing Helper Script
--- Version: 1.0.7
+-- Version: 1.0.8
 -- Phase: 01 - Selective Connection Routing
+-- Added passthrough for OSC messages to ensure groups receive them
 
 -- Version logging on startup
-local SCRIPT_VERSION = "1.0.7"
+local SCRIPT_VERSION = "1.0.8"
 
 -- Logger settings
 local MAX_LOG_LINES = 20  -- Maximum lines to keep in logger
@@ -193,6 +194,14 @@ function validateConfiguration()
     end
     
     return valid
+end
+
+-- OSC receive callback (if needed)
+function onReceiveOSC(message, connections)
+    -- IMPORTANT: This function should NOT block OSC messages
+    -- from reaching other controls (like our track groups)
+    -- Return false to allow message to continue to other controls
+    return false
 end
 
 -- Initialize
