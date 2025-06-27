@@ -1,13 +1,16 @@
 -- TouchOSC Selective Connection Routing Helper Script
--- Version: 1.0.6
+-- Version: 1.0.7
 -- Phase: 01 - Selective Connection Routing
 
 -- Version logging on startup
-local SCRIPT_VERSION = "1.0.6"
+local SCRIPT_VERSION = "1.0.7"
 
 -- Logger settings
 local MAX_LOG_LINES = 20  -- Maximum lines to keep in logger
 local logLines = {}       -- Log buffer
+
+-- Configuration cache
+local configCache = {}
 
 -- Logger function
 function log(...)
@@ -51,13 +54,6 @@ function clearLogger()
     logLines = {}
     updateLogger()
 end
-
--- Start logging
-log("Helper Script v" .. SCRIPT_VERSION .. " loaded")
-log("Selective Connection Routing initialized")
-
--- Configuration cache
-local configCache = {}
 
 -- Parse configuration from text object
 function parseConfiguration()
@@ -199,21 +195,19 @@ function validateConfiguration()
     return valid
 end
 
--- Store functions in root for global access
-root.helperFunctions = {
-    log = log,
-    getConnectionIndex = getConnectionIndex,
-    buildConnectionTable = buildConnectionTable,
-    parseGroupName = parseGroupName,
-    refreshAllGroups = refreshAllGroups,
-    updateStatusIndicator = updateStatusIndicator,
-    STATUS_COLORS = STATUS_COLORS
-}
-
 -- Initialize
 function init()
-    log("Helper script initializing...")
+    log("Helper Script v" .. SCRIPT_VERSION .. " loaded")
+    log("Selective Connection Routing initialized")
+    log("Helper functions loaded successfully")
+    log("Configuration format:")
+    log("  connection_band: 1")
+    log("  connection_master: 2")
+    
+    -- Parse configuration immediately
     validateConfiguration()
+    
+    log("Helper script ready - groups can now initialize")
 end
 
 -- Update function for auto-refresh (to be implemented in Phase 4)
@@ -221,13 +215,5 @@ function update()
     -- Phase 4 will add auto-refresh logic here
 end
 
-log("Helper functions loaded successfully")
-log("Configuration format:")
-log("  connection_band: 1")
-log("  connection_master: 2")
-
--- Run validation immediately
-validateConfiguration()
-
--- Note: Helper functions are stored in root.helperFunctions
-log("Helper functions available at root.helperFunctions")
+-- Make sure init runs
+init()
