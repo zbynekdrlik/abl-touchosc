@@ -1,10 +1,10 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.5.0
--- Phase: 01 - Simplified group without individual refresh button
--- Groups now only respond to global refresh commands
+-- Version: 1.5.1
+-- Phase: 01 - Added safety: disable controls when not mapped correctly
+-- Prevents sending commands to wrong tracks
 
 -- Version logging
-local SCRIPT_VERSION = "1.5.0"
+local SCRIPT_VERSION = "1.5.1"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -86,6 +86,38 @@ local function parseGroupName(name)
     end
 end
 
+-- Enable/disable all controls in the group
+local function setGroupEnabled(enabled)
+    -- Disable/enable all child controls
+    for _, child in ipairs(self.children) do
+        -- Skip status indicators and labels
+        if child.name ~= "status_indicator" and child.name ~= "fdr_label" then
+            -- Disable interaction
+            child.interactive = enabled
+            
+            -- Visual feedback - dim when disabled
+            if child.color then
+                if enabled then
+                    -- Restore normal appearance
+                    child.color = Color(1, 1, 1, 1)
+                else
+                    -- Dim to show disabled
+                    child.color = Color(0.3, 0.3, 0.3, 0.5)
+                end
+            end
+            
+            -- For faders specifically, reset to 0 when disabled
+            if not enabled and child.type == ControlType.FADER then
+                if child.values and child.values.x then
+                    child.values.x = 0
+                end
+            end
+        end
+    end
+    
+    log(self.name .. " controls " .. (enabled and "ENABLED" or "DISABLED"))
+end
+
 -- Update visual status (minimal - just LED if present)
 local function updateStatus(status)
     if self.children.status_indicator then
@@ -96,6 +128,21 @@ local function updateStatus(status)
         elseif status == "stale" then
             self.children.status_indicator.color = Color(1, 0.5, 0, 1)  -- Orange
         end
+    end
+end
+
+-- Clear all OSC listeners for safety
+local function clearListeners()
+    if trackNumber and trackMapped then
+        local targetConnections = buildConnectionTable(connectionIndex)
+        
+        -- Stop all listeners for the old track
+        sendOSC('/live/track/stop_listen/volume', trackNumber, targetConnections)
+        sendOSC('/live/track/stop_listen/output_meter_level', trackNumber, targetConnections)
+        sendOSC('/live/track/stop_listen/mute', trackNumber, targetConnections)
+        sendOSC('/live/track/stop_listen/panning', trackNumber, targetConnections)
+        
+        log("Stopped listeners for track " .. trackNumber)
     end
 end
 
@@ -113,6 +160,9 @@ function init()
     
     log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
     
+    -- SAFETY: Disable all controls until properly mapped
+    setGroupEnabled(false)
+    
     -- Note: OSC routing must be configured in TouchOSC editor
     log("NOTE: Ensure group has OSC receive pattern: /live/song/get/track_names")
     
@@ -122,8 +172,14 @@ end
 
 function refreshTrackMapping()
     log("Refreshing " .. self.name)
+    
+    -- SAFETY: Clear any existing listeners and disable controls
+    clearListeners()
+    setGroupEnabled(false)
+    
     needsRefresh = true
     trackMapped = false
+    trackNumber = nil  -- Clear old track number
     
     -- Build connection table for our specific connection
     local connections = buildConnectionTable(connectionIndex)
@@ -148,6 +204,7 @@ function onReceiveOSC(message, connections)
             if not arguments then
                 log("ERROR: No track names in response for " .. self.name)
                 updateStatus("error")
+                setGroupEnabled(false)  -- Keep disabled
                 return true
             end
             
@@ -169,6 +226,7 @@ function onReceiveOSC(message, connections)
                         log("Mapped " .. self.name .. " -> Track " .. trackNumber)
                         
                         updateStatus("ok")
+                        setGroupEnabled(true)  -- ENABLE controls now that mapping is correct
                         
                         -- Store combined info in tag
                         self.tag = instance .. ":" .. trackNumber
@@ -196,6 +254,8 @@ function onReceiveOSC(message, connections)
             if not trackFound then
                 log("ERROR: Track not found: '" .. trackName .. "' for " .. self.name)
                 updateStatus("error")
+                setGroupEnabled(false)  -- Keep disabled for safety
+                trackNumber = nil  -- Clear any old track number
                 
                 if self.children.fdr_label then
                     self.children.fdr_label.values.text = "???"
@@ -216,6 +276,11 @@ function onReceiveNotify(action)
 end
 
 function update()
+    -- Additional safety check - if not mapped, ensure controls stay disabled
+    if not trackMapped then
+        setGroupEnabled(false)
+    end
+    
     -- Visual feedback for stale data
     if trackMapped and lastVerified > 0 then
         local age = getMillis() - lastVerified
@@ -225,5 +290,5 @@ function update()
     end
 end
 
-log("Group ready - awaiting global refresh command")
+log("Group ready - controls DISABLED until mapping confirmed")
 log("Script version " .. SCRIPT_VERSION .. " loaded")
