@@ -1,19 +1,57 @@
 -- TouchOSC Selective Connection Routing Helper Script
--- Version: 1.0.2
+-- Version: 1.0.3
 -- Phase: 01 - Selective Connection Routing
 
 -- Version logging on startup
-local SCRIPT_VERSION = "1.0.2"
+local SCRIPT_VERSION = "1.0.3"
 print("[helper_script.lua] [" .. os.date("%Y-%m-%d %H:%M:%S") .. "] Script version " .. SCRIPT_VERSION .. " loaded")
 print("[helper_script.lua] [" .. os.date("%Y-%m-%d %H:%M:%S") .. "] Selective Connection Routing Phase 0 initialized")
 
--- Shared helper functions for connection routing
-function getConnectionIndex(instance)
-    local configName = "connection_" .. instance
-    local configObj = root:findByName(configName)
+-- Configuration cache
+local configCache = {}
+
+-- Parse configuration from text object
+function parseConfiguration()
+    local configObj = root:findByName("configuration")
     
-    if configObj and configObj.values and configObj.values.text then
-        local index = tonumber(configObj.values.text) or 1
+    if not configObj or not configObj.values or not configObj.values.text then
+        print("[helper_script.lua] ERROR: No 'configuration' text object found")
+        return false
+    end
+    
+    configCache = {}
+    local configText = configObj.values.text
+    
+    -- Parse each line
+    for line in configText:gmatch("[^\r\n]+") do
+        -- Trim whitespace
+        line = line:match("^%s*(.-)%s*$")
+        
+        -- Skip empty lines and comments
+        if line ~= "" and not line:match("^#") then
+            -- Parse key: value
+            local key, value = line:match("^([%w_]+):%s*(.+)$")
+            if key and value then
+                -- Trim whitespace from value
+                value = value:match("^%s*(.-)%s*$")
+                configCache[key] = value
+                print("[helper_script.lua] Config loaded:", key, "=", value)
+            else
+                print("[helper_script.lua] Warning: Invalid config line:", line)
+            end
+        end
+    end
+    
+    return true
+end
+
+-- Get connection index for an instance
+function getConnectionIndex(instance)
+    local key = "connection_" .. instance
+    local value = configCache[key]
+    
+    if value then
+        local index = tonumber(value) or 1
         print("[helper_script.lua] Connection for", instance, "is", index)
         return index
     else
@@ -73,23 +111,24 @@ end
 -- Configuration validation
 function validateConfiguration()
     print("[helper_script.lua] Validating configuration...")
-    print("[helper_script.lua] Looking for label objects named 'connection_band' and 'connection_master'")
     
-    local configs = {"connection_band", "connection_master"}
+    if not parseConfiguration() then
+        print("[helper_script.lua] Configuration validation FAILED")
+        print("[helper_script.lua] Please create a text object named 'configuration' with format:")
+        print("[helper_script.lua]   connection_band: 1")
+        print("[helper_script.lua]   connection_master: 2")
+        return false
+    end
+    
+    -- Check for required connections
+    local required = {"connection_band", "connection_master"}
     local valid = true
     
-    for _, configName in ipairs(configs) do
-        local obj = root:findByName(configName)
-        if obj then
-            if obj.values and obj.values.text then
-                print("[helper_script.lua]", configName, "found with value:", obj.values.text)
-            else
-                print("[helper_script.lua] ERROR:", configName, "found but has no text value")
-                valid = false
-            end
+    for _, key in ipairs(required) do
+        if configCache[key] then
+            print("[helper_script.lua]", key, "configured as connection", configCache[key])
         else
-            print("[helper_script.lua] ERROR:", configName, "not found!")
-            print("[helper_script.lua] Please create a label with name:", configName)
+            print("[helper_script.lua] Warning:", key, "not found in configuration")
             valid = false
         end
     end
@@ -97,9 +136,7 @@ function validateConfiguration()
     if valid then
         print("[helper_script.lua] Configuration validation PASSED")
     else
-        print("[helper_script.lua] Configuration validation FAILED - Please create the required label objects")
-        print("[helper_script.lua] Instructions: Create labels (not text objects) named 'connection_band' and 'connection_master'")
-        print("[helper_script.lua] Set their text values to the connection numbers (e.g., '1' and '2')")
+        print("[helper_script.lua] Configuration incomplete - add missing connection definitions")
     end
     
     return valid
@@ -117,6 +154,10 @@ function update()
 end
 
 print("[helper_script.lua] Helper functions loaded successfully")
+print("[helper_script.lua] Configuration format:")
+print("[helper_script.lua]   connection_band: 1")
+print("[helper_script.lua]   connection_master: 2")
+print("[helper_script.lua]   # Comments are supported")
 
 -- Run validation immediately
 validateConfiguration()
