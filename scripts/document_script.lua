@@ -1,8 +1,8 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.1.0
+-- Version: 2.1.1
 -- Purpose: Main document script with configuration, logging, and track management
 
-local VERSION = "2.1.0"
+local VERSION = "2.1.1"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -17,9 +17,24 @@ local logLines = {}
 local maxLogLines = 20
 
 -- === LOGGING FUNCTIONS ===
+local function findLogger()
+    -- Try to find logger at root first
+    logger = root:findByName("logger")
+    if logger then return logger end
+    
+    -- Search in all children recursively
+    local allControls = root:findAllByName("logger", true)
+    if allControls and #allControls > 0 then
+        logger = allControls[1]
+        return logger
+    end
+    
+    return nil
+end
+
 local function log(message)
     if not logger then
-        logger = root:findByName("logger")
+        findLogger()
         if not logger then return end
     end
     
@@ -141,6 +156,9 @@ end
 
 -- === INITIALIZATION ===
 function init()
+    -- Try to find logger first
+    findLogger()
+    
     log(SCRIPT_NAME .. " v" .. VERSION .. " loaded")
     
     -- Parse configuration
