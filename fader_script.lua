@@ -1,3 +1,7 @@
+-- FADER SCRIPT - CONNECTION-AWARE VERSION
+-- Version: 2.0.0 (Phase 2 - Connection routing support)
+local VERSION = "2.0.0"
+
 -- FINAL PROFESSIONAL FADER - MOVEMENT SMOOTHING SYSTEM
 -- DEBUG CONTROL: Set to 1 to enable all logging, 0 to disable completely
 local DEBUG = 1
@@ -68,10 +72,60 @@ local double_tap_animation_active = false
 local double_tap_target_position = 0
 local double_tap_start_position = 0
 
+-- Connection-aware state
+local track_mapped = false
+local track_number = nil
+local connection_index = nil
+local last_disable_check = 0
+local DISABLE_CHECK_INTERVAL = 500  -- Check every 500ms
+
 -- DEBUG PRINT FUNCTION
 function debugPrint(...)
   if DEBUG == 1 then
     print(...)
+  end
+end
+
+-- Helper function to check if control should be enabled
+function isControlEnabled()
+  -- Check parent's track_number property
+  track_number = self.parent.track_number
+  
+  -- If track_number is nil or -1, the track is not mapped
+  if track_number == nil or track_number == -1 then
+    return false
+  end
+  
+  return true
+end
+
+-- Helper function to get connection index
+function getConnectionIndex()
+  -- Try to get from parent first
+  if self.parent.connection_index then
+    return self.parent.connection_index
+  end
+  
+  -- Fallback: parse from group name
+  local group_name = self.parent.name
+  if string.find(group_name, "band_") == 1 then
+    return 1
+  elseif string.find(group_name, "master_") == 1 then
+    return 2
+  end
+  
+  -- Default to connection 1 if unable to determine
+  return 1
+end
+
+-- Helper function to build connection table
+function buildConnectionTable(conn_index)
+  if conn_index == 1 then
+    return {1}
+  elseif conn_index == 2 then
+    return {2}
+  else
+    return {conn_index}
   end
 end
 
@@ -359,8 +413,20 @@ function applyFirstMovementScaling(raw_position, is_touching)
 end
 
 function onReceiveOSC(message, connections)
+  -- Check if control is enabled before processing OSC
+  if not isControlEnabled() then
+    return
+  end
+  
   local arguments = message[2]
-  if arguments[1].value == tonumber(self.parent.tag) then
+  
+  -- Get track number from parent
+  local parent_track = self.parent.track_number
+  if parent_track == nil or parent_track == -1 then
+    return  -- Not mapped
+  end
+  
+  if arguments[1].value == parent_track then
     local remote_audio_value = arguments[2].value
     last_osc_audio = remote_audio_value
     
@@ -388,6 +454,33 @@ function onReceiveOSC(message, connections)
 end
 
 function update()
+  -- Periodically check if control should be enabled/disabled
+  local current_time = getMillis()
+  if current_time - last_disable_check > DISABLE_CHECK_INTERVAL then
+    last_disable_check = current_time
+    
+    local should_be_enabled = isControlEnabled()
+    if should_be_enabled ~= track_mapped then
+      track_mapped = should_be_enabled
+      
+      if not track_mapped then
+        -- Disable the fader
+        self.enabled = false
+        debugPrint("*** FADER DISABLED - Track not mapped ***")
+      else
+        -- Enable the fader
+        self.enabled = true
+        connection_index = getConnectionIndex()
+        debugPrint("*** FADER ENABLED - Track mapped, Connection:", connection_index)
+      end
+    end
+  end
+  
+  -- Skip all processing if disabled
+  if not track_mapped then
+    return
+  end
+  
   -- Handle double-tap animation (only if enabled)
   if ENABLE_DOUBLE_TAP and double_tap_animation_active then
     if self.values.touch then
@@ -414,7 +507,8 @@ function update()
           double_tap_animation_active = false
           debugPrint("*** DOUBLE-TAP ANIMATION COMPLETE (Already at target) ***")
           local final_audio = use_log_curve and linearToLog(double_tap_target_position) or double_tap_target_position
-          sendOSC('/live/track/set/volume', tonumber(self.parent.tag), final_audio)
+          local connections = buildConnectionTable(connection_index)
+          sendOSC('/live/track/set/volume', {self.parent.track_number, final_audio}, connections)
           return
       end
 
@@ -430,7 +524,8 @@ function update()
           double_tap_animation_active = false
           debugPrint("*** DOUBLE-TAP ANIMATION COMPLETE (Snapped to target) ***")
           local final_audio = use_log_curve and linearToLog(double_tap_target_position) or double_tap_target_position
-          sendOSC('/live/track/set/volume', tonumber(self.parent.tag), final_audio)
+          local connections = buildConnectionTable(connection_index)
+          sendOSC('/live/track/set/volume', {self.parent.track_number, final_audio}, connections)
       else
           -- Move towards target with constant speed
           self.values.x = proposed_new_position
@@ -438,7 +533,8 @@ function update()
           
           -- Send OSC update
           local new_audio = use_log_curve and linearToLog(proposed_new_position) or proposed_new_position
-          sendOSC('/live/track/set/volume', tonumber(self.parent.tag), new_audio)
+          local connections = buildConnectionTable(connection_index)
+          sendOSC('/live/track/set/volume', {self.parent.track_number, new_audio}, connections)
           
           debugPrint("*** DOUBLE-TAP ANIMATION (Constant Speed) ***")
           -- Progress calculation assuming linear movement
@@ -487,6 +583,11 @@ function isInDeadZone(audio_value)
 end
 
 function onValueChanged()
+  -- Check if control is enabled
+  if not isControlEnabled() then
+    return  -- Don't process if track not mapped
+  end
+  
   -- Skip processing if animation is active and no touch
   if double_tap_animation_active and not self.values.touch then
     return  -- Let update() handle the animation
@@ -537,6 +638,7 @@ function onValueChanged()
   debugPrint("Audio:", string.format("%.3f", audio_value), string.format("(%.1f%%)", audio_value * 100))
   debugPrint("dB:", formatDB(db_value))
   debugPrint("Touch:", self.values.touch and "TOUCHING" or "RELEASED")
+  debugPrint("Track:", self.parent.track_number, "Connection:", connection_index)
   debugPrint("Movements processed:", movements_processed, "/", SCALED_MOVEMENTS_COUNT)
   local scaling_active = (movements_processed <= SCALED_MOVEMENTS_COUNT and touch_session_active)
   debugPrint("Scaling:", scaling_active and "ACTIVE" or "INACTIVE")
@@ -564,7 +666,9 @@ function onValueChanged()
   end
   last_logged_position = scaled_fader_position
   
-  sendOSC('/live/track/set/volume', tonumber(self.parent.tag), audio_value)
+  -- Send OSC with connection routing
+  local connections = buildConnectionTable(connection_index)
+  sendOSC('/live/track/set/volume', {self.parent.track_number, audio_value}, connections)
   
   -- TOUCH DETECTION WITH DEBUG
   if self.values.touch and not touch_started then
@@ -652,8 +756,23 @@ end
 
 -- VERIFICATION
 function init()
+  print("=== FADER SCRIPT v" .. VERSION .. " loaded ===")
   debugPrint("=== PROFESSIONAL FADER WITH IMMEDIATE 0.1dB RESPONSE ===")
   debugPrint("DEBUG MODE:", DEBUG == 1 and "ENABLED" or "DISABLED")
+  debugPrint("Connection-aware features: ENABLED")
+  
+  -- Initialize connection routing
+  track_mapped = isControlEnabled()
+  connection_index = getConnectionIndex()
+  
+  if track_mapped then
+    self.enabled = true
+    debugPrint("Fader ENABLED - Track:", self.parent.track_number, "Connection:", connection_index)
+  else
+    self.enabled = false
+    debugPrint("Fader DISABLED - Track not mapped")
+  end
+  
   debugPrint("Gradual movement scaling:", ENABLE_FIRST_MOVEMENT_SCALING and "ENABLED" or "DISABLED")
   if ENABLE_FIRST_MOVEMENT_SCALING then
     debugPrint("- Scaled movements count:", SCALED_MOVEMENTS_COUNT)
