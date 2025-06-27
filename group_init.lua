@@ -1,10 +1,10 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.2.2
+-- Version: 1.2.3
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
--- Self-contained version with proper OSC sending
+-- Fixed sendOSC syntax
 
 -- Version logging
-local SCRIPT_VERSION = "1.2.2"
+local SCRIPT_VERSION = "1.2.3"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -67,14 +67,6 @@ local function getConnectionIndex(inst)
     return 1
 end
 
-local function buildConnectionTable(connIndex)
-    local connections = {}
-    for i = 1, 10 do
-        connections[i] = (i == connIndex)
-    end
-    return connections
-end
-
 local function parseGroupName(name)
     if name:sub(1, 5) == "band_" then
         return "band", name:sub(6)
@@ -114,9 +106,20 @@ function refreshTrackMapping()
     end
     
     -- Request track names from specific connection
-    local connections = buildConnectionTable(connectionIndex)
-    -- Send without arguments (empty table instead of nil)
-    sendOSC('/live/song/get/track_names', {}, connections)
+    -- TouchOSC sendOSC format: sendOSC(path, arguments, connection1, connection2, ...)
+    -- We'll build the function call with only the specific connection enabled
+    if connectionIndex == 1 then
+        sendOSC('/live/song/get/track_names', {}, true, false, false, false, false, false, false, false, false, false)
+    elseif connectionIndex == 2 then
+        sendOSC('/live/song/get/track_names', {}, false, true, false, false, false, false, false, false, false, false)
+    elseif connectionIndex == 3 then
+        sendOSC('/live/song/get/track_names', {}, false, false, true, false, false, false, false, false, false, false)
+    elseif connectionIndex == 4 then
+        sendOSC('/live/song/get/track_names', {}, false, false, false, true, false, false, false, false, false, false)
+    else
+        -- Default to connection 1
+        sendOSC('/live/song/get/track_names', {}, true, false, false, false, false, false, false, false, false, false)
+    end
 end
 
 function onReceiveOSC(message, connections)
@@ -147,12 +150,34 @@ function onReceiveOSC(message, connections)
                 -- Store combined info in tag
                 self.tag = instance .. ":" .. trackNumber
                 
-                -- Start listeners
-                local targetConnections = buildConnectionTable(connectionIndex)
-                sendOSC('/live/track/start_listen/volume', {trackNumber}, targetConnections)
-                sendOSC('/live/track/start_listen/output_meter_level', {trackNumber}, targetConnections)
-                sendOSC('/live/track/start_listen/mute', {trackNumber}, targetConnections)
-                sendOSC('/live/track/start_listen/panning', {trackNumber}, targetConnections)
+                -- Start listeners - use same connection routing
+                if connectionIndex == 1 then
+                    sendOSC('/live/track/start_listen/volume', {trackNumber}, true, false, false, false, false, false, false, false, false, false)
+                    sendOSC('/live/track/start_listen/output_meter_level', {trackNumber}, true, false, false, false, false, false, false, false, false, false)
+                    sendOSC('/live/track/start_listen/mute', {trackNumber}, true, false, false, false, false, false, false, false, false, false)
+                    sendOSC('/live/track/start_listen/panning', {trackNumber}, true, false, false, false, false, false, false, false, false, false)
+                elseif connectionIndex == 2 then
+                    sendOSC('/live/track/start_listen/volume', {trackNumber}, false, true, false, false, false, false, false, false, false, false)
+                    sendOSC('/live/track/start_listen/output_meter_level', {trackNumber}, false, true, false, false, false, false, false, false, false, false)
+                    sendOSC('/live/track/start_listen/mute', {trackNumber}, false, true, false, false, false, false, false, false, false, false)
+                    sendOSC('/live/track/start_listen/panning', {trackNumber}, false, true, false, false, false, false, false, false, false, false)
+                elseif connectionIndex == 3 then
+                    sendOSC('/live/track/start_listen/volume', {trackNumber}, false, false, true, false, false, false, false, false, false, false)
+                    sendOSC('/live/track/start_listen/output_meter_level', {trackNumber}, false, false, true, false, false, false, false, false, false, false)
+                    sendOSC('/live/track/start_listen/mute', {trackNumber}, false, false, true, false, false, false, false, false, false, false)
+                    sendOSC('/live/track/start_listen/panning', {trackNumber}, false, false, true, false, false, false, false, false, false, false)
+                elseif connectionIndex == 4 then
+                    sendOSC('/live/track/start_listen/volume', {trackNumber}, false, false, false, true, false, false, false, false, false, false)
+                    sendOSC('/live/track/start_listen/output_meter_level', {trackNumber}, false, false, false, true, false, false, false, false, false, false)
+                    sendOSC('/live/track/start_listen/mute', {trackNumber}, false, false, false, true, false, false, false, false, false, false)
+                    sendOSC('/live/track/start_listen/panning', {trackNumber}, false, false, false, true, false, false, false, false, false, false)
+                else
+                    -- Default to connection 1
+                    sendOSC('/live/track/start_listen/volume', {trackNumber}, true, false, false, false, false, false, false, false, false, false)
+                    sendOSC('/live/track/start_listen/output_meter_level', {trackNumber}, true, false, false, false, false, false, false, false, false, false)
+                    sendOSC('/live/track/start_listen/mute', {trackNumber}, true, false, false, false, false, false, false, false, false, false)
+                    sendOSC('/live/track/start_listen/panning', {trackNumber}, true, false, false, false, false, false, false, false, false, false)
+                end
                 
                 -- Update label
                 if self.children["fdr_label"] then
