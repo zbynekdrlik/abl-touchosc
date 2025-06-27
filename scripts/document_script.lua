@@ -1,8 +1,8 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.3.0
+-- Version: 2.4.0
 -- Purpose: Main document script with configuration, logging, and track management
 
-local VERSION = "2.3.0"
+local VERSION = "2.4.0"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -11,68 +11,46 @@ local config = {
     unfold_groups = {}
 }
 
--- Logger setup
+-- Logger reference (will be found by name)
 local logger = nil
 local logLines = {}
 local maxLogLines = 20
 
 -- === LOGGING FUNCTIONS ===
-local function findLoggerRecursive(parent)
-    if not parent or not parent.children then return nil end
-    
-    for _, child in ipairs(parent.children) do
-        -- Check if this is the logger
-        if child.name == "logger" and child.type == "TEXT" then
-            return child
-        end
-        -- Check if it has the isLogger flag
-        if child.isLogger then
-            return child
-        end
-        -- Recursively search children
-        local found = findLoggerRecursive(child)
-        if found then return found end
-    end
-    return nil
-end
-
-local function findLogger()
-    -- Check if logger was already found
-    if logger then
-        return logger
-    end
-    
-    -- Try simple search first
-    logger = root:findByName("logger")
-    if logger then 
-        return logger 
-    end
-    
-    -- Try recursive search
-    logger = findLoggerRecursive(root)
-    return logger
-end
-
 local function log(message)
     local logMessage = os.date("%H:%M:%S") .. " " .. message
     
-    -- Always print to console as backup
+    -- Always print to console
     print(logMessage)
     
-    -- Store messages even if logger not found yet
+    -- Store messages
     table.insert(logLines, logMessage)
     if #logLines > maxLogLines then
         table.remove(logLines, 1)
     end
     
-    -- Try to find logger if not found
+    -- Try to find logger if not found yet
     if not logger then
-        findLogger()
+        logger = root:findByName("logger", true)  -- recursive search
     end
     
     -- Update logger if found
-    if logger then
+    if logger and logger.values then
         logger.values.text = table.concat(logLines, "\n")
+    end
+end
+
+-- === NOTIFY HANDLER FOR LOGGER ===
+function onReceiveNotify(action, value)
+    if action == "register_logger" then
+        -- Logger is notifying us of its existence
+        logger = value
+        log("Logger registered via notify")
+        
+        -- Send all buffered messages to logger
+        if logger and logger.values then
+            logger.values.text = table.concat(logLines, "\n")
+        end
     end
 end
 
@@ -135,14 +113,6 @@ function getConnectionForInstance(instance)
     return config.connections[instance]
 end
 
-function notifyGroupRefresh(groupName)
-    local group = root:findByName(groupName)
-    if group then
-        group:notify("refresh_tracks")
-        log("Refreshing " .. groupName)
-    end
-end
-
 function refreshAllGroups()
     log("=== GLOBAL REFRESH INITIATED ===")
     
@@ -152,12 +122,13 @@ function refreshAllGroups()
         status.values.text = "Refreshing..."
     end
     
-    -- Clear all track mappings first
+    -- Find all groups with trackGroup tag
     local groups = root:findAllByProperty("tag", "trackGroup", true)
+    
+    -- Clear all track mappings first
     for _, group in ipairs(groups) do
-        if group.trackNumber then
-            group.trackNumber = nil
-        end
+        -- Notify group to clear its mapping
+        group:notify("clear_mapping")
     end
     
     -- Trigger refresh on all groups
@@ -183,23 +154,12 @@ function createConnectionTable(connectionIndex)
     return connections
 end
 
--- === LOGGER REGISTRATION ===
-function registerLogger(loggerControl)
-    logger = loggerControl
-    log("Logger registered successfully!")
-    
-    -- Display all buffered messages
-    if logger and #logLines > 0 then
-        logger.values.text = table.concat(logLines, "\n")
-    end
-end
-
 -- === INITIALIZATION ===
 function init()
     log(SCRIPT_NAME .. " v" .. VERSION .. " loaded")
     
     -- Try to find logger
-    findLogger()
+    logger = root:findByName("logger", true)
     if logger then
         log("Logger found during init")
     else
