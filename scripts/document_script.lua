@@ -1,8 +1,8 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.2.1
+-- Version: 2.2.2
 -- Purpose: Main document script with configuration, logging, and track management
 
-local VERSION = "2.2.1"
+local VERSION = "2.2.2"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -156,11 +156,19 @@ function createConnectionTable(connectionIndex)
 end
 
 -- === LOGGER REGISTRATION ===
--- Call this from logger's init script
-function registerLogger(loggerControl)
+-- Make this global so logger can find it
+_G.registerLogger = function(loggerControl)
     logger = loggerControl
     log("Logger registered from " .. (loggerControl.parent and loggerControl.parent.name or "unknown"))
+    
+    -- Show all previous console messages in the logger
+    if #logLines > 0 then
+        logger.values.text = table.concat(logLines, "\n")
+    end
 end
+
+-- Also store in root for alternative access
+root.registerLogger = _G.registerLogger
 
 -- === INITIALIZATION ===
 function init()
@@ -180,6 +188,16 @@ function init()
     sendOSC('/live/song/start_listen/is_playing')
     
     log("Initialization complete")
+    
+    -- Try to find logger after init
+    self:after(0.5, function()
+        if not logger then
+            findLogger()
+            if logger then
+                log("Logger found after init")
+            end
+        end
+    end)
 end
 
 -- === OSC RECEIVE HANDLER ===
