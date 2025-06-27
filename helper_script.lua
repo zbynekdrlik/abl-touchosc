@@ -1,9 +1,9 @@
 -- TouchOSC Selective Connection Routing Helper Script
--- Version: 1.0.5
+-- Version: 1.0.6
 -- Phase: 01 - Selective Connection Routing
 
 -- Version logging on startup
-local SCRIPT_VERSION = "1.0.5"
+local SCRIPT_VERSION = "1.0.6"
 
 -- Logger settings
 local MAX_LOG_LINES = 20  -- Maximum lines to keep in logger
@@ -199,6 +199,17 @@ function validateConfiguration()
     return valid
 end
 
+-- Store functions in root for global access
+root.helperFunctions = {
+    log = log,
+    getConnectionIndex = getConnectionIndex,
+    buildConnectionTable = buildConnectionTable,
+    parseGroupName = parseGroupName,
+    refreshAllGroups = refreshAllGroups,
+    updateStatusIndicator = updateStatusIndicator,
+    STATUS_COLORS = STATUS_COLORS
+}
+
 -- Initialize
 function init()
     log("Helper script initializing...")
@@ -218,5 +229,5 @@ log("  connection_master: 2")
 -- Run validation immediately
 validateConfiguration()
 
--- Note: log function is global within this script
--- Other scripts should check if it exists before using
+-- Note: Helper functions are stored in root.helperFunctions
+log("Helper functions available at root.helperFunctions")
