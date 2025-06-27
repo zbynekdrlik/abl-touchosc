@@ -1,9 +1,9 @@
 -- TouchOSC Selective Connection Routing Helper Script
--- Version: 1.0.0
+-- Version: 1.0.1
 -- Phase: 01 - Selective Connection Routing
 
 -- Version logging on startup
-local SCRIPT_VERSION = "1.0.0"
+local SCRIPT_VERSION = "1.0.1"
 print("[helper_script.lua] [" .. os.date("%Y-%m-%d %H:%M:%S") .. "] Script version " .. SCRIPT_VERSION .. " loaded")
 print("[helper_script.lua] [" .. os.date("%Y-%m-%d %H:%M:%S") .. "] Selective Connection Routing Phase 0 initialized")
 
@@ -87,6 +87,12 @@ function validateConfiguration()
         end
     end
     
+    if valid then
+        print("[helper_script.lua] Configuration validation PASSED")
+    else
+        print("[helper_script.lua] Configuration validation FAILED - Please create the required text objects")
+    end
+    
     return valid
 end
 
@@ -102,3 +108,6 @@ function update()
 end
 
 print("[helper_script.lua] Helper functions loaded successfully")
+
+-- Run validation immediately
+validateConfiguration()
