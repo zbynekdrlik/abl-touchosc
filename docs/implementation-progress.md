@@ -5,6 +5,7 @@
 ### Version History
 - **v1.0.0** (2025-06-27): Initial Phase 0 implementation - Helper script with version logging
 - **v1.0.1** (2025-06-27): Updated helper script with immediate validation
+- **v1.0.2** (2025-06-27): Changed from text objects to labels for configuration
 - **v1.1.0** (2025-06-27): Phase 1 implementation - Group initialization and refresh button scripts
 
 ### Completed Steps
@@ -13,12 +14,13 @@
 1. Created feature branch: `feature/selective-connection-routing`
 2. Created PR #5 for tracking changes
 3. Added `helper_script.lua` with:
-   - Version logging on startup (v1.0.1)
+   - Version logging on startup (v1.0.2)
    - Configuration validation
    - Connection routing helpers
    - Status color definitions
    - Refresh function foundations
 4. User confirmed configuration validation passed
+5. **Updated to use labels instead of text objects**
 
 #### Phase 1: Single Group Test with Refresh 🚧
 1. Added `group_init.lua` (v1.1.0) with:
@@ -29,7 +31,18 @@
    - Version logging
 2. Added `refresh_button.lua` (v1.1.0) for manual refresh
 
-### Manual Setup Required for Phase 1
+### Manual Setup Required
+
+#### Configuration Setup (Updated)
+1. Add the `helper_script.lua` to your TouchOSC document root
+2. Create **label** objects (not text objects):
+   - Name: `connection_band`, Text: `1`
+   - Name: `connection_master`, Text: `2`
+3. Configure your connections:
+   - Connection 1: Band Ableton instance
+   - Connection 2: Master Ableton instance
+
+#### Phase 1 Setup
 1. **Duplicate one existing group** (e.g., 'Hand 1 #')
 2. **Rename it** to 'band_Hand 1 #' (add the prefix)
 3. **Add custom property** to group: tag = "trackGroup"
@@ -37,6 +50,12 @@
 5. **Add refresh button** (button control) with the refresh_button.lua script
 6. **Replace group script** with group_init.lua
 7. Keep original group for comparison
+
+### Testing Checklist for Phase 0 (Updated)
+- [x] Script loads without errors
+- [x] Version 1.0.2 is logged on startup
+- [ ] Configuration validation shows both labels found
+- [ ] No critical errors in logs
 
 ### Testing Checklist for Phase 1
 - [ ] Group script loads without errors
@@ -53,7 +72,7 @@
 Once Phase 1 is tested and working, we'll proceed with Phase 2: Single Control Migration
 
 ## Files Changed
-- `helper_script.lua` - Updated to v1.0.1
+- `helper_script.lua` - Updated to v1.0.2 (use labels instead of text objects)
 - `group_init.lua` - New file (v1.1.0)
 - `refresh_button.lua` - New file (v1.1.0)
 - `docs/implementation-progress.md` - This file
