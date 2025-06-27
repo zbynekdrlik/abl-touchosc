@@ -1,3 +1,7 @@
+-- METER SCRIPT - CONNECTION-AWARE VERSION
+-- Version: 2.0.0 (Phase 2 - Connection routing support)
+local VERSION = "2.0.0"
+
 -- SIMPLE METER SCRIPT WITH HARDCODED CALIBRATION
 -- Uses your exact calibration data to directly map AbletonOSC values to fader positions
 
@@ -29,10 +33,49 @@ local CALIBRATION_POINTS = {
   {1.0, 1.0}       -- Max -> 100%
 }
 
+-- Connection-aware state
+local track_mapped = false
+local track_number = nil
+local connection_index = nil
+local last_disable_check = 0
+local DISABLE_CHECK_INTERVAL = 500  -- Check every 500ms
+
 function debugPrint(...)
   if DEBUG == 1 then
     print(...)
   end
+end
+
+-- Helper function to check if control should be enabled
+function isControlEnabled()
+  -- Check parent's track_number property
+  track_number = self.parent.track_number
+  
+  -- If track_number is nil or -1, the track is not mapped
+  if track_number == nil or track_number == -1 then
+    return false
+  end
+  
+  return true
+end
+
+-- Helper function to get connection index
+function getConnectionIndex()
+  -- Try to get from parent first
+  if self.parent.connection_index then
+    return self.parent.connection_index
+  end
+  
+  -- Fallback: parse from group name
+  local group_name = self.parent.name
+  if string.find(group_name, "band_") == 1 then
+    return 1
+  elseif string.find(group_name, "master_") == 1 then
+    return 2
+  end
+  
+  -- Default to connection 1 if unable to determine
+  return 1
 end
 
 -- Simple linear interpolation between calibration points
@@ -131,13 +174,32 @@ function smoothColor(target_color)
 end
 
 function onReceiveOSC(message, connections)
+  -- Check if control is enabled before processing OSC
+  if not isControlEnabled() then
+    return
+  end
+  
+  -- Check if message is from the correct connection
+  local message_connection = connections and connections[1] or 1
+  if message_connection ~= connection_index then
+    debugPrint("Ignoring message from connection", message_connection, "- expecting", connection_index)
+    return
+  end
+  
   local arguments = message[2]
   
+  -- Get track number from parent
+  local parent_track = self.parent.track_number
+  if parent_track == nil or parent_track == -1 then
+    return  -- Not mapped
+  end
+  
   -- Check if this message is for our track
-  if arguments[1].value == tonumber(self.parent.tag) then
+  if arguments[1].value == parent_track then
     local normalized_meter = arguments[2].value
     
     debugPrint("=== METER UPDATE ===")
+    debugPrint("Track:", parent_track, "Connection:", connection_index)
     debugPrint("AbletonOSC normalized:", string.format("%.4f", normalized_meter))
     
     -- Convert AbletonOSC normalized value to fader position
@@ -177,15 +239,54 @@ function onReceiveOSC(message, connections)
   end
 end
 
+function update()
+  -- Periodically check if control should be enabled/disabled
+  local current_time = getMillis()
+  if current_time - last_disable_check > DISABLE_CHECK_INTERVAL then
+    last_disable_check = current_time
+    
+    local should_be_enabled = isControlEnabled()
+    if should_be_enabled ~= track_mapped then
+      track_mapped = should_be_enabled
+      
+      if not track_mapped then
+        -- Reset meter when track not mapped
+        self.values.x = 0
+        self.color = Color(0.2, 0.2, 0.2, 0.5)  -- Dim gray
+        debugPrint("*** METER DISABLED - Track not mapped ***")
+      else
+        -- Enable meter
+        connection_index = getConnectionIndex()
+        self.color = Color(COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4])
+        debugPrint("*** METER ENABLED - Track mapped, Connection:", connection_index)
+      end
+    end
+  end
+end
+
 -- Initialize
 function init()
-  -- Set initial color to green
-  self.color = Color(COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4])
+  print("=== METER SCRIPT v" .. VERSION .. " loaded ===")
+  print("Connection-aware features: ENABLED")
+  
+  -- Initialize connection routing
+  track_mapped = isControlEnabled()
+  connection_index = getConnectionIndex()
+  
+  if track_mapped then
+    -- Set initial color to green
+    self.color = Color(COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4])
+    print("Meter ENABLED - Track:", self.parent.track_number, "Connection:", connection_index)
+  else
+    -- Set disabled appearance
+    self.color = Color(0.2, 0.2, 0.2, 0.5)  -- Dim gray
+    print("Meter DISABLED - Track not mapped")
+  end
   
   -- Initialize meter at minimum
   self.values.x = 0
   
-  print("=== SIMPLE METER SCRIPT ===")
+  print("")
   print("Using hardcoded calibration points from your tests")
   print("")
   print("Calibration points:")
