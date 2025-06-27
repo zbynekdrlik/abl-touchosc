@@ -1,8 +1,8 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.2.0
+-- Version: 2.2.1
 -- Purpose: Main document script with configuration, logging, and track management
 
-local VERSION = "2.2.0"
+local VERSION = "2.2.1"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -18,26 +18,12 @@ local maxLogLines = 20
 
 -- === LOGGING FUNCTIONS ===
 local function findLogger()
-    -- OPTION 1: Direct path to logger in pager
-    -- Update this path to match your logger location
-    -- Example: If logger is in Pager1 > Page2 > logger
-    -- local pager = root:findByName("Pager1")
-    -- if pager then
-    --     local page = pager:findByName("Page2")
-    --     if page then
-    --         logger = page:findByName("logger")
-    --     end
-    -- end
-    
-    -- OPTION 2: Store logger reference in a root control
-    -- Create a small label at root called "logger_ref" 
-    -- In its init(), set: root.logger_ref = self.parent:findByName("logger")
-    if root.logger_ref then
-        logger = root.logger_ref
+    -- Check if logger was registered
+    if logger then
         return logger
     end
     
-    -- OPTION 3: Simple search at root (original)
+    -- Simple search at root
     logger = root:findByName("logger")
     return logger
 end
