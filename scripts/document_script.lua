@@ -1,8 +1,8 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.1.3
+-- Version: 2.2.0
 -- Purpose: Main document script with configuration, logging, and track management
 
-local VERSION = "2.1.3"
+local VERSION = "2.2.0"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -15,34 +15,45 @@ local config = {
 local logger = nil
 local logLines = {}
 local maxLogLines = 20
-local useConsole = false  -- Fallback to console if no logger found
 
 -- === LOGGING FUNCTIONS ===
 local function findLogger()
-    -- Try to find logger at root first
-    logger = root:findByName("logger")
-    if logger then 
-        return logger 
+    -- OPTION 1: Direct path to logger in pager
+    -- Update this path to match your logger location
+    -- Example: If logger is in Pager1 > Page2 > logger
+    -- local pager = root:findByName("Pager1")
+    -- if pager then
+    --     local page = pager:findByName("Page2")
+    --     if page then
+    --         logger = page:findByName("logger")
+    --     end
+    -- end
+    
+    -- OPTION 2: Store logger reference in a root control
+    -- Create a small label at root called "logger_ref" 
+    -- In its init(), set: root.logger_ref = self.parent:findByName("logger")
+    if root.logger_ref then
+        logger = root.logger_ref
+        return logger
     end
     
-    -- If not found at root, logger might be in a pager or nested
-    -- For now, we'll use console as fallback
-    return nil
+    -- OPTION 3: Simple search at root (original)
+    logger = root:findByName("logger")
+    return logger
 end
 
 local function log(message)
-    -- Always print to console for debugging
-    print(os.date("%H:%M:%S") .. " " .. message)
+    local logMessage = os.date("%H:%M:%S") .. " " .. message
+    
+    -- Always print to console as backup
+    print(logMessage)
     
     if not logger then
         findLogger()
-        if not logger then 
-            useConsole = true
-            return 
-        end
+        if not logger then return end
     end
     
-    table.insert(logLines, os.date("%H:%M:%S") .. " " .. message)
+    table.insert(logLines, logMessage)
     
     if #logLines > maxLogLines then
         table.remove(logLines, 1)
@@ -158,18 +169,16 @@ function createConnectionTable(connectionIndex)
     return connections
 end
 
+-- === LOGGER REGISTRATION ===
+-- Call this from logger's init script
+function registerLogger(loggerControl)
+    logger = loggerControl
+    log("Logger registered from " .. (loggerControl.parent and loggerControl.parent.name or "unknown"))
+end
+
 -- === INITIALIZATION ===
 function init()
-    -- Try to find logger first
-    findLogger()
-    
     log(SCRIPT_NAME .. " v" .. VERSION .. " loaded")
-    
-    if useConsole then
-        log("No logger text object found - using console output")
-    else
-        log("Logger found - output will appear in logger text object")
-    end
     
     -- Parse configuration
     parseConfiguration()
