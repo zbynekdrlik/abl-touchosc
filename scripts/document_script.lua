@@ -1,8 +1,8 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.0.0
+-- Version: 2.1.0
 -- Purpose: Main document script with configuration, logging, and track management
 
-local VERSION = "2.0.0"
+local VERSION = "2.1.0"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -54,14 +54,30 @@ local function parseConfiguration()
                 log("  Connection: " .. key .. " -> " .. value)
             end
             
-            -- Parse unfold groups
+            -- Parse unfold groups with connection prefix
+            local unfold_instance, unfold_group = line:match("^%s*unfold_(%w+):%s*'([^']+)'%s*$")
+            if not unfold_instance then
+                unfold_instance, unfold_group = line:match('^%s*unfold_(%w+):%s*"([^"]+)"%s*$')
+            end
+            if unfold_instance and unfold_group then
+                table.insert(config.unfold_groups, {
+                    instance = unfold_instance,
+                    group_name = unfold_group
+                })
+                log("  Unfold group: " .. unfold_instance .. " -> " .. unfold_group)
+            end
+            
+            -- Legacy format support (no prefix = unfold on all connections)
             local unfold_match = line:match("^%s*unfold:%s*'([^']+)'%s*$")
             if not unfold_match then
                 unfold_match = line:match('^%s*unfold:%s*"([^"]+)"%s*$')
             end
             if unfold_match then
-                table.insert(config.unfold_groups, unfold_match)
-                log("  Unfold group: " .. unfold_match)
+                table.insert(config.unfold_groups, {
+                    instance = "all",
+                    group_name = unfold_match
+                })
+                log("  Unfold group: all -> " .. unfold_match)
             end
         end
     end
@@ -149,17 +165,41 @@ function onReceiveOSC(message, connections)
     
     -- Handle track names for unfolding
     if message[1] == '/live/song/get/track_names' then
-        log("Received track names, checking for groups to unfold...")
+        -- Determine which connection this came from
+        local sourceConnection = nil
+        for i = 1, #connections do
+            if connections[i] then
+                sourceConnection = i
+                break
+            end
+        end
+        
+        -- Find which instance this connection belongs to
+        local sourceInstance = nil
+        for instance, connIndex in pairs(config.connections) do
+            if connIndex == sourceConnection then
+                sourceInstance = instance
+                break
+            end
+        end
+        
+        log("Received track names from " .. (sourceInstance or "unknown") .. " (connection " .. (sourceConnection or "?") .. ")")
         
         for i = 1, #arguments do
             local track_index = i - 1
             local track_name = arguments[i].value
             
             -- Check against configured unfold groups
-            for _, unfold_group in ipairs(config.unfold_groups) do
-                if track_name == unfold_group then
-                    log("Unfolding group: " .. track_name .. " (track " .. track_index .. ")")
-                    sendOSC('/live/track/set/fold_state', track_index, false)
+            for _, unfold_config in ipairs(config.unfold_groups) do
+                if track_name == unfold_config.group_name then
+                    -- Check if this unfold should apply to this instance
+                    if unfold_config.instance == "all" or unfold_config.instance == sourceInstance then
+                        log("Unfolding group: " .. track_name .. " (track " .. track_index .. ") on " .. (sourceInstance or "all"))
+                        
+                        -- Send unfold command only to the source connection
+                        local targetConnections = createConnectionTable(sourceConnection)
+                        sendOSC('/live/track/set/fold_state', track_index, false, targetConnections)
+                    end
                 end
             end
         end
