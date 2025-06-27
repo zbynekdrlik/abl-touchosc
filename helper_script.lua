@@ -1,10 +1,10 @@
 -- TouchOSC Selective Connection Routing Helper Script
--- Version: 1.0.8
+-- Version: 1.0.9
 -- Phase: 01 - Selective Connection Routing
--- Added passthrough for OSC messages to ensure groups receive them
+-- Added global refresh function that can be called from buttons
 
 -- Version logging on startup
-local SCRIPT_VERSION = "1.0.8"
+local SCRIPT_VERSION = "1.0.9"
 
 -- Logger settings
 local MAX_LOG_LINES = 20  -- Maximum lines to keep in logger
@@ -126,16 +126,23 @@ function parseGroupName(name)
     end
 end
 
--- Global refresh function
+-- Global refresh function - refreshes all track groups
 function refreshAllGroups()
-    log("Refreshing all track groups...")
+    log("=== GLOBAL REFRESH INITIATED ===")
     local groups = root:findAllByProperty("tag", "trackGroup", true)
     local count = 0
+    local startTime = getMillis()
+    
     for _, group in ipairs(groups) do
         group:notify("refresh")
         count = count + 1
     end
-    log("Sent refresh to " .. count .. " groups")
+    
+    local elapsed = getMillis() - startTime
+    log("Sent refresh to " .. count .. " groups in " .. elapsed .. "ms")
+    log("=== GLOBAL REFRESH COMPLETE ===")
+    
+    return count
 end
 
 -- Status color definitions
@@ -202,6 +209,13 @@ function onReceiveOSC(message, connections)
     -- from reaching other controls (like our track groups)
     -- Return false to allow message to continue to other controls
     return false
+end
+
+-- Handle notifications from other controls
+function onReceiveNotify(action, value)
+    if action == "globalRefresh" then
+        return refreshAllGroups()
+    end
 end
 
 -- Initialize
