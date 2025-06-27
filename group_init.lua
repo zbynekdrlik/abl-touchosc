@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.1.2
+-- Version: 1.1.3
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
 
 -- Version logging
-local SCRIPT_VERSION = "1.1.2"
+local SCRIPT_VERSION = "1.1.3"
 
 -- Use log function if available from helper script, otherwise fall back to print
 local function safeLog(...)
@@ -25,10 +25,13 @@ safeLog("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
 function init()
     safeLog("Initializing group: " .. self.name)
     
+    -- Set tag programmatically (not via UI)
+    self.tag = "trackGroup"
+    
     -- Parse group name
     local instance, trackName = parseGroupName(self.name)
     
-    -- Store data in script variables (not just tag)
+    -- Store data in script variables
     self.instance = instance
     self.trackName = trackName
     self.connectionIndex = getConnectionIndex(instance)
@@ -79,7 +82,7 @@ function onReceiveOSC(message, connections)
                     self.children.status_indicator.color = {0, 1, 0}  -- Green = OK
                 end
                 
-                -- Store in tag for backwards compatibility
+                -- Store combined info in tag
                 self.tag = self.instance .. ":" .. self.trackNumber
                 
                 -- Start listeners
