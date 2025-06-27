@@ -1,14 +1,80 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.1.5
+-- Version: 1.2.0
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
+-- Self-contained version with embedded helper functions
 
 -- Version logging
-local SCRIPT_VERSION = "1.1.5"
+local SCRIPT_VERSION = "1.2.0"
 
--- Check if helper functions are available
-if not log then
-    print("[group_init.lua] ERROR: Helper functions not found! Make sure helper_script.lua is loaded first")
-    return
+-- Local logger function
+local function log(...)
+    local timestamp = os.date("%H:%M:%S")
+    local args = {...}
+    local message = "[" .. timestamp .. "] "
+    
+    for i, v in ipairs(args) do
+        message = message .. tostring(v)
+        if i < #args then message = message .. " " end
+    end
+    
+    print(message)
+    
+    -- Update logger if exists
+    local loggerObj = root:findByName("logger")
+    if loggerObj and loggerObj.values then
+        local currentText = loggerObj.values.text or ""
+        local lines = {}
+        for line in currentText:gmatch("[^\r\n]+") do
+            table.insert(lines, line)
+        end
+        table.insert(lines, message)
+        -- Keep last 20 lines
+        while #lines > 20 do
+            table.remove(lines, 1)
+        end
+        loggerObj.values.text = table.concat(lines, "\n")
+    end
+end
+
+-- Get connection configuration
+local function getConnectionIndex(instance)
+    local configObj = root:findByName("configuration")
+    if not configObj or not configObj.values or not configObj.values.text then
+        log("Warning: No configuration found, using default connection 1")
+        return 1
+    end
+    
+    local configText = configObj.values.text
+    local searchKey = "connection_" .. instance .. ":"
+    
+    for line in configText:gmatch("[^\r\n]+") do
+        line = line:match("^%s*(.-)%s*$")
+        if line:sub(1, #searchKey) == searchKey then
+            local value = line:sub(#searchKey + 1):match("^%s*(.-)%s*$")
+            return tonumber(value) or 1
+        end
+    end
+    
+    log("Warning: No config for " .. instance .. " - using default (1)")
+    return 1
+end
+
+local function buildConnectionTable(connectionIndex)
+    local connections = {}
+    for i = 1, 10 do
+        connections[i] = (i == connectionIndex)
+    end
+    return connections
+end
+
+local function parseGroupName(name)
+    if name:sub(1, 5) == "band_" then
+        return "band", name:sub(6)
+    elseif name:sub(1, 7) == "master_" then
+        return "master", name:sub(8)
+    else
+        return "band", name
+    end
 end
 
 log("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
@@ -16,7 +82,7 @@ log("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
 function init()
     log("Initializing group: " .. self.name)
     
-    -- Set tag programmatically (not via UI)
+    -- Set tag programmatically
     self.tag = "trackGroup"
     
     -- Parse group name
