@@ -1,10 +1,10 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.3.1
+-- Version: 1.3.2
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
--- Fixed sendOSC syntax for messages without arguments
+-- Testing different sendOSC syntax
 
 -- Version logging
-local SCRIPT_VERSION = "1.3.1"
+local SCRIPT_VERSION = "1.3.2"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -116,12 +116,8 @@ function refreshTrackMapping()
     -- Build connection table for our specific connection
     local connections = buildConnectionTable(connectionIndex)
     
-    -- For TouchOSC, when sending a message with no arguments but specific connections,
-    -- we need to use the complex message format
-    sendOSC({
-        '/live/song/get/track_names',
-        {}  -- empty arguments
-    }, connections)
+    -- Try: For messages with no arguments, pass connections as second parameter
+    sendOSC('/live/song/get/track_names', connections)
     
     log("Sent track names request to connection " .. connectionIndex)
 end
