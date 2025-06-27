@@ -1,10 +1,10 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.3.5
+-- Version: 1.4.0
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
--- Testing nil argument before connections table
+-- WORKING VERSION with correct sendOSC syntax!
 
 -- Version logging
-local SCRIPT_VERSION = "1.3.5"
+local SCRIPT_VERSION = "1.4.0"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -116,10 +116,8 @@ function refreshTrackMapping()
     -- Build connection table for our specific connection
     local connections = buildConnectionTable(connectionIndex)
     
-    -- Based on TouchOSC examples, for messages with arguments:
-    -- sendOSC('/path', arg1, arg2, { connections })
-    -- So for no arguments, maybe we need nil as a placeholder?
-    sendOSC('/live/song/get/track_names', nil, connections)
+    -- CORRECT SYNTAX: For messages with no arguments, connections table is the second parameter!
+    sendOSC('/live/song/get/track_names', connections)
     
     log("Sent track names request to connection " .. connectionIndex)
 end
@@ -215,3 +213,4 @@ function update()
 end
 
 log("Group initialization script ready")
+log("Selective connection routing is ACTIVE!")
