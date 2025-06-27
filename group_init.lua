@@ -1,10 +1,10 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.4.4
+-- Version: 1.4.5
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
--- Removed OSCReceive property access, rely on TouchOSC routing
+-- Added flexible track name matching
 
 -- Version logging
-local SCRIPT_VERSION = "1.4.4"
+local SCRIPT_VERSION = "1.4.5"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -85,6 +85,27 @@ local function parseGroupName(name)
     else
         return "band", name
     end
+end
+
+-- Flexible track name matching
+local function matchTrackName(searchName, trackNameInList)
+    -- Direct match
+    if trackNameInList == searchName then
+        return true
+    end
+    
+    -- Check if searchName is contained in trackNameInList
+    if trackNameInList:find(searchName, 1, true) then
+        return true
+    end
+    
+    -- Special case for "Hand 1 #" -> "Hand 1 MIC INPUT"
+    local cleanSearch = searchName:gsub(" #$", "")  -- Remove trailing #
+    if trackNameInList:find(cleanSearch, 1, true) then
+        return true
+    end
+    
+    return false
 end
 
 log("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
@@ -170,57 +191,77 @@ function onReceiveOSC(message, connections)
             end
             
             log("Processing " .. #arguments .. " track names...")
+            log("Looking for track matching: " .. trackName)
             
             local trackFound = false
+            local possibleMatches = {}
             
             for i = 1, #arguments do
                 if arguments[i] and arguments[i].value then
                     local trackNameValue = arguments[i].value
-                    log("  Track " .. (i-1) .. ": " .. trackNameValue)
                     
-                    if trackNameValue == trackName then
-                        -- Found our track
-                        trackNumber = i - 1
-                        lastVerified = getMillis()
-                        needsRefresh = false
-                        trackFound = true
-                        
-                        log("FOUND our track '" .. trackName .. "' at index " .. trackNumber .. "!")
-                        
-                        -- Update status - use Color() function!
-                        if self.children.status_indicator then
-                            self.children.status_indicator.color = Color(0, 1, 0, 1)  -- Green = OK (RGBA)
-                        end
-                        
-                        -- Store combined info in tag
-                        self.tag = instance .. ":" .. trackNumber
-                        
-                        -- Build connection table for our specific connection
-                        local targetConnections = buildConnectionTable(connectionIndex)
-                        
-                        -- Start listeners - send only to our configured connection
-                        sendOSC('/live/track/start_listen/volume', trackNumber, targetConnections)
-                        sendOSC('/live/track/start_listen/output_meter_level', trackNumber, targetConnections)
-                        sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
-                        sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
-                        
-                        log("Started listeners for track " .. trackNumber)
-                        
-                        -- Update label
-                        if self.children["fdr_label"] then
-                            self.children["fdr_label"].values.text = trackName:match("(%w+)(.*)")
-                        end
-                        break
+                    -- Check for match
+                    if matchTrackName(trackName, trackNameValue) then
+                        table.insert(possibleMatches, {index = i - 1, name = trackNameValue})
+                    end
+                    
+                    -- Log first few and last few tracks for context
+                    if i <= 5 or i > #arguments - 5 then
+                        log("  Track " .. (i-1) .. ": " .. trackNameValue)
+                    elseif i == 6 then
+                        log("  ... (showing first 5 and last 5 tracks)")
                     end
                 end
             end
             
-            if not trackFound then
-                -- Track not found
-                log("ERROR: Track not found: " .. trackName)
+            if #possibleMatches > 0 then
+                -- Use the first match
+                local match = possibleMatches[1]
+                trackNumber = match.index
+                lastVerified = getMillis()
+                needsRefresh = false
+                trackFound = true
                 
-                if self.children["fdr_label"] then
-                    self.children["fdr_label"].values.text = "???"
+                log("FOUND matching track '" .. match.name .. "' at index " .. trackNumber .. "!")
+                if #possibleMatches > 1 then
+                    log("Note: Multiple matches found, using first one")
+                end
+                
+                -- Update status - use Color() function!
+                if self.children.status_indicator then
+                    self.children.status_indicator.color = Color(0, 1, 0, 1)  -- Green = OK (RGBA)
+                end
+                
+                -- Store combined info in tag
+                self.tag = instance .. ":" .. trackNumber
+                
+                -- Build connection table for our specific connection
+                local targetConnections = buildConnectionTable(connectionIndex)
+                
+                -- Start listeners - send only to our configured connection
+                sendOSC('/live/track/start_listen/volume', trackNumber, targetConnections)
+                sendOSC('/live/track/start_listen/output_meter_level', trackNumber, targetConnections)
+                sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
+                sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
+                
+                log("Started listeners for track " .. trackNumber)
+                
+                -- Update label if it exists
+                if self.children.fdr_label then
+                    local displayName = trackName:match("([^#]+)") or trackName
+                    displayName = displayName:gsub("^%s*(.-)%s*$", "%1")  -- Trim whitespace
+                    self.children.fdr_label.values.text = displayName
+                end
+            else
+                -- Track not found
+                log("ERROR: No track found matching: " .. trackName)
+                log("Possible issues:")
+                log("  - Track name in TouchOSC doesn't match Ableton")
+                log("  - Track might be in a different Ableton instance")
+                log("  - Check exact spelling and spacing")
+                
+                if self.children.fdr_label then
+                    self.children.fdr_label.values.text = "???"
                 end
                 if self.children.status_indicator then
                     self.children.status_indicator.color = Color(1, 0, 0, 1)  -- Red = Error (RGBA)
