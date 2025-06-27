@@ -1,10 +1,10 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.4.0
+-- Version: 1.4.1
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
--- WORKING VERSION with correct sendOSC syntax!
+-- Fixed color assignment using Color() function
 
 -- Version logging
-local SCRIPT_VERSION = "1.4.0"
+local SCRIPT_VERSION = "1.4.1"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -108,15 +108,15 @@ function refreshTrackMapping()
     log("Refreshing track mapping for: " .. self.name)
     needsRefresh = true
     
-    -- Visual feedback
+    -- Visual feedback - use Color() function!
     if self.children.status_indicator then
-        self.children.status_indicator.color = {1, 1, 0}  -- Yellow = refreshing
+        self.children.status_indicator.color = Color(1, 1, 0, 1)  -- Yellow = refreshing (RGBA)
     end
     
     -- Build connection table for our specific connection
     local connections = buildConnectionTable(connectionIndex)
     
-    -- CORRECT SYNTAX: For messages with no arguments, connections table is the second parameter!
+    -- Send track names request to specific connection
     sendOSC('/live/song/get/track_names', connections)
     
     log("Sent track names request to connection " .. connectionIndex)
@@ -150,9 +150,9 @@ function onReceiveOSC(message, connections)
                 
                 log("Found track '" .. trackName .. "' at index " .. trackNumber)
                 
-                -- Update status
+                -- Update status - use Color() function!
                 if self.children.status_indicator then
-                    self.children.status_indicator.color = {0, 1, 0}  -- Green = OK
+                    self.children.status_indicator.color = Color(0, 1, 0, 1)  -- Green = OK (RGBA)
                 end
                 
                 -- Store combined info in tag
@@ -189,7 +189,7 @@ function onReceiveOSC(message, connections)
                 self.children["fdr_label"].values.text = "???"
             end
             if self.children.status_indicator then
-                self.children.status_indicator.color = {1, 0, 0}  -- Red = Error
+                self.children.status_indicator.color = Color(1, 0, 0, 1)  -- Red = Error (RGBA)
             end
         end
     end
@@ -207,7 +207,7 @@ function update()
     if lastVerified > 0 then
         local age = getMillis() - lastVerified
         if age > 60000 and self.children.status_indicator then  -- 1 minute
-            self.children.status_indicator.color = {1, 0.5, 0}  -- Orange = Stale
+            self.children.status_indicator.color = Color(1, 0.5, 0, 1)  -- Orange = Stale (RGBA)
         end
     end
 end
