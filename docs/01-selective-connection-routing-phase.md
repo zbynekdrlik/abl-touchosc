@@ -7,119 +7,149 @@ Currently, all TouchOSC objects broadcast to all configured connections. We need
 
 Each Ableton instance runs AbletonOSC on different ports/IPs.
 
-## Solution Overview
+## Current Architecture
+- Groups are named same as Ableton tracks (e.g., 'Hand 1 #')
+- On initialization, groups find their track number via track name
+- Track number is stored in group.tag parameter
+- Child scripts inherit parent tag as track number
 
-### Option 1: Per-Control Connection Selection (Recommended)
-TouchOSC allows each control to send/receive messages on specific connections (up to 10 connections supported).
+## Recommended Solution: Prefix-Based Group Naming
 
-**Implementation Steps:**
-1. Configure two connections in TouchOSC:
-   - Connection 1: Band Ableton (e.g., 192.168.1.100:11000)
-   - Connection 2: Master Ableton (e.g., 192.168.1.100:11001)
+### Overview
+Extend the current group naming convention to include an Ableton instance prefix:
+- Band tracks: `band_Hand 1 #`
+- Master tracks: `master_Hand 1 #`
 
-2. For each control/fader in TouchOSC editor:
-   - Band faders: Enable only Connection 1 in message settings
-   - Master faders: Enable only Connection 2 in message settings
-   - Shared controls: Enable both connections if needed
+Scripts will parse the group name to determine both:
+1. Which connection to use (based on prefix)
+2. Which track to control (based on track name after prefix)
 
-3. The '∞' symbol in connection settings means "all connections" - avoid using this
+### Implementation Details
 
-### Option 2: Script-Based Routing
-Use Lua scripting to control OSC destination programmatically.
+#### Phase 1: Connection Setup
+```
+Connection 1 - Band:
+- Enabled: ✓
+- Host: [Band Ableton IP]
+- Send Port: [Band Port]
+- Receive Port: [Optional]
 
-**Implementation Steps:**
-1. Modify `fader_script.lua` to check fader properties
-2. Route messages based on fader name/property
-3. Use `sendOSC()` with specific connection index parameter
+Connection 2 - Master:
+- Enabled: ✓
+- Host: [Master Ableton IP]
+- Send Port: [Master Port]
+- Receive Port: [Optional]
+```
 
-## Detailed Implementation Plan
+#### Phase 2: Group Naming Convention
+Update group names to include instance prefix:
+```
+Before: 'Hand 1 #'
+After:  'band_Hand 1 #' or 'master_Hand 1 #'
+```
 
-### Phase 1: Connection Setup
-1. Define connection specifications:
-   ```
-   Connection 1 - Band:
-   - Enabled: ✓
-   - Host: [Band Ableton IP]
-   - Send Port: [Band Port]
-   - Receive Port: [Optional]
-   
-   Connection 2 - Master:
-   - Enabled: ✓
-   - Host: [Master Ableton IP]
-   - Send Port: [Master Port]
-   - Receive Port: [Optional]
-   ```
+#### Phase 3: Script Modifications
 
-### Phase 2: Object Configuration
-1. Identify faders for each connection:
-   - List band-specific faders
-   - List master-specific faders
+1. **Parent Group Script Updates:**
+```lua
+function init()
+    -- Parse group name to extract instance and track name
+    local fullName = self.name
+    local instance, trackName = parseGroupName(fullName)
+    
+    -- Find track number as before, but search in specific Ableton instance
+    local trackNumber = findTrackNumber(trackName, instance)
+    
+    -- Store both in tag (e.g., "band:3" or "master:5")
+    self.tag = instance .. ":" .. trackNumber
+end
 
-2. Configure each control's OSC messages:
-   - Open control properties in TouchOSC editor
-   - Go to Messages → OSC tab
-   - For each message, enable only the appropriate connection(s)
-   - Uncheck unwanted connections to prevent cross-communication
+function parseGroupName(name)
+    -- Extract prefix and track name
+    if name:sub(1, 5) == "band_" then
+        return "band", name:sub(6)
+    elseif name:sub(1, 7) == "master_" then
+        return "master", name:sub(8)
+    else
+        -- Default fallback
+        return "band", name
+    end
+end
+```
 
-### Phase 3: Script Modifications (If using Option 2)
-1. Update `fader_script.lua`:
-   ```lua
-   -- Pseudo-code structure
-   function onValueChanged(key)
-     local connection = determineConnection(self.name)
-     if connection == "band" then
-       sendOSC("/live/track/...", {value}, {1}) -- connection 1
-     elseif connection == "master" then
-       sendOSC("/live/track/...", {value}, {2}) -- connection 2
-     end
-   end
-   ```
+2. **Child Control Script Updates:**
+```lua
+function onValueChanged()
+    -- Parse parent tag to get instance and track number
+    local parentTag = self.parent.tag
+    local instance, trackNumber = parseParentTag(parentTag)
+    
+    -- Determine connection index
+    local connectionIndex = getConnectionIndex(instance)
+    
+    -- Send OSC to specific connection
+    local address = string.format("/live/track/%d/volume", trackNumber)
+    sendOSC(address, {self.values.x}, {connectionIndex})
+end
 
-2. Create helper functions:
-   - `determineConnection()`: Logic to identify target based on control name
-   - `getConnectionIndex()`: Map logical names to connection indices (1 or 2)
+function parseParentTag(tag)
+    -- Split "band:3" or "master:5"
+    local instance, trackNum = tag:match("([^:]+):(.+)")
+    return instance, tonumber(trackNum)
+end
 
-### Phase 4: Testing Protocol
-1. Test individual connections
-2. Verify selective routing
-3. Monitor both Ableton instances
-4. Validate no cross-communication
+function getConnectionIndex(instance)
+    if instance == "band" then
+        return 1
+    elseif instance == "master" then
+        return 2
+    else
+        return 1  -- default
+    end
+end
+```
 
-## Technical Considerations
+#### Phase 4: Migration from GUI OSC to Script-Based
+For controls currently using OSC GUI selector:
+1. Disable OSC message in GUI
+2. Add script with appropriate onValueChanged handler
+3. Use parent tag to determine routing
 
-### TouchOSC Connection Features
-- Supports up to 10 simultaneous connections
-- Each control's messages can be individually configured for specific connections
-- Connection indices start at 1 in scripts
-- The sendOSC() function accepts connection index as third parameter
+### Benefits of This Approach
+✅ **Minimal Changes**: Extends existing architecture rather than replacing it  
+✅ **Visual Clarity**: Group names clearly show routing in editor  
+✅ **Flexible**: Easy to add more Ableton instances (e.g., "drums_Kick 1")  
+✅ **Maintains Features**: Track number discovery still works  
+✅ **Centralized Logic**: Routing determined by group name, inherited by children  
 
-### Naming Conventions
-Propose systematic naming:
-- Band faders: `band_fader_[function]`
-- Master faders: `master_fader_[function]`
+### Migration Strategy
+1. **Test Phase**: Create one test group with new naming
+2. **Gradual Migration**: Convert groups one at a time
+3. **Backwards Compatible**: Can run old and new groups simultaneously
 
-### Pros/Cons Analysis
+### Technical Considerations
+- Connection indices are 1-based in TouchOSC
+- Scripts must handle both sending and receiving on correct connections
+- Consider adding connection validation/fallback
+- May need to update track discovery to search specific Ableton instance
 
-**Option 1 - Per-Control Configuration:**
-- ✅ Native TouchOSC feature, no scripting required
-- ✅ Visual configuration in editor
-- ✅ Easy to see which control uses which connection
-- ❌ Manual configuration for each control
-- ❌ Changes require editing each control individually
+## Alternative Solutions (Not Recommended)
 
-**Option 2 - Script-Based:**
-- ✅ Centralized routing logic
-- ✅ Easy to change routing rules
-- ✅ Can use dynamic conditions
-- ❌ Requires Lua scripting knowledge
-- ❌ Less visible in editor interface
+### Option A: Per-Control Connection Selection
+- Configure each control's connections individually in GUI
+- ❌ Tedious for many controls
+- ❌ No visual indication of routing in group names
 
-## Recommendation
-Start with Option 1 (Per-Control Connection Selection) as it uses native TouchOSC features and provides clear visual feedback. Consider Option 2 if you need dynamic routing based on runtime conditions.
+### Option B: Separate Layouts
+- Create separate TouchOSC layouts for band/master
+- ❌ Requires switching between layouts
+- ❌ Duplicated development effort
 
 ## Next Steps
-1. Confirm IP addresses and ports for both Ableton instances
-2. Choose implementation approach
-3. Create test layout with minimal faders
-4. Configure connections and test routing
-5. Scale to full implementation
+1. Confirm connection details for both Ableton instances
+2. Create test group with new naming convention
+3. Update initialization script for track discovery
+4. Convert one control from GUI OSC to script-based
+5. Test bi-directional communication
+6. Document script templates for team use
+7. Plan full migration schedule
