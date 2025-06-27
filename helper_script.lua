@@ -1,9 +1,9 @@
 -- TouchOSC Selective Connection Routing Helper Script
--- Version: 1.0.4
+-- Version: 1.0.5
 -- Phase: 01 - Selective Connection Routing
 
 -- Version logging on startup
-local SCRIPT_VERSION = "1.0.4"
+local SCRIPT_VERSION = "1.0.5"
 
 -- Logger settings
 local MAX_LOG_LINES = 20  -- Maximum lines to keep in logger
@@ -218,5 +218,5 @@ log("  connection_master: 2")
 -- Run validation immediately
 validateConfiguration()
 
--- Export logger function for global use
-_G.log = log
+-- Note: log function is global within this script
+-- Other scripts should check if it exists before using
