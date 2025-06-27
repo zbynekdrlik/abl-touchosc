@@ -1,8 +1,8 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.2.2
+-- Version: 2.3.0
 -- Purpose: Main document script with configuration, logging, and track management
 
-local VERSION = "2.2.2"
+local VERSION = "2.3.0"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -17,14 +17,39 @@ local logLines = {}
 local maxLogLines = 20
 
 -- === LOGGING FUNCTIONS ===
+local function findLoggerRecursive(parent)
+    if not parent or not parent.children then return nil end
+    
+    for _, child in ipairs(parent.children) do
+        -- Check if this is the logger
+        if child.name == "logger" and child.type == "TEXT" then
+            return child
+        end
+        -- Check if it has the isLogger flag
+        if child.isLogger then
+            return child
+        end
+        -- Recursively search children
+        local found = findLoggerRecursive(child)
+        if found then return found end
+    end
+    return nil
+end
+
 local function findLogger()
-    -- Check if logger was registered
+    -- Check if logger was already found
     if logger then
         return logger
     end
     
-    -- Simple search at root
+    -- Try simple search first
     logger = root:findByName("logger")
+    if logger then 
+        return logger 
+    end
+    
+    -- Try recursive search
+    logger = findLoggerRecursive(root)
     return logger
 end
 
@@ -34,18 +59,21 @@ local function log(message)
     -- Always print to console as backup
     print(logMessage)
     
-    if not logger then
-        findLogger()
-        if not logger then return end
-    end
-    
+    -- Store messages even if logger not found yet
     table.insert(logLines, logMessage)
-    
     if #logLines > maxLogLines then
         table.remove(logLines, 1)
     end
     
-    logger.values.text = table.concat(logLines, "\n")
+    -- Try to find logger if not found
+    if not logger then
+        findLogger()
+    end
+    
+    -- Update logger if found
+    if logger then
+        logger.values.text = table.concat(logLines, "\n")
+    end
 end
 
 -- === CONFIGURATION PARSING ===
@@ -156,23 +184,27 @@ function createConnectionTable(connectionIndex)
 end
 
 -- === LOGGER REGISTRATION ===
--- Make this global so logger can find it
-_G.registerLogger = function(loggerControl)
+function registerLogger(loggerControl)
     logger = loggerControl
-    log("Logger registered from " .. (loggerControl.parent and loggerControl.parent.name or "unknown"))
+    log("Logger registered successfully!")
     
-    -- Show all previous console messages in the logger
-    if #logLines > 0 then
+    -- Display all buffered messages
+    if logger and #logLines > 0 then
         logger.values.text = table.concat(logLines, "\n")
     end
 end
 
--- Also store in root for alternative access
-root.registerLogger = _G.registerLogger
-
 -- === INITIALIZATION ===
 function init()
     log(SCRIPT_NAME .. " v" .. VERSION .. " loaded")
+    
+    -- Try to find logger
+    findLogger()
+    if logger then
+        log("Logger found during init")
+    else
+        log("Logger not found - using console output")
+    end
     
     -- Parse configuration
     parseConfiguration()
@@ -188,16 +220,6 @@ function init()
     sendOSC('/live/song/start_listen/is_playing')
     
     log("Initialization complete")
-    
-    -- Try to find logger after init
-    self:after(0.5, function()
-        if not logger then
-            findLogger()
-            if logger then
-                log("Logger found after init")
-            end
-        end
-    end)
 end
 
 -- === OSC RECEIVE HANDLER ===
