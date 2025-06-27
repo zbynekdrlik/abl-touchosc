@@ -1,23 +1,15 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.1.4
+-- Version: 1.1.5
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
 
 -- Version logging
-local SCRIPT_VERSION = "1.1.4"
+local SCRIPT_VERSION = "1.1.5"
 
--- Get helper functions from root
-local helpers = root.helperFunctions
-if not helpers then
+-- Check if helper functions are available
+if not log then
     print("[group_init.lua] ERROR: Helper functions not found! Make sure helper_script.lua is loaded first")
     return
 end
-
--- Import functions we need
-local log = helpers.log or print
-local parseGroupName = helpers.parseGroupName
-local getConnectionIndex = helpers.getConnectionIndex
-local buildConnectionTable = helpers.buildConnectionTable
-local updateStatusIndicator = helpers.updateStatusIndicator
 
 log("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
 
