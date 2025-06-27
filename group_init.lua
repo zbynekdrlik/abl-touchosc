@@ -1,10 +1,10 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.4.3
+-- Version: 1.4.4
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
--- Fixed OSC routing to ensure group receives messages
+-- Removed OSCReceive property access, rely on TouchOSC routing
 
 -- Version logging
-local SCRIPT_VERSION = "1.4.3"
+local SCRIPT_VERSION = "1.4.4"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -13,6 +13,8 @@ local connectionIndex = nil
 local lastVerified = 0
 local needsRefresh = false
 local trackNumber = nil
+local waitingForResponse = false
+local requestTime = 0
 
 -- Local logger function
 local function log(...)
@@ -100,12 +102,9 @@ function init()
     
     log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
     
-    -- Important: Set OSC receive routing to match our track names request
-    -- This ensures this control receives the /live/song/get/track_names response
-    if self.properties and self.properties.OSCReceive then
-        self.properties.OSCReceive = "/live/song/get/track_names"
-        log("Set OSC receive pattern to: /live/song/get/track_names")
-    end
+    -- Note: OSC routing must be configured in TouchOSC editor
+    -- The group should have OSC receive pattern set to: /live/song/get/track_names
+    log("NOTE: Ensure group has OSC receive pattern: /live/song/get/track_names")
     
     -- Initial track discovery
     refreshTrackMapping()
@@ -114,6 +113,8 @@ end
 function refreshTrackMapping()
     log("Refreshing track mapping for: " .. self.name)
     needsRefresh = true
+    waitingForResponse = true
+    requestTime = getMillis()
     
     -- Visual feedback - use Color() function!
     if self.children.status_indicator then
@@ -145,6 +146,7 @@ function onReceiveOSC(message, connections)
     -- Check if this is track names response
     if path == '/live/song/get/track_names' then
         log("Track names response received!")
+        waitingForResponse = false
         
         -- Log which connections this came from
         for i = 1, 10 do
@@ -244,6 +246,17 @@ function onNotify(param)
 end
 
 function update()
+    -- Check for timeout
+    if waitingForResponse and (getMillis() - requestTime > 5000) then
+        log("WARNING: No response after 5 seconds")
+        waitingForResponse = false
+        needsRefresh = false
+        
+        if self.children.status_indicator then
+            self.children.status_indicator.color = Color(1, 0, 0, 1)  -- Red = Error
+        end
+    end
+    
     -- Visual feedback for stale data
     if lastVerified > 0 then
         local age = getMillis() - lastVerified
