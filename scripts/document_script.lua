@@ -1,8 +1,8 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.4.0
+-- Version: 2.5.0
 -- Purpose: Main document script with configuration, logging, and track management
 
-local VERSION = "2.4.0"
+local VERSION = "2.5.0"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -11,8 +11,9 @@ local config = {
     unfold_groups = {}
 }
 
--- Logger reference (will be found by name)
+-- Control references (can be in pagers)
 local logger = nil
+local configText = nil
 local logLines = {}
 local maxLogLines = 20
 
@@ -40,30 +41,24 @@ local function log(message)
     end
 end
 
--- === NOTIFY HANDLER FOR LOGGER ===
-function onReceiveNotify(action, value)
-    if action == "register_logger" then
-        -- Logger is notifying us of its existence
-        logger = value
-        log("Logger registered via notify")
-        
-        -- Send all buffered messages to logger
-        if logger and logger.values then
-            logger.values.text = table.concat(logLines, "\n")
-        end
-    end
-end
-
 -- === CONFIGURATION PARSING ===
 local function parseConfiguration()
-    local configText = root:findByName("configuration")
+    -- Try to find configuration if not registered yet
+    if not configText then
+        configText = root:findByName("configuration", true)
+    end
+    
     if not configText or not configText.values.text then
-        log("ERROR: No configuration text object found")
+        log("Configuration not found yet - waiting for registration")
         return false
     end
     
     local text = configText.values.text
     log("Parsing configuration...")
+    
+    -- Clear old config
+    config.connections = {}
+    config.unfold_groups = {}
     
     -- Parse connection mappings
     for line in text:gmatch("[^\r\n]+") do
@@ -106,6 +101,33 @@ local function parseConfiguration()
     
     log("Configuration loaded: " .. #config.unfold_groups .. " unfold groups")
     return true
+end
+
+-- === NOTIFY HANDLER ===
+function onReceiveNotify(action, value)
+    if action == "register_logger" then
+        -- Logger is notifying us of its existence
+        logger = value
+        log("Logger registered via notify")
+        
+        -- Send all buffered messages to logger
+        if logger and logger.values then
+            logger.values.text = table.concat(logLines, "\n")
+        end
+        
+    elseif action == "register_configuration" then
+        -- Configuration text is notifying us
+        configText = value
+        log("Configuration registered via notify")
+        
+        -- Parse the configuration immediately
+        parseConfiguration()
+        
+    elseif action == "configuration_updated" then
+        -- Configuration text has been updated
+        log("Configuration updated - reparsing")
+        parseConfiguration()
+    end
 end
 
 -- === GLOBAL HELPER FUNCTIONS ===
@@ -162,12 +184,12 @@ function init()
     logger = root:findByName("logger", true)
     if logger then
         log("Logger found during init")
-    else
-        log("Logger not found - using console output")
     end
     
-    -- Parse configuration
-    parseConfiguration()
+    -- Try to parse configuration
+    if not parseConfiguration() then
+        log("Waiting for configuration registration...")
+    end
     
     -- Original init commands
     log("Stopping all track listeners...")
