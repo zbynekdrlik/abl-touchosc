@@ -1,10 +1,10 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.4.2
+-- Version: 1.4.3
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
--- Added debug logging for OSC receiving
+-- Fixed OSC routing to ensure group receives messages
 
 -- Version logging
-local SCRIPT_VERSION = "1.4.2"
+local SCRIPT_VERSION = "1.4.3"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -100,6 +100,13 @@ function init()
     
     log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
     
+    -- Important: Set OSC receive routing to match our track names request
+    -- This ensures this control receives the /live/song/get/track_names response
+    if self.properties and self.properties.OSCReceive then
+        self.properties.OSCReceive = "/live/song/get/track_names"
+        log("Set OSC receive pattern to: /live/song/get/track_names")
+    end
+    
     -- Initial track discovery
     refreshTrackMapping()
 end
@@ -132,7 +139,7 @@ function onReceiveOSC(message, connections)
         for i = 1, 10 do
             if connections[i] then table.insert(conns, i) end
         end
-        log("DEBUG: Received OSC: " .. path .. " from connection(s): " .. table.concat(conns, ","))
+        log("DEBUG: Received OSC at " .. self.name .. ": " .. path .. " from connection(s): " .. table.concat(conns, ","))
     end
     
     -- Check if this is track names response
@@ -149,7 +156,7 @@ function onReceiveOSC(message, connections)
         -- Only process if it's from our configured connection
         if not connections[connectionIndex] then 
             log("Ignoring - not from our connection (" .. connectionIndex .. ")")
-            return 
+            return true -- Return true to stop further processing
         end
         
         if needsRefresh then
@@ -157,7 +164,7 @@ function onReceiveOSC(message, connections)
             
             if not arguments then
                 log("ERROR: No track names in response")
-                return
+                return true
             end
             
             log("Processing " .. #arguments .. " track names...")
@@ -217,10 +224,16 @@ function onReceiveOSC(message, connections)
                     self.children.status_indicator.color = Color(1, 0, 0, 1)  -- Red = Error (RGBA)
                 end
             end
+            
+            return true -- Message processed, stop further processing
         else
             log("Received track names but not in refresh mode - ignoring")
+            return true
         end
     end
+    
+    -- Return false for messages we don't handle to allow further processing
+    return false
 end
 
 function onNotify(param)
@@ -242,4 +255,4 @@ end
 
 log("Group initialization script ready")
 log("Selective connection routing is ACTIVE!")
-log("onReceiveOSC is attached to: " .. self.name)
+log("Script version " .. SCRIPT_VERSION .. " loaded")
