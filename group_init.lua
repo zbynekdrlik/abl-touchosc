@@ -1,10 +1,10 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.4.6
--- Phase: 01 - Phase 1: Single Group Test with Refresh
--- Reverted to EXACT track name matching for safety
+-- Version: 1.5.0
+-- Phase: 01 - Simplified group without individual refresh button
+-- Groups now only respond to global refresh commands
 
 -- Version logging
-local SCRIPT_VERSION = "1.4.6"
+local SCRIPT_VERSION = "1.5.0"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -13,8 +13,7 @@ local connectionIndex = nil
 local lastVerified = 0
 local needsRefresh = false
 local trackNumber = nil
-local waitingForResponse = false
-local requestTime = 0
+local trackMapped = false
 
 -- Local logger function
 local function log(...)
@@ -87,6 +86,19 @@ local function parseGroupName(name)
     end
 end
 
+-- Update visual status (minimal - just LED if present)
+local function updateStatus(status)
+    if self.children.status_indicator then
+        if status == "ok" then
+            self.children.status_indicator.color = Color(0, 1, 0, 1)  -- Green
+        elseif status == "error" then
+            self.children.status_indicator.color = Color(1, 0, 0, 1)  -- Red
+        elseif status == "stale" then
+            self.children.status_indicator.color = Color(1, 0.5, 0, 1)  -- Orange
+        end
+    end
+end
+
 log("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
 
 function init()
@@ -98,12 +110,10 @@ function init()
     -- Parse group name and store in script variables
     instance, trackName = parseGroupName(self.name)
     connectionIndex = getConnectionIndex(instance)
-    lastVerified = getMillis()
     
     log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
     
     -- Note: OSC routing must be configured in TouchOSC editor
-    -- The group should have OSC receive pattern set to: /live/song/get/track_names
     log("NOTE: Ensure group has OSC receive pattern: /live/song/get/track_names")
     
     -- Initial track discovery
@@ -111,66 +121,35 @@ function init()
 end
 
 function refreshTrackMapping()
-    log("Refreshing track mapping for: " .. self.name)
+    log("Refreshing " .. self.name)
     needsRefresh = true
-    waitingForResponse = true
-    requestTime = getMillis()
-    
-    -- Visual feedback - use Color() function!
-    if self.children.status_indicator then
-        self.children.status_indicator.color = Color(1, 1, 0, 1)  -- Yellow = refreshing (RGBA)
-    end
+    trackMapped = false
     
     -- Build connection table for our specific connection
     local connections = buildConnectionTable(connectionIndex)
     
     -- Send track names request to specific connection
     sendOSC('/live/song/get/track_names', connections)
-    
-    log("Sent track names request to connection " .. connectionIndex)
-    log("Waiting for response...")
 end
 
 function onReceiveOSC(message, connections)
     local path = message[1]
     
-    -- Debug log ALL incoming OSC messages
-    if path then
-        local conns = {}
-        for i = 1, 10 do
-            if connections[i] then table.insert(conns, i) end
-        end
-        log("DEBUG: Received OSC at " .. self.name .. ": " .. path .. " from connection(s): " .. table.concat(conns, ","))
-    end
-    
     -- Check if this is track names response
     if path == '/live/song/get/track_names' then
-        log("Track names response received!")
-        waitingForResponse = false
-        
-        -- Log which connections this came from
-        for i = 1, 10 do
-            if connections[i] then
-                log("  From connection " .. i)
-            end
-        end
-        
         -- Only process if it's from our configured connection
         if not connections[connectionIndex] then 
-            log("Ignoring - not from our connection (" .. connectionIndex .. ")")
-            return true -- Return true to stop further processing
+            return true
         end
         
         if needsRefresh then
             local arguments = message[2]
             
             if not arguments then
-                log("ERROR: No track names in response")
+                log("ERROR: No track names in response for " .. self.name)
+                updateStatus("error")
                 return true
             end
-            
-            log("Processing " .. #arguments .. " track names...")
-            log("Looking for EXACT match: '" .. trackName .. "'")
             
             local trackFound = false
             
@@ -185,13 +164,11 @@ function onReceiveOSC(message, connections)
                         lastVerified = getMillis()
                         needsRefresh = false
                         trackFound = true
+                        trackMapped = true
                         
-                        log("FOUND exact match for '" .. trackName .. "' at index " .. trackNumber .. "!")
+                        log("Mapped " .. self.name .. " -> Track " .. trackNumber)
                         
-                        -- Update status - use Color() function!
-                        if self.children.status_indicator then
-                            self.children.status_indicator.color = Color(0, 1, 0, 1)  -- Green = OK (RGBA)
-                        end
+                        updateStatus("ok")
                         
                         -- Store combined info in tag
                         self.tag = instance .. ":" .. trackNumber
@@ -205,8 +182,6 @@ function onReceiveOSC(message, connections)
                         sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
                         sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
                         
-                        log("Started listeners for track " .. trackNumber)
-                        
                         -- Update label if it exists
                         if self.children.fdr_label then
                             local displayName = trackName:match("([^#]+)") or trackName
@@ -215,71 +190,40 @@ function onReceiveOSC(message, connections)
                         end
                         break
                     end
-                    
-                    -- Log first few and last few tracks for context
-                    if i <= 5 or i > #arguments - 5 then
-                        log("  Track " .. (i-1) .. ": '" .. trackNameValue .. "'")
-                    elseif i == 6 then
-                        log("  ... (showing first 5 and last 5 tracks)")
-                    end
                 end
             end
             
             if not trackFound then
-                -- Track not found
-                log("ERROR: No exact match found for: '" .. trackName .. "'")
-                log("Make sure:")
-                log("  - Track name in Ableton matches EXACTLY (including spaces)")
-                log("  - Group name format is 'band_TrackName' or 'master_TrackName'")
-                log("  - No extra spaces or special characters")
+                log("ERROR: Track not found: '" .. trackName .. "' for " .. self.name)
+                updateStatus("error")
                 
                 if self.children.fdr_label then
                     self.children.fdr_label.values.text = "???"
                 end
-                if self.children.status_indicator then
-                    self.children.status_indicator.color = Color(1, 0, 0, 1)  -- Red = Error (RGBA)
-                end
             end
             
-            return true -- Message processed, stop further processing
-        else
-            log("Received track names but not in refresh mode - ignoring")
             return true
         end
     end
     
-    -- Return false for messages we don't handle to allow further processing
     return false
 end
 
-function onNotify(param)
-    if param == "refresh" then
-        log("Received refresh notification for " .. self.name)
+function onReceiveNotify(action)
+    if action == "refresh" then
         refreshTrackMapping()
     end
 end
 
 function update()
-    -- Check for timeout
-    if waitingForResponse and (getMillis() - requestTime > 5000) then
-        log("WARNING: No response after 5 seconds")
-        waitingForResponse = false
-        needsRefresh = false
-        
-        if self.children.status_indicator then
-            self.children.status_indicator.color = Color(1, 0, 0, 1)  -- Red = Error
-        end
-    end
-    
     -- Visual feedback for stale data
-    if lastVerified > 0 then
+    if trackMapped and lastVerified > 0 then
         local age = getMillis() - lastVerified
-        if age > 60000 and self.children.status_indicator then  -- 1 minute
-            self.children.status_indicator.color = Color(1, 0.5, 0, 1)  -- Orange = Stale (RGBA)
+        if age > 300000 then  -- 5 minutes
+            updateStatus("stale")
         end
     end
 end
 
-log("Group initialization script ready")
-log("Selective connection routing is ACTIVE!")
+log("Group ready - awaiting global refresh command")
 log("Script version " .. SCRIPT_VERSION .. " loaded")
