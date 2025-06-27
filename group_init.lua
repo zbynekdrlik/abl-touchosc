@@ -1,29 +1,28 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.1.3
+-- Version: 1.1.4
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
 
 -- Version logging
-local SCRIPT_VERSION = "1.1.3"
+local SCRIPT_VERSION = "1.1.4"
 
--- Use log function if available from helper script, otherwise fall back to print
-local function safeLog(...)
-    if log then
-        log(...)
-    else
-        local args = {...}
-        local message = "[group_init.lua] "
-        for i, v in ipairs(args) do
-            message = message .. tostring(v)
-            if i < #args then message = message .. " " end
-        end
-        print(message)
-    end
+-- Get helper functions from root
+local helpers = root.helperFunctions
+if not helpers then
+    print("[group_init.lua] ERROR: Helper functions not found! Make sure helper_script.lua is loaded first")
+    return
 end
 
-safeLog("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
+-- Import functions we need
+local log = helpers.log or print
+local parseGroupName = helpers.parseGroupName
+local getConnectionIndex = helpers.getConnectionIndex
+local buildConnectionTable = helpers.buildConnectionTable
+local updateStatusIndicator = helpers.updateStatusIndicator
+
+log("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
 
 function init()
-    safeLog("Initializing group: " .. self.name)
+    log("Initializing group: " .. self.name)
     
     -- Set tag programmatically (not via UI)
     self.tag = "trackGroup"
@@ -37,14 +36,14 @@ function init()
     self.connectionIndex = getConnectionIndex(instance)
     self.lastVerified = getMillis()
     
-    safeLog("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. self.connectionIndex)
+    log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. self.connectionIndex)
     
     -- Initial track discovery
     refreshTrackMapping()
 end
 
 function refreshTrackMapping()
-    safeLog("Refreshing track mapping for: " .. self.name)
+    log("Refreshing track mapping for: " .. self.name)
     self.needsRefresh = true
     
     -- Visual feedback
@@ -63,7 +62,7 @@ function onReceiveOSC(message, connections)
     
     local path = message[1]
     if path == '/live/song/get/track_names' and self.needsRefresh then
-        safeLog("Received track names for " .. self.name)
+        log("Received track names for " .. self.name)
         local arguments = message[2]
         local trackFound = false
         
@@ -75,7 +74,7 @@ function onReceiveOSC(message, connections)
                 self.needsRefresh = false
                 trackFound = true
                 
-                safeLog("Found track '" .. self.trackName .. "' at index " .. self.trackNumber)
+                log("Found track '" .. self.trackName .. "' at index " .. self.trackNumber)
                 
                 -- Update status
                 if self.children.status_indicator then
@@ -102,7 +101,7 @@ function onReceiveOSC(message, connections)
         
         if not trackFound then
             -- Track not found
-            safeLog("ERROR: Track not found: " .. self.trackName)
+            log("ERROR: Track not found: " .. self.trackName)
             if self.children["fdr_label"] then
                 self.children["fdr_label"].values.text = "???"
             end
@@ -115,7 +114,7 @@ end
 
 function onNotify(param)
     if param == "refresh" then
-        safeLog("Received refresh notification for " .. self.name)
+        log("Received refresh notification for " .. self.name)
         refreshTrackMapping()
     end
 end
@@ -130,4 +129,4 @@ function update()
     end
 end
 
-safeLog("Group initialization script ready")
+log("Group initialization script ready")
