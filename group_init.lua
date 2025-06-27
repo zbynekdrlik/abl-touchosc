@@ -1,10 +1,10 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.3.3
+-- Version: 1.3.4
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
--- Debug version to understand sendOSC
+-- Testing manual connection switching
 
 -- Version logging
-local SCRIPT_VERSION = "1.3.3"
+local SCRIPT_VERSION = "1.3.4"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -67,14 +67,6 @@ local function getConnectionIndex(inst)
     return 1
 end
 
-local function buildConnectionTable(connIndex)
-    local connections = {}
-    for i = 1, 10 do
-        connections[i] = (i == connIndex)
-    end
-    return connections
-end
-
 local function parseGroupName(name)
     if name:sub(1, 5) == "band_" then
         return "band", name:sub(6)
@@ -100,13 +92,30 @@ function init()
     
     log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
     
+    -- Check current connections
+    log("Current object connections:")
+    if self.connections then
+        for i = 1, 10 do
+            if self.connections[i] then
+                log("  Connection " .. i .. ": enabled")
+            end
+        end
+    else
+        log("  No connections property accessible from script")
+    end
+    
+    -- Important notice
+    log("=== IMPORTANT ===")
+    log("This group needs Connection " .. connectionIndex .. " enabled in TouchOSC UI")
+    log("Select the group and check its Connections in the properties panel")
+    log("=================")
+    
     -- Initial track discovery
     refreshTrackMapping()
 end
 
 function refreshTrackMapping()
     log("Refreshing track mapping for: " .. self.name)
-    log("DEBUG: About to call sendOSC...")
     needsRefresh = true
     
     -- Visual feedback
@@ -114,49 +123,34 @@ function refreshTrackMapping()
         self.children.status_indicator.color = {1, 1, 0}  -- Yellow = refreshing
     end
     
-    -- Let's try the simplest approach first - just send without connection routing
-    -- and see if the object's own connections work
-    local success, err = pcall(function()
-        sendOSC('/live/song/get/track_names')
-    end)
-    
-    if success then
-        log("Sent track names request (using object's default connections)")
-    else
-        log("ERROR sending OSC:", err)
-        -- Try alternative approaches
-        log("Trying with empty argument table...")
-        local success2, err2 = pcall(function()
-            sendOSC('/live/song/get/track_names', {})
-        end)
-        if success2 then
-            log("Success with empty table")
-        else
-            log("ERROR with empty table:", err2)
-        end
-    end
-    
-    log("IMPORTANT: Make sure this group object has the correct connection enabled in TouchOSC UI")
-    log("The group should have Connection " .. connectionIndex .. " enabled")
+    -- Send the OSC message - it will use whatever connections are enabled on this object
+    sendOSC('/live/song/get/track_names')
+    log("Sent track names request using object's configured connections")
 end
 
 function onReceiveOSC(message, connections)
     local path = message[1]
     
-    -- Log all incoming messages to see what's happening
-    if path == '/live/song/get/track_names' then
-        log("Received track names response")
-        log("Message came from connections:")
+    -- Log all incoming OSC messages for debugging
+    if path:sub(1, 5) == "/live" then
+        local activeConns = {}
         for i = 1, 10 do
             if connections[i] then
-                log("  Connection " .. i .. ": YES")
+                table.insert(activeConns, i)
             end
         end
-        
-        -- Only process if it's from our configured connection
-        if not connections[connectionIndex] then 
-            log("Ignoring - not from our connection (" .. connectionIndex .. ")")
-            return 
+        if #activeConns > 0 then
+            log("OSC received: " .. path .. " from connection(s): " .. table.concat(activeConns, ", "))
+        end
+    end
+    
+    if path == '/live/song/get/track_names' then
+        -- Check which connection this came from
+        if connections[connectionIndex] then
+            log("Track names received from our connection (" .. connectionIndex .. ")")
+        else
+            log("Track names received from different connection - ignoring")
+            return
         end
         
         if needsRefresh then
@@ -166,6 +160,8 @@ function onReceiveOSC(message, connections)
                 log("ERROR: No track names received")
                 return
             end
+            
+            log("Received " .. #arguments .. " track names")
             
             local trackFound = false
             
@@ -187,7 +183,7 @@ function onReceiveOSC(message, connections)
                     -- Store combined info in tag
                     self.tag = instance .. ":" .. trackNumber
                     
-                    -- Start listeners - use simple sendOSC for now
+                    -- Start listeners
                     sendOSC('/live/track/start_listen/volume', trackNumber)
                     sendOSC('/live/track/start_listen/output_meter_level', trackNumber)
                     sendOSC('/live/track/start_listen/mute', trackNumber)
