@@ -1,10 +1,10 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.2.1
+-- Version: 1.2.2
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
--- Self-contained version with proper data storage
+-- Self-contained version with proper OSC sending
 
 -- Version logging
-local SCRIPT_VERSION = "1.2.1"
+local SCRIPT_VERSION = "1.2.2"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -115,7 +115,8 @@ function refreshTrackMapping()
     
     -- Request track names from specific connection
     local connections = buildConnectionTable(connectionIndex)
-    sendOSC('/live/song/get/track_names', nil, connections)
+    -- Send without arguments (empty table instead of nil)
+    sendOSC('/live/song/get/track_names', {}, connections)
 end
 
 function onReceiveOSC(message, connections)
