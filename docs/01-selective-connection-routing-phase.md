@@ -1,348 +1,377 @@
-# TouchOSC Selective Connection Routing - Phase Document (Updated)
+# TouchOSC Selective Connection Routing - Complete Implementation Guide
 
-## Problem Statement
-Currently, all TouchOSC objects broadcast to all configured connections. We need to route specific faders to different Ableton instances:
-- Some faders → Ableton "band" instance
-- Other faders → Ableton "master" instance
+## Overview
+This feature enables TouchOSC to route different faders to different Ableton Live instances. Some controls go to a "band" instance while others go to a "master" instance, each running AbletonOSC on different ports.
 
-Each Ableton instance runs AbletonOSC on different ports/IPs.
+## Current Status: Phase 1 Complete ✅
 
-## Current Implementation Status
+### What's Working
+- ✅ Configuration system via text object
+- ✅ Visual logger for debugging
+- ✅ Group-based connection routing
+- ✅ Automatic track discovery and mapping
+- ✅ Global refresh system
+- ✅ Safety features (controls disable when unmapped)
+- ✅ Visual status indicators
 
-### ✅ Phase 0: Preparation and Testing Setup - **COMPLETE**
-- Helper script v1.0.9 with configuration parsing
-- Visual logger functionality
-- Connection routing helpers
-- Global functions available to all scripts
+### Script Versions
+- **helper_script.lua**: v1.0.9
+- **group_init.lua**: v1.5.1
+- **global_refresh_button.lua**: v1.1.0
+- **fader_script.lua**: Original (needs Phase 2 update)
+- **meter_script.lua**: Original (needs Phase 2 update)
 
-### ✅ Phase 1: Single Group Test - **COMPLETE & IMPROVED**
-- Group initialization script v1.5.1
-- Global refresh system implemented
-- Safety features: controls disabled when not mapped
-- Exact track name matching for safety
-- Visual status indicators
+## Complete Setup Guide (From Scratch)
 
-### 🚧 Phase 2-7: Pending
-- Ready to proceed with full implementation
+### Prerequisites
+- TouchOSC Editor
+- Two Ableton Live instances with AbletonOSC
+- Basic understanding of TouchOSC scripting
 
-## Key Learnings & Solutions Implemented
+### Step 1: TouchOSC Connection Configuration
+Configure your connections in TouchOSC:
 
-### 1. Script Isolation
-- **Issue**: Scripts run in complete isolation, cannot share variables
-- **Solution**: Use control properties and notify() for communication
-
-### 2. OSC Routing
-- **Issue**: Cannot set OSC receive patterns programmatically
-- **Solution**: Must configure in TouchOSC editor UI
-- **Implementation**: Groups need `/live/song/get/track_names` pattern
-
-### 3. Color Management
-- **Issue**: Direct color table assignment fails
-- **Solution**: Must use `Color()` constructor with RGBA values
-
-### 4. Connection Routing
-- **Issue**: sendOSC needs proper connection table syntax
-- **Solution**: `sendOSC(path, arg, connections)` or `sendOSC(path, connections)`
-
-### 5. Safety & Track Matching
-- **Issue**: Fuzzy matching could control wrong tracks
-- **Solution**: Exact name matching only, disable controls when unmapped
-
-### 6. Global Refresh
-- **Issue**: Individual refresh buttons are poor UX
-- **Solution**: Single global refresh button for all groups
-
-## Current Architecture
-
-### System Components
 ```
-Root/Project Page
-├── Scripts
-│   └── helper_script.lua (v1.0.9)
-│
-├── Configuration & Monitoring
-│   ├── configuration (text object)
-│   ├── logger (text object) [optional]
-│   └── global_status (text label) [optional]
-│
-├── Global Controls
-│   └── global_refresh_button (with global_refresh_button.lua)
-│
-└── Track Groups
-    ├── band_Hand1 # (with group_init.lua v1.5.1)
-    │   ├── status_indicator (LED)
-    │   ├── fdr_label [optional]
-    │   ├── fader
-    │   ├── meter
-    │   └── mute button
-    ├── master_Vox1 #
-    └── ...
+Connection 1: Band Ableton
+- Host: [Band Computer IP]
+- Send Port: [AbletonOSC Port - typically 11000]
+- Receive Port: [Local Port 1 - e.g., 11001]
+
+Connection 2: Master Ableton  
+- Host: [Master Computer IP]
+- Send Port: [AbletonOSC Port - typically 11000]
+- Receive Port: [Local Port 2 - e.g., 11002]
 ```
 
-### Configuration Format
+**CRITICAL**: Each connection must have a unique receive port!
+
+### Step 2: Create Root Configuration Objects
+
+#### 2.1 Configuration Text Object (REQUIRED)
+1. Add a Text object to document root
+2. Name it exactly: `configuration`
+3. Properties:
+   - Font size: 12-14pt
+   - Position: Anywhere (can be hidden)
+4. Content:
 ```
 # TouchOSC Connection Configuration
 connection_band: 1
 connection_master: 2
-# Future: connection_drums: 3
 ```
 
-### Script Versions
-- **helper_script.lua**: v1.0.9 - Global functions and configuration
-- **group_init.lua**: v1.5.1 - Group initialization with safety
-- **global_refresh_button.lua**: v1.1.0 - Single refresh for all
-- **fader_script.lua**: Existing (to be updated in Phase 2)
-- **meter_script.lua**: Existing (to be updated in Phase 2)
+#### 2.2 Logger Text Object (RECOMMENDED)
+1. Add a Text object to document root
+2. Name it exactly: `logger`
+3. Properties:
+   - Height: ~300px (fits ~20 lines)
+   - Font: Monospace recommended
+   - Interactive: OFF (read-only)
+   - Position: Visible area for debugging
 
-## Implementation Guide
+#### 2.3 Global Status Label (OPTIONAL)
+1. Add a Label object to document root
+2. Name it: `global_status`
+3. Use for refresh feedback
 
-### Setting Up From Scratch
+### Step 3: Add Helper Script to Root
 
-#### 1. TouchOSC Configuration
-```
-Connection 1: Band Ableton
-- Host: [Band IP]
-- Send Port: [Band Port]
-- Receive Port: [Local Port 1]
+1. Select document root in editor
+2. Add new script
+3. Copy entire `helper_script.lua` content
+4. Save and verify in control mode:
+   - Logger should show: "Helper Script v1.0.9 loaded"
+   - Configuration should be parsed
 
-Connection 2: Master Ableton  
-- Host: [Master IP]
-- Send Port: [Master Port]
-- Receive Port: [Local Port 2]
-```
+**VERIFICATION**: Check logger shows configuration loaded correctly
 
-#### 2. Create Configuration Objects
-1. **Text object "configuration"**:
-   - Font size: ~12-14pt
-   - Content:
-   ```
-   connection_band: 1
-   connection_master: 2
-   ```
+### Step 4: Create Global Refresh Button
 
-2. **Text object "logger"** (optional but recommended):
-   - Height: ~300px (20 lines)
-   - Font: Monospace
-   - Read-only
+1. Add a Button control
+2. Name it descriptively (e.g., "REFRESH ALL TRACKS")
+3. Properties:
+   - Size: Large enough to tap easily
+   - Color: Distinct (e.g., yellow)
+   - Position: Top of interface
+4. Add script: Copy entire `global_refresh_button.lua`
+5. The button text will auto-set to "REFRESH ALL"
 
-3. **Text label "global_status"** (optional):
-   - For refresh feedback
+### Step 5: Prepare Track Groups
 
-#### 3. Add Scripts to Root
-1. Select document root
-2. Add script: `helper_script.lua`
-3. Verify loads with "Helper Script v1.0.9 loaded"
+For EACH track group you want to control:
 
-#### 4. Create Global Refresh Button
-1. Add button control
-2. Name it descriptively (e.g., "REFRESH ALL")
-3. Add script: `global_refresh_button.lua`
-4. Position prominently
+#### 5.1 Group Naming Convention
+Rename groups with instance prefix:
+- Band tracks: `band_TrackName`
+- Master tracks: `master_TrackName`
 
-#### 5. Prepare Track Groups
-For each group to migrate:
+Examples:
+- "Kick #" → "band_Kick #"
+- "VOX 1 #" → "master_VOX 1 #"
 
-1. **Rename with prefix**:
-   - "Hand1 #" → "band_Hand1 #"
-   - "Vox1 #" → "master_Vox1 #"
+**CRITICAL**: The name after prefix must EXACTLY match Ableton track name!
 
-2. **Add status indicator**:
-   - Add small LED or label
-   - Name it exactly "status_indicator"
+#### 5.2 Add Status Indicator
+1. Add an LED or small label inside the group
+2. Name it EXACTLY: `status_indicator`
+3. Position: Top corner of group
+4. This will show:
+   - Green = Track mapped correctly
+   - Red = Track not found
+   - Orange = Data stale (>5 min)
 
-3. **Configure OSC receive**:
-   - Select group in editor
-   - OSC tab → Receive
+#### 5.3 Configure Group OSC Receive
+**CRITICAL - Must be done in editor, cannot be scripted!**
+
+1. Select the group in editor
+2. Go to OSC tab
+3. In Receive section:
    - Pattern: `/live/song/get/track_names`
-   - Enable appropriate connection(s)
+   - Enable checkbox for the connection(s) this group uses
+   - Band groups: Enable connection 1
+   - Master groups: Enable connection 2
 
-4. **Add group script**:
-   - Replace existing script with `group_init.lua`
+#### 5.4 Add Group Script
+1. Select the group
+2. Remove any existing scripts
+3. Add new script
+4. Copy entire `group_init.lua` content
+5. Save
 
-5. **Optional label**:
-   - Name child label "fdr_label" for track name display
+#### 5.5 Optional Track Label
+If you have a label showing track name:
+1. Name it exactly: `fdr_label`
+2. It will auto-update with track name (without # suffix)
 
-### Testing Procedure
+### Step 6: Initial Testing
 
-#### Initial Test
 1. Enter control surface mode
-2. Check logger shows all scripts loaded with versions
-3. Press global refresh button
-4. Verify:
-   - Status indicators turn green (found) or red (not found)
-   - Controls are enabled (green) or disabled (red)
-   - Logger shows track mapping
+2. Check logger output:
+   ```
+   Helper Script v1.0.9 loaded
+   Configuration loaded correctly
+   Group init v1.5.1 for band_Kick #
+   Group init v1.5.1 for master_VOX 1 #
+   etc...
+   ```
 
-#### Track Reorder Test
+3. All groups should show:
+   - Status indicators RED (not mapped yet)
+   - Controls dimmed/disabled
+
+4. Press global refresh button
+5. Logger should show:
+   ```
+   === GLOBAL REFRESH INITIATED ===
+   Refreshing band_Kick #
+   Mapped band_Kick # -> Track 0
+   Refreshing master_VOX 1 #
+   Mapped master_VOX 1 # -> Track 5
+   === GLOBAL REFRESH COMPLETE ===
+   ```
+
+6. Verify:
+   - Green status = track found
+   - Red status = track not found
+   - Controls enabled only for green status
+
+## Critical Implementation Details
+
+### 1. Script Isolation
+Every script runs in complete isolation:
+- No shared variables between scripts
+- Each script has its own Lua context
+- Communication only via:
+  - `notify()` function
+  - Parent/child properties
+  - Control values
+
+### 2. Color Management
+```lua
+-- CORRECT
+self.color = Color(1, 0, 0, 1)  -- Red
+
+-- WRONG - Will fail!
+self.color = {1, 0, 0}
+```
+
+### 3. OSC Connection Routing
+```lua
+-- CORRECT - With connection table
+local connections = {true, false, false, false, false, false, false, false, false, false}
+sendOSC('/live/track/get/volume', trackIndex, connections)
+
+-- WRONG - Sends to ALL connections!
+sendOSC('/live/track/get/volume', trackIndex)
+```
+
+### 4. OSC Receive Patterns
+- MUST be configured in TouchOSC editor UI
+- Cannot be set via script
+- Groups need `/live/song/get/track_names` pattern
+
+### 5. Safety Features
+- Exact track name matching (no fuzzy matching)
+- Controls auto-disable when track not found
+- Visual feedback for all states
+- Track numbers cleared before remapping
+
+## Testing Scenarios
+
+### Test 1: Basic Functionality
+1. Start both Ableton instances
+2. Load TouchOSC template
+3. Press global refresh
+4. Verify all tracks map correctly
+5. Test fader movement
+
+### Test 2: Track Reordering
 1. Reorder tracks in Ableton
 2. Note controls may operate wrong tracks
 3. Press global refresh
-4. Verify correct control restored
+4. Verify correct mapping restored
 
-#### Safety Test
-1. Rename track in Ableton to non-matching name
+### Test 3: Safety Features
+1. Rename a track in Ableton
 2. Press global refresh
 3. Verify:
-   - Status indicator turns red
-   - Controls are disabled (dimmed)
-   - Cannot operate fader
+   - Status turns red
+   - Controls are disabled
+   - Cannot move fader
 
-## Phase Completion Guide
+### Test 4: Connection Failure
+1. Disconnect one Ableton instance
+2. Press global refresh
+3. Groups for that instance should show red
+4. Other instance should work normally
 
-### ✅ Phase 0 & 1: Complete
-- Configuration system working
-- Single group tested successfully
-- Global refresh implemented
-- Safety features verified
+## Troubleshooting Guide
 
-### 📋 Phase 2: Single Control Migration
-**Goal**: Update fader script for connection awareness
+### Problem: No groups found on refresh
+- Check group names have correct prefix
+- Verify `self.tag = "trackGroup"` is set
+- Check logger for errors
 
-1. Update `fader_script.lua`:
+### Problem: Track not mapping
+- Verify EXACT name match (including spaces)
+- Check track has # suffix if expected
+- Ensure OSC receive pattern configured
+
+### Problem: Wrong connection used
+- Check configuration text object
+- Verify connection numbers (1-10)
+- Check group prefix matches config
+
+### Problem: Controls not disabling
+- Update to latest group_init.lua (v1.5.1)
+- Check status indicator exists
+- Verify safety features in script
+
+### Problem: OSC not received
+- Check receive ports are unique
+- Verify Ableton sending to correct port
+- Use OSC monitor in TouchOSC
+- Check group OSC pattern configuration
+
+## Phase 2 Preparation
+
+### Update Fader Script
+The fader needs connection awareness:
+
 ```lua
--- Add connection-aware sending
 function onValueChanged(key)
     if key == "x" and self.values.touch then
         local parent = self.parent
         if not parent or not parent.trackNumber then
-            return  -- Safety: parent not mapped
+            return  -- Safety check
         end
         
-        -- Get connection from parent
-        local connIndex = parent.connectionIndex or 1
+        -- Parse connection from parent tag
+        local tag = parent.tag or ""
+        local instance, trackNum = tag:match("(%w+):(%d+)")
+        if not instance or not trackNum then return end
+        
+        -- Get connection index
+        local connIndex = instance == "master" and 2 or 1
         local connections = {}
         for i = 1, 10 do
             connections[i] = (i == connIndex)
         end
         
         -- Send to specific connection
-        sendOSC("/live/track/set/volume", 
-                parent.trackNumber, self.values.x, connections)
+        local audio_value = use_log_curve and linearToLog(self.values.x) or self.values.x
+        sendOSC("/live/track/set/volume", tonumber(trackNum), audio_value, connections)
     end
 end
 ```
 
-### 📋 Phase 3: Bidirectional Communication
-**Goal**: Add receiving with connection filtering
-
-### 📋 Phase 4: Full Control Set
-**Goal**: Update all control scripts (meter, mute, pan, etc.)
-
-### 📋 Phase 5: Production Testing
-**Goal**: Test with real performance scenarios
-
-### 📋 Phase 6: Documentation & Training
-**Goal**: Create user guide and troubleshooting
-
-### 📋 Phase 7: Full Deployment
-**Goal**: Deploy to all TouchOSC devices
-
-## Troubleshooting Guide
-
-### Controls Not Responding
-1. Check status indicator color:
-   - Red = Track not found
-   - Gray = Not initialized
-   - Green = Should work
-2. Press global refresh
-3. Check logger for errors
-4. Verify track names match exactly
-
-### OSC Not Received
-1. Check group OSC receive pattern
-2. Verify connection settings
-3. Use OSC monitor in TouchOSC
-4. Check Ableton is sending
-
-### Wrong Track Control
-1. Track order changed - press refresh
-2. Check exact name matching
-3. Verify configuration
-
-### Performance Issues
-1. Reduce logger text size
-2. Disable unused connections
-3. Increase refresh interval
+### Update Meter Script
+Similar pattern for meter to filter incoming OSC by connection.
 
 ## Best Practices
 
-### Naming Conventions
-- Groups: `instance_TrackName`
-- Status indicators: `status_indicator`
-- Labels: `fdr_label`
-- Configuration: Lowercase with underscores
+### 1. Always Test Safety
+- Rename tracks to test unmapping
+- Reorder to test refresh
+- Disconnect to test failures
 
-### Visual Feedback
-- Green: Connected and working
-- Yellow: Refreshing/Processing
-- Red: Error/Not found
-- Orange: Stale data
-- Gray: Disabled/Unmapped
+### 2. Use Visual Feedback
+- Status indicators mandatory
+- Logger helpful for debugging
+- Clear color coding
 
-### Safety First
-- Always disable controls when unmapped
-- Use exact name matching
-- Clear old values on refresh
-- Validate all references
+### 3. Document Track Names
+- Keep a list of exact track names
+- Note which go to which instance
+- Plan for future additions
 
-### User Experience
-- One global refresh button
-- Clear status indicators
-- Informative error messages
-- Responsive feedback
+### 4. Performance Considerations
+- Limit logger to 20 lines
+- Avoid frequent refreshes
+- Disable unused connections
 
-## Technical Reference
+## Version Control
 
-### Key Functions
-```lua
--- Build connection table
-buildConnectionTable(connectionIndex)
+### Current Versions
+- helper_script.lua: 1.0.9
+- group_init.lua: 1.5.1  
+- global_refresh_button.lua: 1.1.0
 
--- Get connection for instance
-getConnectionIndex(instance)
+### Version History
+- 1.0.0-1.0.5: Initial helper development
+- 1.0.6-1.0.9: Configuration and logging
+- 1.1.0-1.4.6: Group script development
+- 1.5.0-1.5.1: Safety features and global refresh
 
--- Parse group name
-parseGroupName(name) -- returns instance, trackName
+### Update Procedure
+1. Always increment version in script
+2. Log version on startup
+3. Update documentation
+4. Test before deployment
 
--- Global refresh
-refreshAllGroups()
+## Summary Checklist
 
--- Logging
-log(...)  -- Visual + console logging
-```
+Setup:
+- [ ] TouchOSC connections configured
+- [ ] Configuration text object created
+- [ ] Helper script added to root
+- [ ] Global refresh button created
+- [ ] Groups renamed with prefixes
+- [ ] Status indicators added
+- [ ] OSC receive patterns configured
+- [ ] Group scripts added
 
-### Control Properties Set by Scripts
-- `self.tag = "trackGroup"` - Identifies groups
-- `self.tag = "band:5"` - Stores instance:trackNumber
-- `control.interactive = false` - Disables control
+Testing:
+- [ ] All scripts show version on load
+- [ ] Configuration parsed correctly
+- [ ] Groups map to correct tracks
+- [ ] Refresh recovers from reordering
+- [ ] Controls disable when unmapped
+- [ ] Visual feedback working
+- [ ] Both Ableton instances receiving
 
-### Required UI Configuration
-- OSC receive patterns (cannot set via script)
-- Child control names (status_indicator, fdr_label)
-- Connection settings in TouchOSC
-
-## Version History
-- **v1.0.0-1.0.5**: Helper script development
-- **v1.0.6-1.0.9**: Helper script improvements
-- **v1.1.0-1.1.2**: Initial group script
-- **v1.2.0-1.4.6**: Group script connection handling
-- **v1.5.0-1.5.1**: Global refresh and safety features
-- **v1.1.0**: Global refresh button
-
-## Next Steps
-1. Test current implementation thoroughly
-2. Document any new issues in touchosc-lua-rules.md
-3. Proceed with Phase 2 control migration
-4. Create user documentation
-5. Plan production deployment
-
-## Success Metrics
-- ✅ Groups map to correct tracks
-- ✅ Refresh recovers from reordering
-- ✅ Visual feedback is clear
-- ✅ Controls disabled when unsafe
-- ✅ Single button refresh
-- ✅ Performance is acceptable
-- 📋 All controls migrated
-- 📋 Production tested
-- 📋 Users trained
+Ready for Phase 2:
+- [ ] Phase 1 fully tested
+- [ ] All issues documented
+- [ ] Fader update planned
+- [ ] Meter update planned
