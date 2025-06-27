@@ -77,7 +77,7 @@ function parseGroupName(name)
 end
 ```
 
-2. **Child Control Script Updates:**
+2. **Child Control Script Updates (Sending):**
 ```lua
 function onValueChanged()
     -- Parse parent tag to get instance and track number
@@ -109,11 +109,47 @@ function getConnectionIndex(instance)
 end
 ```
 
-#### Phase 4: Migration from GUI OSC to Script-Based
+3. **Child Control Script Updates (Receiving):**
+```lua
+function onReceiveOSC(message, connections)
+    -- Get expected connection for this control
+    local parentTag = self.parent.tag
+    local instance, trackNumber = parseParentTag(parentTag)
+    local expectedConnection = getConnectionIndex(instance)
+    
+    -- Only process if message came from expected connection
+    if not connections[expectedConnection] then
+        return  -- Ignore messages from wrong connection
+    end
+    
+    -- Process the message
+    local path = message[1]
+    local arguments = message[2]
+    
+    -- Extract value and update control
+    if arguments[1] then
+        self.values.x = arguments[1].value
+    end
+end
+```
+
+#### Phase 4: OSC Message Receiving Behavior
+
+**Key Points:**
+- `onReceiveOSC(message, connections)` receives ALL incoming OSC messages that match the control's address
+- The `connections` parameter is a table of booleans indicating which connection(s) the message came from
+- Example: `{true, false, false, ...}` means message came from Connection 1
+- Script must filter messages based on the expected connection
+
+**Important:** Controls using GUI OSC message configuration will need to:
+1. Either keep GUI receive enabled but add script filtering
+2. Or disable GUI receive and handle everything in script
+
+#### Phase 5: Migration from GUI OSC to Script-Based
 For controls currently using OSC GUI selector:
-1. Disable OSC message in GUI
-2. Add script with appropriate onValueChanged handler
-3. Use parent tag to determine routing
+1. Keep OSC message address configuration (for matching)
+2. Add `onReceiveOSC` function to filter by connection
+3. Or completely move to script-based OSC handling
 
 ### Benefits of This Approach
 ✅ **Minimal Changes**: Extends existing architecture rather than replacing it  
@@ -121,17 +157,40 @@ For controls currently using OSC GUI selector:
 ✅ **Flexible**: Easy to add more Ableton instances (e.g., "drums_Kick 1")  
 ✅ **Maintains Features**: Track number discovery still works  
 ✅ **Centralized Logic**: Routing determined by group name, inherited by children  
-
-### Migration Strategy
-1. **Test Phase**: Create one test group with new naming
-2. **Gradual Migration**: Convert groups one at a time
-3. **Backwards Compatible**: Can run old and new groups simultaneously
+✅ **Bidirectional Control**: Both sending and receiving respect connection routing
 
 ### Technical Considerations
-- Connection indices are 1-based in TouchOSC
-- Scripts must handle both sending and receiving on correct connections
-- Consider adding connection validation/fallback
-- May need to update track discovery to search specific Ableton instance
+
+#### Connection Filtering
+- Scripts receive messages from ALL connections
+- Must check `connections` parameter to filter
+- Connection indices are 1-based
+- Can process messages from multiple connections if needed
+
+#### Performance
+- Filtering in script adds minimal overhead
+- Early return if wrong connection
+- No need to parse messages from wrong source
+
+#### Error Handling
+```lua
+function onReceiveOSC(message, connections)
+    -- Validate inputs
+    if not message or not connections then return end
+    if not self.parent or not self.parent.tag then return end
+    
+    -- Get expected connection
+    local instance = parseInstanceFromParentTag(self.parent.tag)
+    local expectedConnection = getConnectionIndex(instance)
+    
+    -- Filter by connection
+    if not connections[expectedConnection] then
+        return  -- Wrong connection, ignore
+    end
+    
+    -- Process message...
+end
+```
 
 ## Alternative Solutions (Not Recommended)
 
@@ -149,7 +208,67 @@ For controls currently using OSC GUI selector:
 1. Confirm connection details for both Ableton instances
 2. Create test group with new naming convention
 3. Update initialization script for track discovery
-4. Convert one control from GUI OSC to script-based
-5. Test bi-directional communication
-6. Document script templates for team use
-7. Plan full migration schedule
+4. Test bidirectional communication with connection filtering
+5. Document script templates for team use
+6. Plan full migration schedule
+
+## Example Implementation
+
+### Complete Fader Script with Connection Routing:
+```lua
+-- Fader script with connection-aware sending and receiving
+function onValueChanged(key)
+    if key == "x" and self.values.touch then
+        -- Get routing info from parent
+        local parentTag = self.parent.tag
+        local instance, trackNumber = parseParentTag(parentTag)
+        local connectionIndex = getConnectionIndex(instance)
+        
+        -- Build connection table (only send to one connection)
+        local connections = {}
+        for i = 1, 10 do
+            connections[i] = (i == connectionIndex)
+        end
+        
+        -- Send to specific connection
+        local address = string.format("/live/track/%d/volume", trackNumber)
+        sendOSC(address, {self.values.x}, connections)
+    end
+end
+
+function onReceiveOSC(message, connections)
+    -- Get expected connection
+    local parentTag = self.parent.tag
+    local instance, trackNumber = parseParentTag(parentTag)
+    local expectedConnection = getConnectionIndex(instance)
+    
+    -- Filter by connection
+    if not connections[expectedConnection] then
+        return  -- Ignore messages from other connections
+    end
+    
+    -- Process message
+    local path = message[1]
+    local arguments = message[2]
+    
+    if arguments[1] then
+        self.values.x = arguments[1].value
+    end
+end
+
+-- Helper functions
+function parseParentTag(tag)
+    local instance, trackNum = tag:match("([^:]+):(.+)")
+    return instance, tonumber(trackNum)
+end
+
+function getConnectionIndex(instance)
+    if instance == "band" then
+        return 1
+    elseif instance == "master" then
+        return 2
+    else
+        return 1
+    end
+end
+```
