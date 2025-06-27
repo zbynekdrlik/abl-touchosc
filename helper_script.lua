@@ -1,9 +1,9 @@
 -- TouchOSC Selective Connection Routing Helper Script
--- Version: 1.0.1
+-- Version: 1.0.2
 -- Phase: 01 - Selective Connection Routing
 
 -- Version logging on startup
-local SCRIPT_VERSION = "1.0.1"
+local SCRIPT_VERSION = "1.0.2"
 print("[helper_script.lua] [" .. os.date("%Y-%m-%d %H:%M:%S") .. "] Script version " .. SCRIPT_VERSION .. " loaded")
 print("[helper_script.lua] [" .. os.date("%Y-%m-%d %H:%M:%S") .. "] Selective Connection Routing Phase 0 initialized")
 
@@ -12,7 +12,7 @@ function getConnectionIndex(instance)
     local configName = "connection_" .. instance
     local configObj = root:findByName(configName)
     
-    if configObj and configObj.values.text then
+    if configObj and configObj.values and configObj.values.text then
         local index = tonumber(configObj.values.text) or 1
         print("[helper_script.lua] Connection for", instance, "is", index)
         return index
@@ -73,6 +73,7 @@ end
 -- Configuration validation
 function validateConfiguration()
     print("[helper_script.lua] Validating configuration...")
+    print("[helper_script.lua] Looking for label objects named 'connection_band' and 'connection_master'")
     
     local configs = {"connection_band", "connection_master"}
     local valid = true
@@ -80,9 +81,15 @@ function validateConfiguration()
     for _, configName in ipairs(configs) do
         local obj = root:findByName(configName)
         if obj then
-            print("[helper_script.lua]", configName, "found with value:", obj.values.text)
+            if obj.values and obj.values.text then
+                print("[helper_script.lua]", configName, "found with value:", obj.values.text)
+            else
+                print("[helper_script.lua] ERROR:", configName, "found but has no text value")
+                valid = false
+            end
         else
             print("[helper_script.lua] ERROR:", configName, "not found!")
+            print("[helper_script.lua] Please create a label with name:", configName)
             valid = false
         end
     end
@@ -90,7 +97,9 @@ function validateConfiguration()
     if valid then
         print("[helper_script.lua] Configuration validation PASSED")
     else
-        print("[helper_script.lua] Configuration validation FAILED - Please create the required text objects")
+        print("[helper_script.lua] Configuration validation FAILED - Please create the required label objects")
+        print("[helper_script.lua] Instructions: Create labels (not text objects) named 'connection_band' and 'connection_master'")
+        print("[helper_script.lua] Set their text values to the connection numbers (e.g., '1' and '2')")
     end
     
     return valid
