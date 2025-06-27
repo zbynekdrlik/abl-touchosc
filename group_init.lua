@@ -1,10 +1,10 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.2.4
+-- Version: 1.2.5
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
--- Using proper TouchOSC connection routing
+-- Working within TouchOSC connection constraints
 
 -- Version logging
-local SCRIPT_VERSION = "1.2.4"
+local SCRIPT_VERSION = "1.2.5"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -90,13 +90,8 @@ function init()
     connectionIndex = getConnectionIndex(instance)
     lastVerified = getMillis()
     
-    -- Set the object's connections property to route to specific connection
-    self.connections = {}
-    for i = 1, 10 do
-        self.connections[i] = (i == connectionIndex)
-    end
-    
     log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
+    log("IMPORTANT: Make sure this group's connections are set to use Connection " .. connectionIndex .. " in the UI")
     
     -- Initial track discovery
     refreshTrackMapping()
@@ -111,74 +106,88 @@ function refreshTrackMapping()
         self.children.status_indicator.color = {1, 1, 0}  -- Yellow = refreshing
     end
     
-    -- Request track names - will use the connections set on this object
+    -- Request track names - will use whatever connections are set on this object in the UI
     sendOSC('/live/song/get/track_names')
+    log("Sent track names request - waiting for response on connection " .. connectionIndex)
 end
 
 function onReceiveOSC(message, connections)
-    -- The connections parameter tells us which connection this message came from
-    -- Only process if it's from our configured connection
-    if not connections[connectionIndex] then return end
-    
     local path = message[1]
-    if path == '/live/song/get/track_names' and needsRefresh then
-        log("Received track names from connection " .. connectionIndex)
-        local arguments = message[2]
-        
-        if not arguments then
-            log("ERROR: No track names received")
-            return
-        end
-        
-        local trackFound = false
-        
-        for i = 1, #arguments do
-            if arguments[i] and arguments[i].value == trackName then
-                -- Found our track
-                trackNumber = i - 1
-                lastVerified = getMillis()
-                needsRefresh = false
-                trackFound = true
-                
-                log("Found track '" .. trackName .. "' at index " .. trackNumber)
-                
-                -- Update status
-                if self.children.status_indicator then
-                    self.children.status_indicator.color = {0, 1, 0}  -- Green = OK
-                end
-                
-                -- Store combined info in tag
-                self.tag = instance .. ":" .. trackNumber
-                
-                -- Start listeners
-                sendOSC('/live/track/start_listen/volume', trackNumber)
-                sendOSC('/live/track/start_listen/output_meter_level', trackNumber)
-                sendOSC('/live/track/start_listen/mute', trackNumber)
-                sendOSC('/live/track/start_listen/panning', trackNumber)
-                
-                -- Update label
-                if self.children["fdr_label"] then
-                    self.children["fdr_label"].values.text = trackName:match("(%w+)(.*)")
-                end
-                break
+    
+    -- Log which connections this message came from
+    if path == '/live/song/get/track_names' then
+        local activeConnections = {}
+        for i = 1, 10 do
+            if connections[i] then
+                table.insert(activeConnections, i)
             end
         end
+        log("Received track names from connections: " .. table.concat(activeConnections, ", "))
         
-        if not trackFound then
-            -- Track not found
-            log("ERROR: Track not found: " .. trackName)
-            log("Available tracks:")
+        -- Only process if it's from our configured connection
+        if not connections[connectionIndex] then 
+            log("Ignoring - not from our connection (" .. connectionIndex .. ")")
+            return 
+        end
+        
+        if needsRefresh then
+            local arguments = message[2]
+            
+            if not arguments then
+                log("ERROR: No track names received")
+                return
+            end
+            
+            local trackFound = false
+            
             for i = 1, #arguments do
-                if arguments[i] and arguments[i].value then
-                    log("  " .. i-1 .. ": " .. arguments[i].value)
+                if arguments[i] and arguments[i].value == trackName then
+                    -- Found our track
+                    trackNumber = i - 1
+                    lastVerified = getMillis()
+                    needsRefresh = false
+                    trackFound = true
+                    
+                    log("Found track '" .. trackName .. "' at index " .. trackNumber)
+                    
+                    -- Update status
+                    if self.children.status_indicator then
+                        self.children.status_indicator.color = {0, 1, 0}  -- Green = OK
+                    end
+                    
+                    -- Store combined info in tag
+                    self.tag = instance .. ":" .. trackNumber
+                    
+                    -- Start listeners
+                    sendOSC('/live/track/start_listen/volume', trackNumber)
+                    sendOSC('/live/track/start_listen/output_meter_level', trackNumber)
+                    sendOSC('/live/track/start_listen/mute', trackNumber)
+                    sendOSC('/live/track/start_listen/panning', trackNumber)
+                    
+                    -- Update label
+                    if self.children["fdr_label"] then
+                        self.children["fdr_label"].values.text = trackName:match("(%w+)(.*)")
+                    end
+                    break
                 end
             end
             
-            if self.children["fdr_label"] then
-                self.children["fdr_label"].values.text = "???"
-            end
-            if self.children.status_indicator then
-                self.children.status_indicator.color = {1, 0, 0}  -- Red = Error
+            if not trackFound then
+                -- Track not found
+                log("ERROR: Track not found: " .. trackName)
+                log("Available tracks:")
+                for i = 1, #arguments do
+                    if arguments[i] and arguments[i].value then
+                        log("  " .. i-1 .. ": " .. arguments[i].value)
+                    end
+                end
+                
+                if self.children["fdr_label"] then
+                    self.children["fdr_label"].values.text = "???"
+                end
+                if self.children.status_indicator then
+                    self.children.status_indicator.color = {1, 0, 0}  -- Red = Error
+                end
             end
         end
     end
