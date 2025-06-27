@@ -1,10 +1,18 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.2.0
+-- Version: 1.2.1
 -- Phase: 01 - Phase 1: Single Group Test with Refresh
--- Self-contained version with embedded helper functions
+-- Self-contained version with proper data storage
 
 -- Version logging
-local SCRIPT_VERSION = "1.2.0"
+local SCRIPT_VERSION = "1.2.1"
+
+-- Script-level variables to store group data
+local instance = nil
+local trackName = nil
+local connectionIndex = nil
+local lastVerified = 0
+local needsRefresh = false
+local trackNumber = nil
 
 -- Local logger function
 local function log(...)
@@ -37,7 +45,7 @@ local function log(...)
 end
 
 -- Get connection configuration
-local function getConnectionIndex(instance)
+local function getConnectionIndex(inst)
     local configObj = root:findByName("configuration")
     if not configObj or not configObj.values or not configObj.values.text then
         log("Warning: No configuration found, using default connection 1")
@@ -45,7 +53,7 @@ local function getConnectionIndex(instance)
     end
     
     local configText = configObj.values.text
-    local searchKey = "connection_" .. instance .. ":"
+    local searchKey = "connection_" .. inst .. ":"
     
     for line in configText:gmatch("[^\r\n]+") do
         line = line:match("^%s*(.-)%s*$")
@@ -55,14 +63,14 @@ local function getConnectionIndex(instance)
         end
     end
     
-    log("Warning: No config for " .. instance .. " - using default (1)")
+    log("Warning: No config for " .. inst .. " - using default (1)")
     return 1
 end
 
-local function buildConnectionTable(connectionIndex)
+local function buildConnectionTable(connIndex)
     local connections = {}
     for i = 1, 10 do
-        connections[i] = (i == connectionIndex)
+        connections[i] = (i == connIndex)
     end
     return connections
 end
@@ -85,16 +93,12 @@ function init()
     -- Set tag programmatically
     self.tag = "trackGroup"
     
-    -- Parse group name
-    local instance, trackName = parseGroupName(self.name)
+    -- Parse group name and store in script variables
+    instance, trackName = parseGroupName(self.name)
+    connectionIndex = getConnectionIndex(instance)
+    lastVerified = getMillis()
     
-    -- Store data in script variables
-    self.instance = instance
-    self.trackName = trackName
-    self.connectionIndex = getConnectionIndex(instance)
-    self.lastVerified = getMillis()
-    
-    log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. self.connectionIndex)
+    log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
     
     -- Initial track discovery
     refreshTrackMapping()
@@ -102,7 +106,7 @@ end
 
 function refreshTrackMapping()
     log("Refreshing track mapping for: " .. self.name)
-    self.needsRefresh = true
+    needsRefresh = true
     
     -- Visual feedback
     if self.children.status_indicator then
@@ -110,29 +114,29 @@ function refreshTrackMapping()
     end
     
     -- Request track names from specific connection
-    local connections = buildConnectionTable(self.connectionIndex)
+    local connections = buildConnectionTable(connectionIndex)
     sendOSC('/live/song/get/track_names', nil, connections)
 end
 
 function onReceiveOSC(message, connections)
     -- Filter by connection
-    if not connections[self.connectionIndex] then return end
+    if not connections[connectionIndex] then return end
     
     local path = message[1]
-    if path == '/live/song/get/track_names' and self.needsRefresh then
+    if path == '/live/song/get/track_names' and needsRefresh then
         log("Received track names for " .. self.name)
         local arguments = message[2]
         local trackFound = false
         
         for i = 1, #arguments do
-            if arguments[i].value == self.trackName then
+            if arguments[i].value == trackName then
                 -- Found our track
-                self.trackNumber = i - 1
-                self.lastVerified = getMillis()
-                self.needsRefresh = false
+                trackNumber = i - 1
+                lastVerified = getMillis()
+                needsRefresh = false
                 trackFound = true
                 
-                log("Found track '" .. self.trackName .. "' at index " .. self.trackNumber)
+                log("Found track '" .. trackName .. "' at index " .. trackNumber)
                 
                 -- Update status
                 if self.children.status_indicator then
@@ -140,18 +144,18 @@ function onReceiveOSC(message, connections)
                 end
                 
                 -- Store combined info in tag
-                self.tag = self.instance .. ":" .. self.trackNumber
+                self.tag = instance .. ":" .. trackNumber
                 
                 -- Start listeners
-                local targetConnections = buildConnectionTable(self.connectionIndex)
-                sendOSC('/live/track/start_listen/volume', {self.trackNumber}, targetConnections)
-                sendOSC('/live/track/start_listen/output_meter_level', {self.trackNumber}, targetConnections)
-                sendOSC('/live/track/start_listen/mute', {self.trackNumber}, targetConnections)
-                sendOSC('/live/track/start_listen/panning', {self.trackNumber}, targetConnections)
+                local targetConnections = buildConnectionTable(connectionIndex)
+                sendOSC('/live/track/start_listen/volume', {trackNumber}, targetConnections)
+                sendOSC('/live/track/start_listen/output_meter_level', {trackNumber}, targetConnections)
+                sendOSC('/live/track/start_listen/mute', {trackNumber}, targetConnections)
+                sendOSC('/live/track/start_listen/panning', {trackNumber}, targetConnections)
                 
                 -- Update label
                 if self.children["fdr_label"] then
-                    self.children["fdr_label"].values.text = self.trackName:match("(%w+)(.*)")
+                    self.children["fdr_label"].values.text = trackName:match("(%w+)(.*)")
                 end
                 break
             end
@@ -159,7 +163,7 @@ function onReceiveOSC(message, connections)
         
         if not trackFound then
             -- Track not found
-            log("ERROR: Track not found: " .. self.trackName)
+            log("ERROR: Track not found: " .. trackName)
             if self.children["fdr_label"] then
                 self.children["fdr_label"].values.text = "???"
             end
@@ -179,8 +183,8 @@ end
 
 function update()
     -- Visual feedback for stale data
-    if self.lastVerified then
-        local age = getMillis() - self.lastVerified
+    if lastVerified > 0 then
+        local age = getMillis() - lastVerified
         if age > 60000 and self.children.status_indicator then  -- 1 minute
             self.children.status_indicator.color = {1, 0.5, 0}  -- Orange = Stale
         end
