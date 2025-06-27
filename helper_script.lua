@@ -1,11 +1,60 @@
 -- TouchOSC Selective Connection Routing Helper Script
--- Version: 1.0.3
+-- Version: 1.0.4
 -- Phase: 01 - Selective Connection Routing
 
 -- Version logging on startup
-local SCRIPT_VERSION = "1.0.3"
-print("[helper_script.lua] [" .. os.date("%Y-%m-%d %H:%M:%S") .. "] Script version " .. SCRIPT_VERSION .. " loaded")
-print("[helper_script.lua] [" .. os.date("%Y-%m-%d %H:%M:%S") .. "] Selective Connection Routing Phase 0 initialized")
+local SCRIPT_VERSION = "1.0.4"
+
+-- Logger settings
+local MAX_LOG_LINES = 20  -- Maximum lines to keep in logger
+local logLines = {}       -- Log buffer
+
+-- Logger function
+function log(...)
+    local timestamp = os.date("%H:%M:%S")
+    local args = {...}
+    local message = "[" .. timestamp .. "] "
+    
+    -- Concatenate all arguments
+    for i, v in ipairs(args) do
+        message = message .. tostring(v)
+        if i < #args then
+            message = message .. " "
+        end
+    end
+    
+    -- Print to console
+    print(message)
+    
+    -- Add to log buffer
+    table.insert(logLines, message)
+    
+    -- Keep only last MAX_LOG_LINES
+    while #logLines > MAX_LOG_LINES do
+        table.remove(logLines, 1)
+    end
+    
+    -- Update logger text object
+    updateLogger()
+end
+
+-- Update logger text object
+function updateLogger()
+    local loggerObj = root:findByName("logger")
+    if loggerObj and loggerObj.values then
+        loggerObj.values.text = table.concat(logLines, "\n")
+    end
+end
+
+-- Clear logger
+function clearLogger()
+    logLines = {}
+    updateLogger()
+end
+
+-- Start logging
+log("Helper Script v" .. SCRIPT_VERSION .. " loaded")
+log("Selective Connection Routing initialized")
 
 -- Configuration cache
 local configCache = {}
@@ -15,7 +64,7 @@ function parseConfiguration()
     local configObj = root:findByName("configuration")
     
     if not configObj or not configObj.values or not configObj.values.text then
-        print("[helper_script.lua] ERROR: No 'configuration' text object found")
+        log("ERROR: No 'configuration' text object found")
         return false
     end
     
@@ -35,9 +84,9 @@ function parseConfiguration()
                 -- Trim whitespace from value
                 value = value:match("^%s*(.-)%s*$")
                 configCache[key] = value
-                print("[helper_script.lua] Config loaded:", key, "=", value)
+                log("Config loaded: " .. key .. " = " .. value)
             else
-                print("[helper_script.lua] Warning: Invalid config line:", line)
+                log("Warning: Invalid config line: " .. line)
             end
         end
     end
@@ -52,10 +101,10 @@ function getConnectionIndex(instance)
     
     if value then
         local index = tonumber(value) or 1
-        print("[helper_script.lua] Connection for", instance, "is", index)
+        log("Connection for " .. instance .. " is " .. index)
         return index
     else
-        print("[helper_script.lua] Warning: No connection config for", instance, "- using default (1)")
+        log("Warning: No config for " .. instance .. " - using default (1)")
         return 1
     end
 end
@@ -82,14 +131,14 @@ end
 
 -- Global refresh function
 function refreshAllGroups()
-    print("[helper_script.lua] Refreshing all track groups")
+    log("Refreshing all track groups...")
     local groups = root:findAllByProperty("tag", "trackGroup", true)
     local count = 0
     for _, group in ipairs(groups) do
         group:notify("refresh")
         count = count + 1
     end
-    print("[helper_script.lua] Sent refresh to", count, "groups")
+    log("Sent refresh to " .. count .. " groups")
 end
 
 -- Status color definitions
@@ -110,13 +159,21 @@ end
 
 -- Configuration validation
 function validateConfiguration()
-    print("[helper_script.lua] Validating configuration...")
+    log("Validating configuration...")
+    
+    -- Check for logger
+    local loggerObj = root:findByName("logger")
+    if not loggerObj then
+        print("[helper_script.lua] Note: No 'logger' text object found - logs will only appear in console")
+    else
+        log("Logger text object found")
+    end
     
     if not parseConfiguration() then
-        print("[helper_script.lua] Configuration validation FAILED")
-        print("[helper_script.lua] Please create a text object named 'configuration' with format:")
-        print("[helper_script.lua]   connection_band: 1")
-        print("[helper_script.lua]   connection_master: 2")
+        log("Configuration validation FAILED")
+        log("Create text object 'configuration' with:")
+        log("  connection_band: 1")
+        log("  connection_master: 2")
         return false
     end
     
@@ -126,17 +183,17 @@ function validateConfiguration()
     
     for _, key in ipairs(required) do
         if configCache[key] then
-            print("[helper_script.lua]", key, "configured as connection", configCache[key])
+            log(key .. " configured as connection " .. configCache[key])
         else
-            print("[helper_script.lua] Warning:", key, "not found in configuration")
+            log("Warning: " .. key .. " not found")
             valid = false
         end
     end
     
     if valid then
-        print("[helper_script.lua] Configuration validation PASSED")
+        log("Configuration validation PASSED")
     else
-        print("[helper_script.lua] Configuration incomplete - add missing connection definitions")
+        log("Configuration incomplete")
     end
     
     return valid
@@ -144,7 +201,7 @@ end
 
 -- Initialize
 function init()
-    print("[helper_script.lua] Helper script initializing...")
+    log("Helper script initializing...")
     validateConfiguration()
 end
 
@@ -153,11 +210,13 @@ function update()
     -- Phase 4 will add auto-refresh logic here
 end
 
-print("[helper_script.lua] Helper functions loaded successfully")
-print("[helper_script.lua] Configuration format:")
-print("[helper_script.lua]   connection_band: 1")
-print("[helper_script.lua]   connection_master: 2")
-print("[helper_script.lua]   # Comments are supported")
+log("Helper functions loaded successfully")
+log("Configuration format:")
+log("  connection_band: 1")
+log("  connection_master: 2")
 
 -- Run validation immediately
 validateConfiguration()
+
+-- Export logger function for global use
+_G.log = log
