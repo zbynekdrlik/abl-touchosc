@@ -1,8 +1,8 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.5.6
+-- Version: 2.5.7
 -- Purpose: Main document script with configuration, logging, and track management
 
-local VERSION = "2.5.6"
+local VERSION = "2.5.7"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -178,6 +178,11 @@ end
 
 -- === INITIALIZATION ===
 function init()
+    -- Add visual separator for new run
+    log("════════════════════════════════════════")
+    log("═══ NEW SESSION " .. os.date("%Y-%m-%d %H:%M:%S") .. " ═══")
+    log("════════════════════════════════════════")
+    
     log(SCRIPT_NAME .. " v" .. VERSION .. " loaded")
     
     -- Try to find logger
