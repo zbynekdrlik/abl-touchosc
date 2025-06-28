@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.5.7
--- Fixed: Use exact child names, no guessing
+-- Version: 1.5.8
+-- Fixed: Bounds checking for children iteration, force logging to document script
 
 -- Version constant
-local SCRIPT_VERSION = "1.5.7"
+local SCRIPT_VERSION = "1.5.8"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -14,34 +14,35 @@ local needsRefresh = false
 local trackNumber = nil
 local trackMapped = false
 local lastEnabledState = nil  -- Track last state to prevent spam
-local initLogged = false  -- Track if we've logged initialization
 
--- Local logger function
-local function log(...)
-    local timestamp = os.date("%H:%M:%S")
-    local args = {...}
-    local message = "[" .. timestamp .. "] "
+-- Local logger function - notify document script instead
+local function log(message)
+    -- Always print to console
+    print("[" .. os.date("%H:%M:%S") .. "] " .. message)
     
-    for i, v in ipairs(args) do
-        message = message .. tostring(v)
-        if i < #args then message = message .. " " end
+    -- Try to notify document script to log for us
+    local docScript = root
+    if docScript then
+        docScript:notify("log_message", message)
     end
     
-    print(message)  -- Always print to console
-    
-    -- Update logger if exists
-    local loggerObj = root:findByName("logger", true)  -- recursive search
-    if loggerObj and loggerObj.values then
+    -- Also try direct logger update as backup
+    local loggerObj = root:findByName("logger", true)
+    if loggerObj and loggerObj.values and loggerObj.values.text ~= nil then
         local currentText = loggerObj.values.text or ""
         local lines = {}
         for line in currentText:gmatch("[^\r\n]+") do
             table.insert(lines, line)
         end
-        table.insert(lines, message)
-        -- Keep last 60 lines to match document script
+        
+        local timestamp = os.date("%H:%M:%S")
+        table.insert(lines, timestamp .. " " .. message)
+        
+        -- Keep last 60 lines
         while #lines > 60 do
             table.remove(lines, 1)
         end
+        
         loggerObj.values.text = table.concat(lines, "\n")
     end
 end
@@ -101,13 +102,17 @@ local function setGroupEnabled(enabled, silent)
         return
     end
     
-    -- Safe iteration - handle both array-like and object-like structures
     local childCount = 0
     
-    -- Try numeric indices first
+    -- Safe iteration with bounds checking
     local i = 1
-    while self.children[i] do
+    local maxIterations = 100  -- Safety limit
+    
+    while i <= maxIterations do
         local child = self.children[i]
+        if not child then
+            break  -- No more children
+        end
         
         -- Process all controls except status_indicator
         if child.name ~= "status_indicator" then
@@ -122,8 +127,6 @@ local function setGroupEnabled(enabled, silent)
                 -- Dim to show disabled (but don't change values!)
                 child.alpha = 0.3
             end
-            
-            -- DON'T TOUCH THE VALUES! No resetting faders or anything
             
             childCount = childCount + 1
         end
@@ -165,16 +168,6 @@ local function clearListeners()
     end
 end
 
--- Delayed initialization logging
-local function logInitialization()
-    if not initLogged then
-        log("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
-        log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
-        log("Group ready - waiting for refresh")
-        initLogged = true
-    end
-end
-
 function init()
     -- Set tag programmatically
     self.tag = "trackGroup"
@@ -189,14 +182,18 @@ function init()
     -- Set initial status
     updateStatus("error")
     
+    -- Log after a short delay to ensure document script is ready
+    local initMessage = "Group init v" .. SCRIPT_VERSION .. " for " .. self.name .. 
+                       " (Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex .. ")"
+    
     -- Print to console immediately
-    print("Group init v" .. SCRIPT_VERSION .. " for " .. self.name .. " (Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex .. ")")
+    print(initMessage)
+    
+    -- Schedule logging for next update
+    self.needsInitLog = true
 end
 
 function refreshTrackMapping()
-    -- Log initialization if not done yet
-    logInitialization()
-    
     log("Refreshing " .. self.name)
     
     -- SAFETY: Clear any existing listeners and disable controls
@@ -306,9 +303,11 @@ function onReceiveNotify(action)
 end
 
 function update()
-    -- Log initialization on first update if not done yet
-    if not initLogged then
-        logInitialization()
+    -- Log initialization on first update
+    if self.needsInitLog then
+        log("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
+        log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
+        self.needsInitLog = false
     end
     
     -- Only check stale data if mapped
