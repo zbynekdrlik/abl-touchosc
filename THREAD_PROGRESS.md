@@ -2,7 +2,7 @@
 
 ## Current Status
 - **Phase**: 3 - Script Functionality Testing
-- **Step**: Reviewing scripts and preparing single track test
+- **Step**: Ready to create single complete track group
 - **Date**: 2025-06-28
 - **Branch**: feature/selective-connection-routing
 
@@ -11,8 +11,15 @@
 - Configuration and logger objects working perfectly
 - Notify system implemented and tested
 - Global refresh button (v1.2.1) working with proper logging
-- **Test track changed to**: "band_CG #"
-- All track scripts reviewed for TouchOSC compliance
+- **Test track**: "band_CG #"
+- **CLARIFIED**: Connection routing is AUTOMATIC based on group names!
+
+## Critical Design Clarification
+The entire selective connection routing system works automatically:
+- **Group names determine connections** (band_* → connection 1, master_* → connection 2)
+- **Scripts handle ALL filtering** - no need to set connections in UI
+- **Enable all connections in OSC settings** - let the scripts do the work!
+- This was the original design goal and it's already implemented correctly
 
 ## Phase 3 Progress
 
@@ -25,63 +32,55 @@
 - ✅ Single track complete test instructions created
 - ✅ Updated test track to "band_CG #"
 - ✅ Reviewed all track scripts for compliance
+- ✅ Updated docs to clarify automatic routing
 - [ ] Create ONE complete track group - READY TO TEST
 
 ### Script Review Results
-All scripts follow TouchOSC rules and are ready for testing:
-- **group_init.lua** (v1.5.1): Properly disables controls until mapped
-- **fader_script.lua** (v2.0.0): Connection-aware, smooth operation
-- **meter_script.lua** (v2.0.0): Filters by connection, visual feedback
-- **mute_button.lua** (v1.0.0): Toggle with visual states
-- **pan_control.lua** (v1.0.0): Center snap, proper range conversion
-
-Key findings:
-- All scripts use proper version logging
-- Connection routing implemented correctly
-- Safety checks prevent wrong track control
-- Visual feedback for disabled states
-- No violations of TouchOSC rules found
+All scripts follow TouchOSC rules and implement automatic routing:
+- **group_init.lua** (v1.5.1): Parses name, filters by connection automatically
+- **fader_script.lua** (v2.0.0): Gets connection from parent group
+- **meter_script.lua** (v2.0.0): Filters incoming messages by connection
+- **mute_button.lua** (v1.0.0): Routes to correct connection
+- **pan_control.lua** (v1.0.0): Connection-aware sending
 
 ### Script Testing Phase (Single Group First)
-- [ ] Test group script (band_CG #)
+- [ ] Create group "band_CG #" with all connections enabled
+- [ ] Verify automatic connection 1 selection
 - [ ] Test fader script in group
 - [ ] Test meter script in group
 - [ ] Test mute button in group
 - [ ] Test pan control in group
 - [ ] Test all controls working together
-- [ ] THEN test multiple group scenarios
 
 ## Current Task: Create Complete "band_CG #" Group
 User needs to create ONE complete track group with:
-1. Group container with status LED
-2. Track label
-3. Fader with script
-4. Meter display with script
-5. Mute button with script
-6. Pan control with script
+1. Group container named "band_CG #" (enables all connections in UI)
+2. Status LED indicator
+3. Track label
+4. Fader with script
+5. Meter display with script
+6. Mute button with script
+7. Pan control with script
 
-Detailed instructions in: `docs/single-track-complete-test.md`
+The "band_" prefix will automatically route to connection 1!
 
 ## Script Versions Ready for Testing
-- **document_script.lua**: v2.5.8 (updated)
-- **group_init.lua**: v1.5.1 (safety features confirmed)
-- **global_refresh_button.lua**: v1.2.1 (updated and working)
-- **fader_script.lua**: v2.0.0 (connection-aware)
-- **meter_script.lua**: v2.0.0 (connection filtering)
-- **mute_button.lua**: v1.0.0 (visual states)
-- **pan_control.lua**: v1.0.0 (center snap)
+- **document_script.lua**: v2.5.8
+- **group_init.lua**: v1.5.1 (automatic connection routing)
+- **global_refresh_button.lua**: v1.2.1
+- **fader_script.lua**: v2.0.0
+- **meter_script.lua**: v2.0.0
+- **mute_button.lua**: v1.0.0
+- **pan_control.lua**: v1.0.0
 
-## Key Safety Features Confirmed
-- Groups disable all controls until properly mapped
-- Scripts check parent group mapping before sending OSC
-- Connection routing prevents cross-talk
-- Visual dimming shows disabled state
-- Faders reset to 0 when unmapped
+## Documentation Updates
+- ✅ Updated single-track-complete-test.md
+- ✅ Updated test-group-setup.md
+- Both now correctly explain automatic connection routing
 
 ## Next Steps
-1. User creates single complete band_CG # group
-2. Test initialization of all scripts
-3. Test refresh to map the track
-4. Test each control individually
-5. Test all controls working together
-6. Once perfect, then create additional test groups
+1. User creates single complete band_CG # group (with all connections enabled)
+2. Test automatic routing to connection 1
+3. Test all controls working together
+4. Once perfect, test master_* group for connection 2
+5. Then scale to production layout
