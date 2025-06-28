@@ -1,9 +1,9 @@
 -- TouchOSC Fader Script with Smoothing
--- Version: 2.1.0 
--- Added: Centralized logging through document script
+-- Version: 2.2.0 
+-- Fixed: Connection routing now reads config directly (scripts are isolated)
 
 -- Version constant
-local VERSION = "2.1.0"
+local VERSION = "2.2.0"
 
 -- ===========================
 -- CONFIGURATION SECTION
@@ -31,9 +31,6 @@ local isCaught = true              -- Has fader "caught" the Ableton value?
 local lastUpdateTime = 0           -- For frame rate limiting
 local touchStartValue = 0          -- Value when touch began
 local hasMoved = false             -- Has user moved fader since touching?
-
--- Reference to document script for connection routing
-local documentScript = nil
 
 -- ===========================
 -- LOGGING
@@ -113,21 +110,33 @@ end
 -- CONNECTION HELPERS
 -- ===========================
 
--- Get the connection index from parent group
+-- Get connection configuration (read directly from config text)
 local function getConnectionIndex()
     -- Check if parent has tag with instance:trackNumber format
     if self.parent and self.parent.tag then
         local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
-        if instance and trackNum then
-            -- Get document script reference
-            if not documentScript then
-                documentScript = root
+        if instance then
+            -- Find configuration object
+            local configObj = root:findByName("configuration", true)
+            if not configObj or not configObj.values or not configObj.values.text then
+                debugLog("Warning: No configuration found, using default connection 1")
+                return 1
             end
             
-            -- Call the helper function from document script
-            if documentScript.getConnectionForInstance then
-                return documentScript.getConnectionForInstance(instance)
+            local configText = configObj.values.text
+            local searchKey = "connection_" .. instance .. ":"
+            
+            -- Parse configuration text
+            for line in configText:gmatch("[^\r\n]+") do
+                line = line:match("^%s*(.-)%s*$")  -- Trim whitespace
+                if line:sub(1, #searchKey) == searchKey then
+                    local value = line:sub(#searchKey + 1):match("^%s*(.-)%s*$")
+                    return tonumber(value) or 1
+                end
             end
+            
+            debugLog("Warning: No config for " .. instance .. " - using default (1)")
+            return 1
         end
     end
     
@@ -194,8 +203,7 @@ local function sendVolume(value)
     sendOSC('/live/track/set/volume', trackNumber, curvedValue, connections)
     lastSentValue = value
     
-    debugLog(string.format("Sent volume: %.3f (curved: %.3f) to track %d on connection %d", 
-        value, curvedValue, trackNumber, connectionIndex))
+    log(string.format("Volume change for track %d: %.3f", trackNumber, value))
 end
 
 -- ===========================
