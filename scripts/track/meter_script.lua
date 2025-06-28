@@ -1,11 +1,11 @@
 -- TouchOSC Meter Script with Multi-Connection Support
--- Version: 2.2.1
--- Added: Debug logging for connection troubleshooting
+-- Version: 2.2.2
+-- Fixed: Debug mode off, removed connection index logging issue
 
-local VERSION = "2.2.1"
+local VERSION = "2.2.2"
 
 -- DEBUG MODE
-local DEBUG = 1  -- Set to 1 to see meter values and conversions in console
+local DEBUG = 0  -- Set to 1 to see meter values and conversions in console
 
 -- COLOR THRESHOLDS (in dB) - PRESERVED FROM ORIGINAL
 local COLOR_THRESHOLD_YELLOW = -12    -- Above this = yellow (caution)
@@ -219,41 +219,21 @@ end
 -- ===========================
 
 function onReceiveOSC(message, connections)
-  -- Debug: Log all incoming messages
-  debugPrint("=== OSC RECEIVED ===")
-  debugPrint("Message path:", message[1])
-  
   -- Check if this is a meter message
   if message[1] ~= '/live/track/get/output_meter_level' then
     return false
   end
   
-  -- Debug: Check connections parameter
-  if connections then
-    local connStr = "Connections: "
-    for i = 1, 10 do
-      if connections[i] then
-        connStr = connStr .. i .. " "
-      end
-    end
-    debugPrint(connStr)
-  else
-    debugPrint("No connections parameter provided")
-  end
-  
   -- Get our connection index
   local myConnection = getConnectionIndex()
-  debugPrint("My connection index:", myConnection)
   
   -- Check if this message is from our connection
   if connections and not connections[myConnection] then
-    debugPrint("Message not from our connection", myConnection)
     return false
   end
   
   local arguments = message[2]
   if not arguments or #arguments < 2 then
-    debugPrint("Not enough arguments")
     return false
   end
   
@@ -261,17 +241,11 @@ function onReceiveOSC(message, connections)
   local msgTrackNumber = arguments[1].value
   local myTrackNumber = getTrackNumber()
   
-  debugPrint("Message track:", msgTrackNumber, "My track:", myTrackNumber)
-  
   if not myTrackNumber or msgTrackNumber ~= myTrackNumber then
     return false
   end
   
   local normalized_meter = arguments[2].value
-  
-  debugPrint("=== METER UPDATE ===")
-  debugPrint("Track:", myTrackNumber, "Connection:", myConnection)
-  debugPrint("AbletonOSC normalized:", string.format("%.4f", normalized_meter))
   
   -- Convert AbletonOSC normalized value to fader position
   local fader_position = abletonToFaderPosition(normalized_meter)
@@ -286,6 +260,10 @@ function onReceiveOSC(message, connections)
   local smoothed = smoothColor(target_color)
   self.color = Color(smoothed[1], smoothed[2], smoothed[3], smoothed[4])
   
+  -- Debug logging
+  debugPrint("=== METER UPDATE ===")
+  debugPrint("Track:", myTrackNumber, "Connection:", myConnection)
+  debugPrint("AbletonOSC normalized:", string.format("%.4f", normalized_meter))
   debugPrint("→ Fader position:", string.format("%.1f%%", fader_position * 100))
   
   -- Calculate actual dB for display
@@ -294,19 +272,6 @@ function onReceiveOSC(message, connections)
   debugPrint("→ Actual dB:", string.format("%.1f", actual_db))
   debugPrint("→ Color:", actual_db >= COLOR_THRESHOLD_RED and "RED" or
                        actual_db >= COLOR_THRESHOLD_YELLOW and "YELLOW" or "GREEN")
-  
-  -- Calibration checks
-  if math.abs(normalized_meter - 0.3945) < 0.01 then
-    debugPrint("*** -40dB CALIBRATION POINT ***")
-  elseif math.abs(normalized_meter - 0.6839) < 0.01 then
-    debugPrint("*** -18dB CALIBRATION POINT ***")
-  elseif math.abs(normalized_meter - 0.7629) < 0.01 then
-    debugPrint("*** -12dB CALIBRATION POINT ***")
-  elseif math.abs(normalized_meter - 0.8399) < 0.01 then
-    debugPrint("*** -6dB CALIBRATION POINT ***")
-  elseif math.abs(normalized_meter - 0.9200) < 0.01 then
-    debugPrint("*** 0dB CALIBRATION POINT ***")
-  end
   
   return true  -- Stop propagation
 end
@@ -340,7 +305,6 @@ function init()
   log("=== METER SCRIPT WITH MULTI-CONNECTION ===")
   log("Using hardcoded calibration points from your tests")
   log("Multi-connection routing enabled")
-  log("DEBUG MODE ENABLED - Check console for details")
   
   -- Log parent info
   if self.parent then
@@ -349,14 +313,8 @@ function init()
     end
     if self.parent.tag then
       log("Parent tag: " .. tostring(self.parent.tag))
-      local myTrack = getTrackNumber()
-      log("My track number: " .. tostring(myTrack))
     end
   end
-  
-  -- Log connection info
-  local myConnection = getConnectionIndex()
-  log("My connection index: " .. myConnection)
 end
 
 init()
