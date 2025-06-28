@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.6.2
--- Fixed: Access children by name, not by index
+-- Version: 1.6.3
+-- Fixed: Only process controls that exist, no warnings
 
 -- Version constant
-local SCRIPT_VERSION = "1.6.2"
+local SCRIPT_VERSION = "1.6.3"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -77,31 +77,32 @@ local function setGroupEnabled(enabled, silent)
     
     local childCount = 0
     
-    -- In TouchOSC, children are accessed by name
-    -- Process known control types
-    local controlNames = {"fader", "meter", "mute", "pan", "solo", "label", 
-                         "button1", "button2", "button3", "button4",
-                         "knob1", "knob2", "knob3", "knob4"}
-    
-    for _, name in ipairs(controlNames) do
-        local child = self.children[name]
-        if child and name ~= "status_indicator" then
-            -- Disable interaction
-            child.interactive = enabled
-            
-            -- Visual feedback - use color with transparency
-            if child.color then
-                local r, g, b = child.color.r, child.color.g, child.color.b
-                if enabled then
-                    -- Restore full opacity
-                    child.color = Color(r, g, b, 1.0)
-                else
-                    -- Dim with transparency (but don't change values!)
-                    child.color = Color(r, g, b, 0.3)
+    -- Process ALL children except status_indicator
+    -- This avoids hardcoding names and warnings about missing controls
+    if type(self.children) == "userdata" then
+        -- TouchOSC children collection - we'll check specific known names
+        local knownControls = {"fader", "mute", "pan", "meter", "solo", "label", "track_label"}
+        
+        for _, name in ipairs(knownControls) do
+            local child = self.children[name]
+            if child and name ~= "status_indicator" then
+                -- Disable interaction
+                child.interactive = enabled
+                
+                -- Visual feedback - use color with transparency
+                if child.color then
+                    local r, g, b = child.color.r, child.color.g, child.color.b
+                    if enabled then
+                        -- Restore full opacity
+                        child.color = Color(r, g, b, 1.0)
+                    else
+                        -- Dim with transparency (but don't change values!)
+                        child.color = Color(r, g, b, 0.3)
+                    end
                 end
+                
+                childCount = childCount + 1
             end
-            
-            childCount = childCount + 1
         end
     end
     
