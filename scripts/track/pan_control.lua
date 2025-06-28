@@ -1,9 +1,9 @@
 -- TouchOSC Pan Control Script
--- Version: 1.1.0
--- Added: Centralized logging through document script
+-- Version: 1.2.0
+-- Added: Double-tap to center and visual color feedback from original script
 
 -- Version constant
-local VERSION = "1.1.0"
+local VERSION = "1.2.0"
 
 -- ===========================
 -- CONFIGURATION SECTION
@@ -17,6 +17,11 @@ local AUTO_RELEASE_TIME = 500      -- Time to wait before auto-releasing (ms)
 local TOUCH_DEBOUNCE = 50          -- Debounce time for touch detection (ms)
 local CENTER_SNAP = 0.05           -- Snap to center within this range
 local DEBUG_MODE = false           -- Enable debug logging
+local DOUBLE_TAP_DELAY = 300      -- Maximum time between taps for double-tap (ms)
+
+-- Color constants (from original script)
+local COLOR_CENTERED = Color(0.39, 0.39, 0.39, 1.0)  -- #646464FF when at center
+local COLOR_OFF_CENTER = Color(0.20, 0.76, 0.86, 1.0) -- #34C1DC when out of center
 
 -- ===========================
 -- STATE VARIABLES
@@ -32,6 +37,10 @@ local lastUpdateTime = 0           -- For frame rate limiting
 local touchStartValue = 0.5        -- Value when touch began
 local hasMoved = false             -- Has user moved control since touching?
 
+-- Double-tap detection (from original script)
+local lastTapReleaseTime = 0       -- Time of last tap release
+local touchOnFirst = false         -- Flag for double-tap detection
+
 -- Reference to document script for connection routing
 local documentScript = nil
 
@@ -39,18 +48,12 @@ local documentScript = nil
 -- LOGGING
 -- ===========================
 
--- Centralized logging through document script
+-- Local logging pattern (following mute button v1.7.1 pattern)
 local function log(message)
-    -- Get parent name for context
     local context = "PAN"
     if self.parent and self.parent.name then
         context = "PAN(" .. self.parent.name .. ")"
     end
-    
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
@@ -85,9 +88,46 @@ local function applyCenterSnap(value)
     return value
 end
 
+-- Update visual color based on pan position (from original script)
+local function updateVisualColor()
+    if math.abs(self.values.x - 0.5) > 0.01 then
+        -- Pan is off-center
+        self.color = COLOR_OFF_CENTER
+    else
+        -- Pan is centered
+        self.color = COLOR_CENTERED
+    end
+end
+
 -- ===========================
 -- CONNECTION HELPERS
 -- ===========================
+
+-- Read configuration directly (following script isolation pattern)
+local function readConfiguration()
+    local configControl = root:findByName("configuration", true)
+    if not configControl then
+        log("ERROR: Configuration control not found")
+        return nil
+    end
+    
+    local configText = configControl.values.text
+    if not configText or configText == "" then
+        log("ERROR: Configuration is empty")
+        return nil
+    end
+    
+    -- Parse configuration
+    local config = {}
+    for line in configText:gmatch("[^\r\n]+") do
+        local key, value = line:match("^([^:]+):%s*(.+)$")
+        if key and value then
+            config[key] = tonumber(value) or value
+        end
+    end
+    
+    return config
+end
 
 -- Get the connection index from parent group
 local function getConnectionIndex()
@@ -95,19 +135,21 @@ local function getConnectionIndex()
     if self.parent and self.parent.tag then
         local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
         if instance and trackNum then
-            -- Get document script reference
-            if not documentScript then
-                documentScript = root
-            end
-            
-            -- Call the helper function from document script
-            if documentScript.getConnectionForInstance then
-                return documentScript.getConnectionForInstance(instance)
+            -- Read configuration directly
+            local config = readConfiguration()
+            if config then
+                local connectionKey = "connection_" .. instance
+                local connectionIndex = config[connectionKey]
+                if connectionIndex then
+                    debugLog("Found connection index:", connectionIndex, "for instance:", instance)
+                    return connectionIndex
+                end
             end
         end
     end
     
     -- Fallback to default
+    debugLog("Using default connection index: 1")
     return 1
 end
 
@@ -210,6 +252,7 @@ local function onTouch()
         -- Reset to center if track not mapped
         self.values.x = 0.5
         displayValue = 0.5
+        updateVisualColor()
         return
     end
     
@@ -224,6 +267,7 @@ local function onTouch()
     lastTouchTime = now
     touchStartValue = self.values.x
     hasMoved = false
+    touchOnFirst = true  -- Flag for double-tap detection
     
     debugLog("Touch started at:", touchStartValue)
 end
@@ -235,7 +279,25 @@ local function onRelease()
     end
     
     isUserTouching = false
-    lastTouchTime = getMillis()
+    local now = getMillis()
+    
+    -- Double-tap detection (from original script)
+    if touchOnFirst and not hasMoved then
+        if (now - lastTapReleaseTime) < DOUBLE_TAP_DELAY then
+            -- Double-tap detected - center the pan
+            self.values.x = 0.5
+            displayValue = 0.5
+            sendPan(0.5)
+            updateVisualColor()
+            lastTapReleaseTime = 0
+            touchOnFirst = false
+            log("Double-tap detected - pan centered")
+        else
+            lastTapReleaseTime = now
+        end
+    end
+    
+    lastTouchTime = now
     
     -- If user didn't move, treat as a tap to catch
     if not hasMoved then
@@ -282,6 +344,9 @@ function update()
         if math.abs(displayValue - lastSentValue) > SEND_THRESHOLD then
             sendPan(displayValue)
         end
+        
+        -- Update visual color
+        updateVisualColor()
     else
         -- Not touching or hasn't moved
         
@@ -305,6 +370,7 @@ function update()
             
             -- Update visual
             self.values.x = displayValue
+            updateVisualColor()
         end
     end
 end
@@ -330,6 +396,9 @@ function onValueChanged(valueName)
             if math.abs(displayValue - lastSentValue) > SEND_THRESHOLD then
                 sendPan(displayValue)
             end
+            
+            -- Update visual color
+            updateVisualColor()
         end
     end
 end
@@ -379,6 +448,7 @@ function onReceiveOSC(message, connections)
         if not isCaught then
             displayValue = targetValue
             self.values.x = displayValue
+            updateVisualColor()
         end
     end
     
@@ -399,11 +469,13 @@ function onReceiveNotify(key, value)
         lastSentValue = 0.5
         isCaught = false
         self.values.x = 0.5
+        updateVisualColor()
         debugLog("Track changed - reset pan to center")
     elseif key == "track_unmapped" then
         -- Disable control when track is unmapped
         self.values.x = 0.5
         displayValue = 0.5
+        updateVisualColor()
         debugLog("Track unmapped - disabled pan control")
     end
 end
@@ -420,6 +492,9 @@ function init()
     self.values.x = 0.5
     displayValue = 0.5
     targetValue = 0.5
+    
+    -- Set initial color
+    updateVisualColor()
     
     -- Log parent info
     if self.parent and self.parent.name then
