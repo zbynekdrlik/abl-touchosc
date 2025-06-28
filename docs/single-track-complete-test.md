@@ -4,9 +4,9 @@
 Create ONE complete track group with all control scripts to verify everything works together before testing multiple scenarios.
 
 ## Test Track Selection
-We'll use **"band_Kick"** as our test track since:
-- It's a common track name in band projects
-- It's easy to verify in Ableton
+We'll use **"band_CG #"** as our test track since:
+- It's the actual track name in your band project
+- It tests special characters in track names
 - It uses Connection 1 (band connection)
 
 ## Complete Track Group Setup
@@ -14,7 +14,7 @@ We'll use **"band_Kick"** as our test track since:
 ### 1. Create the Main Group
 1. **Create Group Control**
    - Type: Group
-   - Name: `band_Kick`
+   - Name: `band_CG #`
    - Size: Approximately 200x600 pixels (taller for all controls)
    - Position: Center of layout
 
@@ -39,7 +39,7 @@ We'll use **"band_Kick"** as our test track since:
 - Type: Label
 - Name: `track_label`
 - Position: Next to status indicator
-- Text: "Kick" (without prefix)
+- Text: "CG #" (without prefix)
 - Size: Wide enough for track name
 
 ### 3. Add Fader Control
@@ -107,7 +107,7 @@ We'll use **"band_Kick"** as our test track since:
 [REFRESH ALL]
 
 ┌─────────────────────┐
-│ ○ Kick              │  <- Status LED + Label
+│ ○ CG #              │  <- Status LED + Label
 ├─────────────────────┤
 │    ┌───┐ ┌─┐       │
 │    │   │ │█│       │  <- Fader + Meter
@@ -130,11 +130,11 @@ We'll use **"band_Kick"** as our test track since:
 - Logger should show initialization messages for ALL scripts:
   ```
   Document Script v2.5.8 loaded
-  Group init v1.5.1 for band_Kick
-  Fader Script v2.0.0 loaded
-  Meter Script v2.0.0 loaded
-  Mute Button v1.0.0 loaded
-  Pan Control v1.0.0 loaded
+  Group init v1.5.1 for band_CG #
+  Fader Script v2.0.0 loaded for band_CG #
+  Meter Script v2.0.0 loaded for band_CG #
+  Mute Button v1.0.0 loaded for band_CG #
+  Pan Control v1.0.0 loaded for band_CG #
   ```
 - Status indicator should be RED
 - All controls should appear dimmed/disabled
@@ -142,7 +142,7 @@ We'll use **"band_Kick"** as our test track since:
 ### 2. Ableton Setup
 - Open Ableton with band project
 - Ensure Connection 1 is connected
-- Create a track named "Kick"
+- Verify track named "CG #" exists
 - Add some audio to the track for meter testing
 
 ### 3. Refresh Test
@@ -150,10 +150,11 @@ We'll use **"band_Kick"** as our test track since:
 2. Watch logger for messages:
    ```
    === GLOBAL REFRESH ===
-   Refreshing group: band_Kick
-   Requesting track names for band_Kick
+   Refreshing group: band_CG #
+   Requesting track names for band_CG #
    Received track names from connection 1
-   Mapped band_Kick -> Track 0
+   Found track 'CG #' at index X
+   Mapped band_CG # -> Track X
    Refreshed 1 groups
    ```
 3. Status indicator should turn GREEN
@@ -163,7 +164,7 @@ We'll use **"band_Kick"** as our test track since:
 
 #### Fader Test
 - [ ] Fader is enabled (not dimmed)
-- [ ] Moving fader sends OSC: `/live/track/set/volume 0 [value]`
+- [ ] Moving fader sends OSC: `/live/track/set/volume X [value]`
 - [ ] OSC only goes to Connection 1
 - [ ] Smooth movement without jumps
 - [ ] Logger shows volume changes
@@ -171,21 +172,21 @@ We'll use **"band_Kick"** as our test track since:
 #### Meter Test
 - [ ] Meter responds to audio level
 - [ ] Colors change: green → yellow → red
-- [ ] Only responds to track 0 on connection 1
+- [ ] Only responds to track X on connection 1
 - [ ] Smooth decay animation
 - [ ] No response to other tracks
 
 #### Mute Button Test
 - [ ] Button is enabled
 - [ ] Press toggles between gray (unmuted) and red (muted)
-- [ ] Sends OSC: `/live/track/set/mute 0 [0/1]`
+- [ ] Sends OSC: `/live/track/set/mute X [0/1]`
 - [ ] Ableton track mutes/unmutes
 - [ ] State persists correctly
 
 #### Pan Control Test
 - [ ] Knob is enabled
 - [ ] Center position = 0.5
-- [ ] Sends OSC: `/live/track/set/panning 0 [value]`
+- [ ] Sends OSC: `/live/track/set/panning X [value]`
 - [ ] Full range -1 to 1 mapped correctly
 - [ ] Syncs with Ableton after release
 
@@ -209,7 +210,7 @@ Before moving to multiple groups, this single group must:
 ## Troubleshooting
 
 ### Controls don't enable after refresh
-- Check track name matches exactly ("Kick")
+- Check track name matches exactly ("CG #")
 - Verify Connection 1 is active
 - Check status LED is green
 - Look for errors in logger
