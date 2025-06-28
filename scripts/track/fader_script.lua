@@ -1,11 +1,11 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.3.3
--- Fixed: Volume change logs now only in debug mode
+-- Version: 2.3.4
+-- Fixed: Removed color changes to preserve visual design
 -- Added: Centralized logging and multi-connection routing
 -- Preserved: ALL original fader functionality
 
 -- Version constant
-local VERSION = "2.3.3"
+local VERSION = "2.3.4"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -630,12 +630,9 @@ function update()
     debugPrint("*** Touch detected during sync delay - cancelling sync ***")
   end
   
-  -- Safety check: disable if track not mapped
-  if not isTrackMapped() then
-    self.color = Color(0.3, 0.3, 0.3, 0.5)
-  else
-    self.color = Color(1, 1, 1, 1)
-  end
+  -- REMOVED: Color changing code
+  -- The group script handles enabling/disabling interactivity
+  -- We should NOT change colors here
 end
 
 function onValueChanged()
@@ -877,10 +874,8 @@ function init()
   -- Initialize scaling variables
   last_position = self.values.x or 0
   
-  -- Set initial interactive state based on track mapping
-  if not isTrackMapped() then
-    self.color = Color(0.3, 0.3, 0.3, 0.5)
-  end
+  -- REMOVED: Initial color setting
+  -- Let the group script handle interactivity
 end
 
 init()
