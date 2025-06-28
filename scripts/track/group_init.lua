@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.6.0
--- Fixed: Use color transparency instead of alpha property
+-- Version: 1.6.1
+-- Fixed: Proper bounds checking to prevent child index warnings
 
 -- Version constant
-local SCRIPT_VERSION = "1.6.0"
+local SCRIPT_VERSION = "1.6.1"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -76,39 +76,36 @@ local function setGroupEnabled(enabled, silent)
     end
     
     local childCount = 0
+    local i = 0
     
-    -- Safe iteration with bounds checking
-    local i = 1
-    local maxIterations = 20  -- Reduced since we know there are ~13 controls
-    
-    while i <= maxIterations do
+    -- Iterate through children - TouchOSC uses 0-based indexing
+    repeat
         local child = self.children[i]
-        if not child then
+        if child then
+            -- Process all controls except status_indicator
+            if child.name ~= "status_indicator" then
+                -- Disable interaction
+                child.interactive = enabled
+                
+                -- Visual feedback - use color with transparency
+                if child.color then
+                    local r, g, b = child.color.r, child.color.g, child.color.b
+                    if enabled then
+                        -- Restore full opacity
+                        child.color = Color(r, g, b, 1.0)
+                    else
+                        -- Dim with transparency (but don't change values!)
+                        child.color = Color(r, g, b, 0.3)
+                    end
+                end
+                
+                childCount = childCount + 1
+            end
+            i = i + 1
+        else
             break  -- No more children
         end
-        
-        -- Process all controls except status_indicator
-        if child.name ~= "status_indicator" then
-            -- Disable interaction
-            child.interactive = enabled
-            
-            -- Visual feedback - use color with transparency
-            if child.color then
-                local r, g, b = child.color.r, child.color.g, child.color.b
-                if enabled then
-                    -- Restore full opacity
-                    child.color = Color(r, g, b, 1.0)
-                else
-                    -- Dim with transparency (but don't change values!)
-                    child.color = Color(r, g, b, 0.3)
-                end
-            end
-            
-            childCount = childCount + 1
-        end
-        
-        i = i + 1
-    end
+    until i > 50  -- Safety limit
     
     -- Only log if not silent
     if not silent then
