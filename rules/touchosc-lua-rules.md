@@ -107,7 +107,7 @@ local groups = root:findAllByProperty("tag", "trackGroup", true)
 ```lua
 local VERSION = "1.2.3"
 function init()
-    print("MyScript v" .. VERSION .. " loaded")
+    log("Script v" .. VERSION .. " loaded")  -- Use centralized logging
 end
 ```
 
@@ -126,33 +126,57 @@ function getConnectionForInstance(instance)
 end
 ```
 
-## 11. Centralized Logging Pattern
+## 11. Centralized Logging Pattern (CRITICAL)
 ```lua
--- ❌ WRONG - Each script implementing its own logger
+-- ❌ WRONG - Each script implementing its own logger lookup
 local function log(msg)
     local logger = root:findByName("logger", true)
-    -- Duplicated code everywhere
+    if logger then
+        logger.values.text = msg  -- Direct access won't work consistently
+    end
 end
 
--- ✅ CORRECT - Document script handles all logging
--- In document script:
+-- ✅ CORRECT - Use notify() to send logs to document script
+-- In ANY script that needs logging:
+local function log(message)
+    -- Add context to identify which control sent the log
+    local context = "SCRIPTNAME"
+    if self.parent and self.parent.name then
+        context = "SCRIPTNAME(" .. self.parent.name .. ")"
+    end
+    
+    -- Send to document script for proper logging
+    root:notify("log_message", context .. ": " .. message)
+    
+    -- Also print to console for development/debugging
+    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
+end
+
+-- Document script (attached to root) handles all logging:
+function onReceiveNotify(action, value)
+    if action == "log_message" then
+        if value then
+            log(tostring(value))  -- Document script's internal log function
+        end
+    end
+end
+
+-- Document script's internal log function manages the logger text:
 local function log(message)
     local logMessage = os.date("%H:%M:%S") .. " " .. message
-    print(logMessage)  -- Always print to console
+    print(logMessage)
     
-    -- Store in buffer
+    -- Buffer management
     table.insert(logLines, logMessage)
     if #logLines > maxLogLines then
         table.remove(logLines, 1)
     end
     
-    -- Update logger control if found
+    -- Update logger control
     if logger and logger.values then
         logger.values.text = table.concat(logLines, "\n")
     end
 end
-
--- Other scripts use print() or notify document script
 ```
 
 ## 12. Control Type Differences
@@ -215,26 +239,44 @@ end
 ## 15. Document Script Pattern
 Create a main "document script" that handles:
 - Configuration parsing
-- Centralized logging
+- **Centralized logging for ALL scripts**
 - Helper functions (exposed via globals)
 - Coordination between scripts
 - Buffering messages before logger is available
 
 ```lua
--- Document script pattern
-local VERSION = "2.5.8"
+-- Document script pattern (v2.5.9+)
+local VERSION = "2.5.9"
 local logLines = {}  -- Buffer messages
 local logger = nil   -- Found later
 
 function init()
     log("Document Script v" .. VERSION .. " loaded")
-    -- Initialize system
 end
 
+-- CRITICAL: Handle log messages from other scripts
 function onReceiveNotify(action, value)
-    if action == "refresh_all_groups" then
+    if action == "log_message" then
+        if value then
+            log(tostring(value))  -- Process log from other script
+        end
+    elseif action == "refresh_all_groups" then
         refreshAllGroups()
     end
+end
+```
+
+## 16. No pcall in TouchOSC
+```lua
+-- ❌ WRONG - pcall not available
+local success, result = pcall(function()
+    return self.children[name]
+end)
+
+-- ✅ CORRECT - Use direct checks
+if self and self.children and self.children[name] then
+    local child = self.children[name]
+    -- Use child
 end
 ```
 
@@ -249,7 +291,9 @@ end
 7. **Messages have structure** - `message[2][1].value`
 8. **Control types differ** - buttons vs labels have different values
 9. **Visual changes need delays** - use update() for timing
-10. **Logger might not exist yet** - buffer messages
+10. **Logger access requires notify()** - never direct access
+11. **No pcall function** - use explicit nil checks
+12. **Document script v2.5.9+** required for centralized logging
 
 ## Testing Checklist
 - [ ] Test with missing controls
@@ -258,5 +302,6 @@ end
 - [ ] Verify all notify() handlers
 - [ ] Check version logging
 - [ ] Test visual feedback visibility
-- [ ] Verify logger updates properly
+- [ ] Verify logger updates properly via notify
 - [ ] Test with controls in pagers
+- [ ] Confirm document script handles log_message
