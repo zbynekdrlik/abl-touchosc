@@ -1,8 +1,9 @@
 -- TouchOSC Global Refresh Button Script
--- Version: 1.1.0
+-- Version: 1.1.1
 -- Phase: 01 - Global refresh for all track groups
+-- Fixed: Works with Label controls using 'x' value instead of 'touch'
 
-local SCRIPT_VERSION = "1.1.0"
+local SCRIPT_VERSION = "1.1.1"
 
 -- Local logger function
 local function log(...)
@@ -37,7 +38,8 @@ end
 log("Global Refresh Button v" .. SCRIPT_VERSION .. " loaded")
 
 function onValueChanged(valueName)
-    if valueName == "touch" and self.values.touch == 1 then
+    -- Labels use 'x' value when touched, not 'touch'
+    if valueName == "x" then
         log("=== GLOBAL REFRESH INITIATED ===")
         
         -- Visual feedback
@@ -75,4 +77,10 @@ end
 function init()
     log("Global Refresh Button initialized")
     self.values.text = "REFRESH ALL"
+    
+    -- Debug: Show what values are available
+    print("Available values on this control:")
+    for k, v in pairs(self.values) do
+        print("  " .. k .. " = " .. tostring(v))
+    end
 end
