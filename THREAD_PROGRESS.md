@@ -2,7 +2,7 @@
 
 ## Current Status
 - **Phase**: 3 - Script Functionality Testing
-- **Step**: Already completed basic setup
+- **Step**: Testing global refresh button
 - **Date**: 2025-06-28
 - **Branch**: feature/selective-connection-routing
 
@@ -11,6 +11,7 @@
 - Configuration and logger objects already created and tested
 - Notify system implemented for inter-script communication
 - Configuration object can be anywhere (uses findByName recursive search)
+- Removed old refresh_button.lua to avoid confusion
 
 ## Phase 3 Progress
 
@@ -19,7 +20,7 @@
 - ✅ Logger text object (working)
 - ✅ Document script attached to root (v2.5.7)
 - ✅ Notify system tested
-- [ ] Global refresh button
+- [ ] Global refresh button - TESTING NOW
 - [ ] Create 4 test groups
 
 ### Script Testing Phase
@@ -30,8 +31,14 @@
 - [ ] Test mute button
 - [ ] Test pan control
 
-## Current Focus
-Ready to test individual control scripts with the 4 test group scenarios.
+## Current Task
+Testing global_refresh_button.lua (v1.1.0)
+
+User should:
+1. Create a Button control
+2. Add global_refresh_button.lua script to it
+3. Verify button text auto-sets to "REFRESH ALL"
+4. Test button functionality
 
 ## Key Findings from Previous Testing
 1. Document script uses recursive search - objects can be in pagers
@@ -42,11 +49,11 @@ Ready to test individual control scripts with the 4 test group scenarios.
 ## Script Versions in Use
 - **document_script.lua**: v2.5.7 (NOT helper_script)
 - **group_init.lua**: v1.5.1
-- **global_refresh_button.lua**: v1.1.0
+- **global_refresh_button.lua**: v1.1.0 (only refresh script now)
 - **fader_script.lua**: v2.0.0
 - **meter_script.lua**: v2.0.0
 - **mute_button.lua**: v1.0.0
 - **pan_control.lua**: v1.0.0
 
 ## Next Step
-Create global refresh button and test groups for control script testing.
+After testing global refresh button, create 4 test groups for control script testing.
