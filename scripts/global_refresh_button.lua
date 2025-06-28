@@ -1,8 +1,8 @@
 -- TouchOSC Global Refresh Button Script
--- Version: 1.2.0
--- Uses document script's refreshAllGroups function
+-- Version: 1.2.1
+-- Notifies document script to perform refresh
 
-local SCRIPT_VERSION = "1.2.0"
+local SCRIPT_VERSION = "1.2.1"
 
 -- Store last tap time to prevent double triggers
 local lastTapTime = 0
@@ -20,12 +20,8 @@ function onValueChanged(valueName)
         -- Visual feedback
         self.color = Color(1, 1, 0, 1)  -- Yellow while refreshing
         
-        -- Use document script's refreshAllGroups function
-        if refreshAllGroups then
-            refreshAllGroups()
-        else
-            print("[ERROR] refreshAllGroups function not found - is document script loaded?")
-        end
+        -- Notify document script to refresh all groups
+        root:notify("refresh_all_groups")
         
         -- Reset color after a short delay
         self.color = Color(0.5, 0.5, 0.5, 1)  -- Back to gray
