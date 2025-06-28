@@ -1,10 +1,11 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.3.0
+-- Version: 2.3.1
+-- Fixed: OSC receive now properly handles instance:track format
 -- Added: Centralized logging and multi-connection routing
 -- Preserved: ALL original fader functionality
 
 -- Version constant
-local VERSION = "2.3.0"
+local VERSION = "2.3.1"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -477,50 +478,48 @@ end
 -- ===========================
 
 function onReceiveOSC(message, connections)
-  -- Only process volume messages
-  if message[1] ~= '/live/track/get/volume' then
-    return false
-  end
-  
-  -- Check if this is our track
+  -- THIS WAS THE BUG! The original fader expects arguments[1].value to be the track number
+  -- but we need to handle the original format
   local arguments = message[2]
-  if not arguments or #arguments < 2 then
-    return false
-  end
   
-  local msgTrackNumber = arguments[1].value
+  -- For the original fader behavior, it was checking:
+  -- if arguments[1].value == tonumber(self.parent.tag) then
+  -- But now self.parent.tag is "band:39" not "39"
+  
+  -- So we need to extract just the track number from our tag
   local myTrackNumber = getTrackNumber()
-  
-  if msgTrackNumber ~= myTrackNumber then
+  if not myTrackNumber then
     return false
   end
   
-  -- Get the volume value (this is the original OSC receive logic)
-  local remote_audio_value = arguments[2].value
-  last_osc_audio = remote_audio_value
-  
-  if use_log_curve then
-    last_osc_x = logToLinear(remote_audio_value)
-  else
-    last_osc_x = remote_audio_value
-  end
-  
-  -- Only update if not touching to prevent jumps
-  if not self.values.touch then
-    -- Don't update if we're in the middle of a sync delay
-    if synced then
-      self.values.x = last_osc_x
-      last_position = last_osc_x
-      debugPrint("*** OSC UPDATE - Fader:", string.format("%.1f%%", last_osc_x * 100), "Audio:", string.format("%.3f", remote_audio_value))
+  -- Check if this message is for our track
+  if arguments[1].value == myTrackNumber then
+    local remote_audio_value = arguments[2].value
+    last_osc_audio = remote_audio_value
+    
+    if use_log_curve then
+      last_osc_x = logToLinear(remote_audio_value)
     else
-      debugPrint("*** OSC UPDATE DURING SYNC DELAY - Storing for later ***")
+      last_osc_x = remote_audio_value
     end
-  else
-    touched = true
-    debugPrint("*** OSC RECEIVED WHILE TOUCHING - Ignoring to prevent jump ***")
+    
+    -- Only update if not touching to prevent jumps
+    if not self.values.touch then
+      -- Don't update if we're in the middle of a sync delay
+      if synced then
+        self.values.x = last_osc_x
+        last_position = last_osc_x
+        debugPrint("*** OSC UPDATE - Fader:", string.format("%.1f%%", last_osc_x * 100), "Audio:", string.format("%.3f", remote_audio_value))
+      else
+        debugPrint("*** OSC UPDATE DURING SYNC DELAY - Storing for later ***")
+      end
+    else
+      touched = true
+      debugPrint("*** OSC RECEIVED WHILE TOUCHING - Ignoring to prevent jump ***")
+    end
   end
   
-  return true
+  return false  -- Don't block other receivers
 end
 
 -- Send OSC with connection routing
