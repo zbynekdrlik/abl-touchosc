@@ -1,8 +1,9 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.5.8
+-- Version: 2.5.9
 -- Purpose: Main document script with configuration, logging, and track management
+-- Added: Handle log_message notifications from other scripts
 
-local VERSION = "2.5.8"
+local VERSION = "2.5.9"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -132,6 +133,12 @@ function onReceiveNotify(action, value)
     elseif action == "refresh_all_groups" then
         -- Global refresh button pressed
         refreshAllGroups()
+        
+    elseif action == "log_message" then
+        -- Another script wants to log a message
+        if value then
+            log(tostring(value))
+        end
     end
 end
 
