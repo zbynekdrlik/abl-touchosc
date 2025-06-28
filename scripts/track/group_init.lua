@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.7.0
--- Added: Centralized logging through document script via notify
+-- Version: 1.8.0
+-- Fixed: Preserve control appearance when enabling/disabling
 
 -- Version constant
-local SCRIPT_VERSION = "1.7.0"
+local SCRIPT_VERSION = "1.8.0"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -14,6 +14,9 @@ local needsRefresh = false
 local trackNumber = nil
 local trackMapped = false
 local lastEnabledState = nil  -- Track last state to prevent spam
+
+-- Store original colors/opacity
+local originalAppearance = {}
 
 -- Centralized logging through document script
 local function log(message)
@@ -76,7 +79,31 @@ local function getChild(parent, name)
     return nil
 end
 
--- Enable/disable all controls in the group
+-- Store original appearance on first run
+local function storeOriginalAppearance()
+    if not self.children then
+        return
+    end
+    
+    local controlsToCheck = {"fader", "mute", "pan", "meter", "track_label"}
+    
+    for _, name in ipairs(controlsToCheck) do
+        local child = getChild(self, name)
+        if child and name ~= "status_indicator" then
+            -- Store original color if it exists
+            if child.color then
+                originalAppearance[name] = {
+                    r = child.color.r,
+                    g = child.color.g,
+                    b = child.color.b,
+                    a = child.color.a
+                }
+            end
+        end
+    end
+end
+
+-- Enable/disable all controls in the group WITHOUT changing appearance
 local function setGroupEnabled(enabled, silent)
     -- Skip if state hasn't changed to prevent spam
     if lastEnabledState == enabled then
@@ -98,20 +125,15 @@ local function setGroupEnabled(enabled, silent)
     for _, name in ipairs(controlsToCheck) do
         local child = getChild(self, name)
         if child and name ~= "status_indicator" then
-            -- Disable interaction
+            -- ONLY disable interaction - DON'T CHANGE APPEARANCE!
             child.interactive = enabled
             
-            -- Visual feedback - use color with transparency
-            if child.color then
-                local r, g, b = child.color.r, child.color.g, child.color.b
-                if enabled then
-                    -- Restore full opacity
-                    child.color = Color(r, g, b, 1.0)
-                else
-                    -- Dim with transparency (but don't change values!)
-                    child.color = Color(r, g, b, 0.3)
-                end
+            -- If we're re-enabling and have stored colors, restore them
+            if enabled and originalAppearance[name] and child.color then
+                local orig = originalAppearance[name]
+                child.color = Color(orig.r, orig.g, orig.b, orig.a)
             end
+            -- DON'T dim or change colors when disabling!
             
             childCount = childCount + 1
         end
@@ -163,6 +185,9 @@ function init()
     -- Log initialization
     log("Group init v" .. SCRIPT_VERSION .. " loaded")
     log("Config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
+    
+    -- Store original appearance BEFORE any changes
+    storeOriginalAppearance()
     
     -- SAFETY: Disable all controls until properly mapped
     setGroupEnabled(false, true)  -- Silent
@@ -234,6 +259,15 @@ function onReceiveOSC(message, connections)
                         -- Store combined info in tag
                         self.tag = instance .. ":" .. trackNumber
                         
+                        -- Notify all child controls that track is mapped
+                        if self.children then
+                            for name, child in pairs(self.children) do
+                                if child and child.notify then
+                                    child:notify("track_changed", trackNumber)
+                                end
+                            end
+                        end
+                        
                         -- Build connection table for our specific connection
                         local targetConnections = buildConnectionTable(connectionIndex)
                         
@@ -260,6 +294,15 @@ function onReceiveOSC(message, connections)
                 updateStatus("error")
                 setGroupEnabled(false)  -- Keep disabled for safety
                 trackNumber = nil  -- Clear any old track number
+                
+                -- Notify children about unmapping
+                if self.children then
+                    for name, child in pairs(self.children) do
+                        if child and child.notify then
+                            child:notify("track_unmapped")
+                        end
+                    end
+                end
                 
                 local label = getChild(self, "track_label")
                 if label then
