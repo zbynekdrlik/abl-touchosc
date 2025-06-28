@@ -1,12 +1,11 @@
 -- mute_button.lua
--- Version: 1.6.3
--- Added: Sending functionality with simple approach
+-- Version: 1.6.4
+-- Simplified: React to x changes, send inverted value
 
-local VERSION = "1.6.3"
+local VERSION = "1.6.4"
 
 -- State tracking
-local currentMuteState = false
-local lastTouchValue = false
+local ignoreNextChange = false
 
 -- Logging
 local function log(message)
@@ -81,17 +80,17 @@ function onReceiveOSC(message, connections)
             -- Check if message is from correct connection
             local expectedConnection = getConnectionIndex()
             if connections[expectedConnection] then
-                -- Update state
-                currentMuteState = arguments[2].value == true
+                -- Set flag to ignore the next value change
+                ignoreNextChange = true
                 
                 -- Update button visual state
-                if currentMuteState then
+                if arguments[2].value then
                     self.values.x = 0  -- Muted = pressed
                 else
                     self.values.x = 1  -- Unmuted = released
                 end
                 
-                log("Received mute state: " .. (currentMuteState and "MUTED" or "UNMUTED"))
+                log("Received mute state: " .. (arguments[2].value and "MUTED" or "UNMUTED"))
             end
         end
     end
@@ -101,31 +100,32 @@ end
 
 -- Handle value changes
 function onValueChanged(key)
-    if key == "touch" then
-        local touchValue = self.values.touch
+    if key == "x" then
+        -- Skip if this was from OSC
+        if ignoreNextChange then
+            ignoreNextChange = false
+            return
+        end
         
-        -- Detect touch press (false to true transition)
-        if touchValue and not lastTouchValue then
+        -- Only send if user is touching
+        if self.values.touch then
             local trackNumber = getTrackNumber()
             if trackNumber then
-                -- Toggle mute
-                local newMuteState = not currentMuteState
+                -- Send inverted x value as boolean
+                -- x=0 (pressed) -> send true (mute on)
+                -- x=1 (released) -> send false (mute off)
+                local muteState = (self.values.x == 0)
                 
                 -- Send with connection routing
                 local connectionIndex = getConnectionIndex()
                 local connections = buildConnectionTable(connectionIndex)
                 
-                sendOSC("/live/track/set/mute", trackNumber, newMuteState, connections)
-                log("Sent mute " .. (newMuteState and "ON" or "OFF") .. " for track " .. trackNumber)
-                
-                -- Update our state (will be confirmed by OSC response)
-                currentMuteState = newMuteState
+                sendOSC("/live/track/set/mute", trackNumber, muteState, connections)
+                log("Sent mute " .. (muteState and "ON" or "OFF") .. " for track " .. trackNumber)
             end
         end
-        
-        lastTouchValue = touchValue
     end
 end
 
 -- Initialize
-log("Script v" .. VERSION .. " loaded (with sending)")
+log("Script v" .. VERSION .. " loaded")
