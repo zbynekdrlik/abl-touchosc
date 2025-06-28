@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.5.3
--- Fixed: Safe iteration over children, proper error handling
+-- Version: 1.5.4
+-- Fixed: Prevent log spam from update() function
 
 -- Version constant
-local SCRIPT_VERSION = "1.5.3"
+local SCRIPT_VERSION = "1.5.4"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -13,6 +13,7 @@ local lastVerified = 0
 local needsRefresh = false
 local trackNumber = nil
 local trackMapped = false
+local lastEnabledState = nil  -- Track last state to prevent spam
 
 -- Local logger function
 local function log(...)
@@ -86,7 +87,14 @@ local function parseGroupName(name)
 end
 
 -- Enable/disable all controls in the group
-local function setGroupEnabled(enabled)
+local function setGroupEnabled(enabled, silent)
+    -- Skip if state hasn't changed to prevent spam
+    if lastEnabledState == enabled then
+        return
+    end
+    
+    lastEnabledState = enabled
+    
     -- Check if we have children
     if not self.children then
         return
@@ -127,7 +135,10 @@ local function setGroupEnabled(enabled)
         i = i + 1
     end
     
-    log(self.name .. " controls " .. (enabled and "ENABLED" or "DISABLED") .. " (" .. childCount .. " controls)")
+    -- Only log if not silent
+    if not silent then
+        log(self.name .. " controls " .. (enabled and "ENABLED" or "DISABLED") .. " (" .. childCount .. " controls)")
+    end
 end
 
 -- Update visual status (minimal - just LED if present)
@@ -174,6 +185,9 @@ function init()
     
     -- SAFETY: Disable all controls until properly mapped
     setGroupEnabled(false)
+    
+    -- Set initial status
+    updateStatus("error")
     
     -- Note: OSC routing must be configured in TouchOSC editor
     log("NOTE: Ensure group has OSC receive pattern: /live/song/get/track_names")
@@ -292,16 +306,13 @@ function onReceiveNotify(action)
 end
 
 function update()
-    -- Additional safety check - if not mapped, ensure controls stay disabled
-    if not trackMapped then
-        setGroupEnabled(false)
-    end
-    
-    -- Visual feedback for stale data
+    -- Only check stale data if mapped
     if trackMapped and lastVerified > 0 then
         local age = getMillis() - lastVerified
         if age > 300000 then  -- 5 minutes
             updateStatus("stale")
         end
     end
+    
+    -- No need to repeatedly call setGroupEnabled - it's handled by state changes
 end
