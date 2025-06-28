@@ -2,7 +2,7 @@
 
 ## Current Status
 - **Phase**: 3 - Script Functionality Testing
-- **Step**: Creating test groups
+- **Step**: Creating ONE complete track group with all controls
 - **Date**: 2025-06-28
 - **Branch**: feature/selective-connection-routing
 
@@ -11,7 +11,7 @@
 - Configuration and logger objects working perfectly
 - Notify system implemented and tested
 - Global refresh button (v1.2.1) working with proper logging
-- Test group setup instructions created
+- **Changed approach**: Testing ONE complete group first before multiple scenarios
 
 ## Phase 3 Progress
 
@@ -21,32 +21,28 @@
 - ✅ Document script attached to root (v2.5.8)
 - ✅ Notify system tested (refresh_all_groups notification works)
 - ✅ Global refresh button (v1.2.1) - Working with proper logging
-- ✅ Test group setup instructions created (docs/test-group-setup.md)
-- [ ] Create 4 test groups - IN PROGRESS
+- ✅ Single track complete test instructions created
+- [ ] Create ONE complete track group - IN PROGRESS
 
-### Script Testing Phase
-- [ ] Test group scripts with 4 scenarios
-- [ ] Test fader script
-- [ ] Test meter script
-- [ ] Test mute button
-- [ ] Test pan control
+### Script Testing Phase (Single Group First)
+- [ ] Test group script (band_Kick)
+- [ ] Test fader script in group
+- [ ] Test meter script in group
+- [ ] Test mute button in group
+- [ ] Test pan control in group
+- [ ] Test all controls working together
+- [ ] THEN test multiple group scenarios
 
-## Global Refresh Button Test Results
-- Script version 1.2.1 working
-- Proper notification to document script
-- Logger shows messages correctly:
-  - "=== GLOBAL REFRESH ==="
-  - "Refreshed 0 groups"
-- Ready to test with actual groups
+## Current Task: Create Complete "band_Kick" Group
+User needs to create ONE complete track group with:
+1. Group container with status LED
+2. Track label
+3. Fader with script
+4. Meter display with script
+5. Mute button with script
+6. Pan control with script
 
-## Current Task: Create 4 Test Groups
-User needs to create in TouchOSC:
-1. Valid band track (band_Kick)
-2. Valid master track (master_VOX 1) 
-3. Non-existent track (band_FakeTrack)
-4. Wrong connection (band_VOX 1)
-
-Detailed instructions provided in: `docs/test-group-setup.md`
+Detailed instructions in: `docs/single-track-complete-test.md`
 
 ## Script Versions in Use
 - **document_script.lua**: v2.5.8 (updated)
@@ -57,14 +53,17 @@ Detailed instructions provided in: `docs/test-group-setup.md`
 - **mute_button.lua**: v1.0.0
 - **pan_control.lua**: v1.0.0
 
-## Key Achievement
-- Logging system fully functional
-- Global refresh working
-- Ready for full group testing
+## Test Approach Change
+Per user feedback, focusing on:
+1. Get ONE complete track group working perfectly
+2. Test all scripts in that single group
+3. Verify full integration
+4. Only then move to multiple group scenarios
 
 ## Next Steps
-1. User creates 4 test groups following the instructions
-2. Test group initialization and status indicators
-3. Test refresh functionality with actual Ableton connections
-4. Add control scripts (fader, meter, mute, pan) to groups
-5. Test each control type with different group states
+1. User creates single complete band_Kick group
+2. Test initialization of all scripts
+3. Test refresh to map the track
+4. Test each control individually
+5. Test all controls working together
+6. Once perfect, then create additional test groups
