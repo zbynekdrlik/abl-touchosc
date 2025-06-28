@@ -4,8 +4,9 @@
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
 - [x] Fixed all fader script issues (v2.3.3)
 - [x] Fader working correctly with Ableton
-- [ ] Currently: Ready to add meter control to band_CG #
-- [ ] Waiting for: User to add meter and continue testing
+- [x] Updated meter script with multi-connection support (v2.2.0)
+- [ ] Currently: User needs to add meter control and test
+- [ ] Waiting for: User to add meter control with correct settings
 - [ ] Blocked by: None
 
 ## Implementation Status
@@ -32,10 +33,22 @@
 - ✅ Fixed: Volume logs moved to debug mode (v2.3.3)
 - ✅ FULLY WORKING with all sophisticated features
 
+### Meter Control
+- ✅ Script updated to v2.2.0
+- ✅ Preserves exact calibration from working meter
+- ✅ Multi-connection support added
+- ⏳ Waiting for user to add control and test
+
 ### Remaining Controls to Test
-- ⏳ Meter - Ready to add
 - ⏳ Mute button - Not tested
 - ⏳ Pan control - Not tested
+
+## Meter Setup Instructions
+**CORRECT setup for meter control:**
+1. Add a **Fader** control to band_CG # group (TouchOSC uses faders for meters)
+2. Name it "meter" (or any preferred name)
+3. Set OSC receive pattern to: `/live/track/get/output_meter_level`
+4. Attach the updated meter_script.lua (v2.2.0)
 
 ## Critical Issues Fixed in This Thread
 
@@ -64,7 +77,7 @@
 - **group_init.lua**: v1.7.0 ✅ (tested and working)
 - **global_refresh_button.lua**: v1.4.0 ✅ (tested and working)
 - **fader_script.lua**: v2.3.3 ✅ (FULLY TESTED AND WORKING)
-- **meter_script.lua**: v2.1.0 ❌ (not tested)
+- **meter_script.lua**: v2.2.0 ⏳ (updated, not tested)
 - **mute_button.lua**: v1.1.0 ❌ (not tested)
 - **pan_control.lua**: v1.1.0 ❌ (not tested)
 
@@ -89,13 +102,21 @@ Scripts that need connection info must:
 - Receive must handle exact format expected by Ableton
 - Connection routing requires explicit connection table
 
+### Meter Script Specifics
+- Uses Fader control type in TouchOSC
+- OSC receive pattern: `/live/track/get/output_meter_level`
+- Preserves exact calibration points from fader
+- Color thresholds: -12dB (yellow), -3dB (red)
+- Smooth color transitions with 0.3 smoothing factor
+
 ## Next Steps
-1. Add meter control to band_CG #
-2. Test meter functionality
-3. Add and test mute button
-4. Add and test pan control
-5. Create master_Hand1 # group
-6. Test multi-instance routing
+1. User adds meter control to band_CG # with correct settings
+2. Test meter functionality with multi-connection routing
+3. Verify calibration matches fader exactly
+4. Add and test mute button
+5. Add and test pan control
+6. Create master_Hand1 # group
+7. Test multi-instance routing
 
 ## Configuration Reminder
 Current real-world configuration:
@@ -108,11 +129,13 @@ connection_master: 3
 - [x] Group initializes correctly
 - [x] Refresh maps track successfully
 - [x] Fader controls volume
-- [ ] Meter shows levels
+- [ ] Meter shows levels with correct calibration
+- [ ] Meter responds only to connection_band messages
+- [ ] Meter colors match dB thresholds
 - [ ] Mute button works
 - [ ] Pan control works
 - [x] All logs use centralized logging
 - [x] No cross-talk with other connections
 
 ## Summary
-Major progress made - fixed all critical fader issues. The sophisticated fader with all its features (movement smoothing, 0.1dB response, double-tap to 0dB, etc.) is now fully working with the multi-connection routing system. Ready to continue testing with remaining controls.
+Meter script updated to v2.2.0 with multi-connection support while preserving all calibration and color settings from the working meter. Ready for user to add meter control and test.
