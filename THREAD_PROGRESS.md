@@ -2,7 +2,7 @@
 
 ## Current Status
 - **Phase**: 3 - Script Functionality Testing
-- **Step**: Ready to create single complete track group
+- **Step**: Fixed logging issue, ready for testing
 - **Date**: 2025-06-28
 - **Branch**: feature/selective-connection-routing
 
@@ -12,14 +12,13 @@
 - Notify system implemented and tested
 - Global refresh button (v1.2.1) working with proper logging
 - **Test track**: "band_CG #"
-- **CLARIFIED**: Connection routing is AUTOMATIC based on group names!
+- **Connection routing is AUTOMATIC based on group names!**
 
-## Critical Design Clarification
-The entire selective connection routing system works automatically:
-- **Group names determine connections** (band_* → connection 1, master_* → connection 2)
-- **Scripts handle ALL filtering** - no need to set connections in UI
-- **Enable all connections in OSC settings** - let the scripts do the work!
-- This was the original design goal and it's already implemented correctly
+## Latest Fix
+- **group_init.lua updated to v1.5.2**
+- Fixed: Moved all logging calls inside functions
+- Now properly logs to the logger text object
+- Uses recursive search for logger (can be in pagers)
 
 ## Phase 3 Progress
 
@@ -33,15 +32,8 @@ The entire selective connection routing system works automatically:
 - ✅ Updated test track to "band_CG #"
 - ✅ Reviewed all track scripts for compliance
 - ✅ Updated docs to clarify automatic routing
+- ✅ Fixed group_init logging issue
 - [ ] Create ONE complete track group - READY TO TEST
-
-### Script Review Results
-All scripts follow TouchOSC rules and implement automatic routing:
-- **group_init.lua** (v1.5.1): Parses name, filters by connection automatically
-- **fader_script.lua** (v2.0.0): Gets connection from parent group
-- **meter_script.lua** (v2.0.0): Filters incoming messages by connection
-- **mute_button.lua** (v1.0.0): Routes to correct connection
-- **pan_control.lua** (v1.0.0): Connection-aware sending
 
 ### Script Testing Phase (Single Group First)
 - [ ] Create group "band_CG #" with all connections enabled
@@ -52,35 +44,45 @@ All scripts follow TouchOSC rules and implement automatic routing:
 - [ ] Test pan control in group
 - [ ] Test all controls working together
 
-## Current Task: Create Complete "band_CG #" Group
-User needs to create ONE complete track group with:
-1. Group container named "band_CG #" (enables all connections in UI)
-2. Status LED indicator
-3. Track label
-4. Fader with script
-5. Meter display with script
-6. Mute button with script
-7. Pan control with script
+## Quick Setup for Testing
 
-The "band_" prefix will automatically route to connection 1!
+1. **Group**: Name: `band_CG #`
+   - OSC pattern: `/live/song/get/track_names` 
+   - Script: `group_init.lua` (v1.5.2)
+   - Add child: LED named `status_indicator`
+
+2. **Fader**: Name: `fader`
+   - Script: `fader_script.lua` (v2.0.0)
+
+3. **Meter**: Name: `meter` (group)
+   - OSC pattern: `/live/track/get/output_meter_level`
+   - Script: `meter_script.lua` (v2.0.0)
+   - Add child: Rectangle named `level`
+
+4. **Mute**: Name: `mute`
+   - Script: `mute_button.lua` (v1.0.0)
+
+5. **Pan**: Name: `pan`
+   - Script: `pan_control.lua` (v1.0.0)
 
 ## Script Versions Ready for Testing
 - **document_script.lua**: v2.5.8
-- **group_init.lua**: v1.5.1 (automatic connection routing)
+- **group_init.lua**: v1.5.2 (FIXED - logging now works)
 - **global_refresh_button.lua**: v1.2.1
 - **fader_script.lua**: v2.0.0
 - **meter_script.lua**: v2.0.0
 - **mute_button.lua**: v1.0.0
 - **pan_control.lua**: v1.0.0
 
-## Documentation Updates
-- ✅ Updated single-track-complete-test.md
-- ✅ Updated test-group-setup.md
-- Both now correctly explain automatic connection routing
+## Key Fix Applied
+- Group script no longer logs at top level
+- All logging moved inside init() function
+- Uses recursive search for logger (true parameter)
+- Matches document script's 60-line buffer
 
 ## Next Steps
-1. User creates single complete band_CG # group (with all connections enabled)
-2. Test automatic routing to connection 1
-3. Test all controls working together
-4. Once perfect, test master_* group for connection 2
-5. Then scale to production layout
+1. User updates group_init.lua to v1.5.2
+2. Test group initialization - should see logs
+3. Test refresh functionality
+4. Add and test each control type
+5. Verify automatic connection routing works
