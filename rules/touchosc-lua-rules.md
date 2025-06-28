@@ -6,6 +6,10 @@
 _G.sharedVar = 123  -- Won't work
 global.data = {}    -- Won't work
 
+-- ❌ IMPOSSIBLE - Scripts cannot call each other's functions
+documentScript.getConnectionForInstance()  -- Won't work
+otherScript:doSomething()                 -- Won't work
+
 -- ✅ ALLOWED - Communication methods
 control:notify("action", value)           -- Send notification
 self.parent.propertyName = value         -- Parent/child properties
@@ -280,20 +284,81 @@ if self and self.children and self.children[name] then
 end
 ```
 
+## 17. Configuration Reading Pattern (NEW)
+Since scripts are isolated, each script that needs configuration must read it directly:
+
+```lua
+-- ✅ CORRECT - Read configuration in each script that needs it
+local function getConnectionIndex()
+    local configObj = root:findByName("configuration", true)
+    if not configObj or not configObj.values or not configObj.values.text then
+        return 1  -- Default
+    end
+    
+    local configText = configObj.values.text
+    -- Parse the text to find what you need
+    for line in configText:gmatch("[^\r\n]+") do
+        -- Process each line
+    end
+end
+
+-- ❌ WRONG - Trying to call another script's function
+local connection = documentScript.getConnectionForInstance("band")  -- Won't work!
+```
+
+## 18. Tag Format Changes (NEW)
+When parent scripts change tag formats, child scripts must adapt:
+
+```lua
+-- Parent might set tag as "band:39" instead of just "39"
+local function getTrackNumber()
+    if self.parent and self.parent.tag then
+        -- Handle new format
+        local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
+        if trackNum then
+            return tonumber(trackNum)
+        end
+        -- Fallback to old format
+        return tonumber(self.parent.tag)
+    end
+    return nil
+end
+```
+
+## 19. OSC Parameter Order (NEW)
+When using variadic parameters with connection tables:
+
+```lua
+-- ❌ WRONG - Variadic args don't work well with connection tables
+local function sendOSCRouted(path, ...)
+    sendOSC(path, ..., connections)  -- This can fail!
+end
+
+-- ✅ CORRECT - Explicit parameters
+local function sendOSCRouted(path, param1, param2)
+    local connections = buildConnectionTable(index)
+    sendOSC(path, param1, param2, connections)
+end
+```
+
 ## Key Gotchas
 
 1. **No global variables** between scripts - use notify()
 2. **No shared memory** - each script is sandboxed
-3. **OSC patterns** cannot be scripted - UI only
-4. **Connection 0** doesn't exist - use 1-10
-5. **Scripts load asynchronously** - can't assume order
-6. **update() runs 60fps** - keep it light
-7. **Messages have structure** - `message[2][1].value`
-8. **Control types differ** - buttons vs labels have different values
-9. **Visual changes need delays** - use update() for timing
-10. **Logger access requires notify()** - never direct access
-11. **No pcall function** - use explicit nil checks
-12. **Document script v2.5.9+** required for centralized logging
+3. **No shared functions** - each script must be self-contained
+4. **OSC patterns** cannot be scripted - UI only
+5. **Connection 0** doesn't exist - use 1-10
+6. **Scripts load asynchronously** - can't assume order
+7. **update() runs 60fps** - keep it light
+8. **Messages have structure** - `message[2][1].value`
+9. **Control types differ** - buttons vs labels have different values
+10. **Visual changes need delays** - use update() for timing
+11. **Logger access requires notify()** - never direct access
+12. **No pcall function** - use explicit nil checks
+13. **Document script v2.5.9+** required for centralized logging
+14. **Each script reads config** - no shared config functions
+15. **Tag formats can change** - handle multiple formats
+16. **OSC parameter order matters** - be explicit with connections
 
 ## Testing Checklist
 - [ ] Test with missing controls
@@ -305,3 +370,6 @@ end
 - [ ] Verify logger updates properly via notify
 - [ ] Test with controls in pagers
 - [ ] Confirm document script handles log_message
+- [ ] Test configuration reading in each script
+- [ ] Verify tag format handling
+- [ ] Check OSC parameter order
