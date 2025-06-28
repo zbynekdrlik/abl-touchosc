@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.9.0
--- Simplified: Only toggle interactivity, no visual changes
+-- Version: 1.9.1
+-- Added: Debug logging for track_label issues
 
 -- Version constant
-local SCRIPT_VERSION = "1.9.0"
+local SCRIPT_VERSION = "1.9.1"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -157,6 +157,20 @@ function init()
     -- Set initial status
     updateStatus("error")
     
+    -- Check if track_label exists
+    local label = getChild(self, "track_label")
+    if label then
+        log("track_label found - setting initial text")
+        if label.values and label.values.text ~= nil then
+            label.values.text = "..."
+            log("track_label text set to '...'")
+        else
+            log("WARNING: track_label doesn't have values.text property!")
+        end
+    else
+        log("No track_label control found")
+    end
+    
     log("Ready - waiting for refresh")
 end
 
@@ -244,7 +258,15 @@ function onReceiveOSC(message, connections)
                         if label then
                             local displayName = trackName:match("([^#]+)") or trackName
                             displayName = displayName:gsub("^%s*(.-)%s*$", "%1")  -- Trim whitespace
-                            label.values.text = displayName
+                            log("Updating track_label to: '" .. displayName .. "'")
+                            if label.values and label.values.text ~= nil then
+                                label.values.text = displayName
+                                log("track_label updated successfully")
+                            else
+                                log("ERROR: track_label doesn't have values.text!")
+                            end
+                        else
+                            log("No track_label found to update")
                         end
                         break
                     end
@@ -266,9 +288,18 @@ function onReceiveOSC(message, connections)
                     end
                 end
                 
+                -- Update label to show error
                 local label = getChild(self, "track_label")
                 if label then
-                    label.values.text = "???"
+                    log("Setting track_label to '???' (track not found)")
+                    if label.values and label.values.text ~= nil then
+                        label.values.text = "???"
+                        log("track_label set to '???'")
+                    else
+                        log("ERROR: track_label doesn't have values.text!")
+                    end
+                else
+                    log("No track_label found to update")
                 end
             end
             
