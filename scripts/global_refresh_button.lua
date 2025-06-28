@@ -1,9 +1,8 @@
 -- TouchOSC Global Refresh Button Script
--- Version: 1.1.3
--- Phase: 01 - Global refresh for all track groups
--- Fixed: Use document script's log function via notify
+-- Version: 1.2.0
+-- Uses document script's refreshAllGroups function
 
-local SCRIPT_VERSION = "1.1.3"
+local SCRIPT_VERSION = "1.2.0"
 
 -- Store last tap time to prevent double triggers
 local lastTapTime = 0
@@ -18,45 +17,26 @@ function onValueChanged(valueName)
         end
         lastTapTime = currentTime
         
+        -- Visual feedback
+        self.color = Color(1, 1, 0, 1)  -- Yellow while refreshing
+        
         -- Use document script's refreshAllGroups function
         if refreshAllGroups then
             refreshAllGroups()
         else
-            -- Fallback if function not available
-            print("=== GLOBAL REFRESH INITIATED ===")
-            
-            -- Visual feedback
-            self.color = Color(1, 1, 0, 1)  -- Yellow while refreshing
-            
-            -- Find all track groups
-            local groups = root:findAllByProperty("tag", "trackGroup", true)
-            local count = 0
-            
-            for _, group in ipairs(groups) do
-                group:notify("refresh")
-                count = count + 1
-            end
-            
-            print("Sent refresh to " .. count .. " track groups")
-            
-            -- Reset button color after a moment
-            self.color = Color(0.5, 0.5, 0.5, 1)  -- Back to gray
-            
-            print("=== GLOBAL REFRESH COMPLETE ===")
+            print("[ERROR] refreshAllGroups function not found - is document script loaded?")
         end
+        
+        -- Reset color after a short delay
+        self.color = Color(0.5, 0.5, 0.5, 1)  -- Back to gray
     end
 end
 
 function init()
     print("Global Refresh Button v" .. SCRIPT_VERSION .. " initialized")
     
-    -- Safely try to set text
-    if self.values and type(self.values) == "table" then
+    -- Set button text
+    if self.values and type(self.values) == "table" and self.values.text ~= nil then
         self.values.text = "REFRESH ALL"
-    else
-        -- If values isn't what we expect, try direct property
-        if self.text then
-            self.text = "REFRESH ALL"
-        end
     end
 end
