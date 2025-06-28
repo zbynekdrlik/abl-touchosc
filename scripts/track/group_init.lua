@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.8.0
--- Fixed: Preserve control appearance when enabling/disabling
+-- Version: 1.9.0
+-- Simplified: Only toggle interactivity, no visual changes
 
 -- Version constant
-local SCRIPT_VERSION = "1.8.0"
+local SCRIPT_VERSION = "1.9.0"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -14,9 +14,6 @@ local needsRefresh = false
 local trackNumber = nil
 local trackMapped = false
 local lastEnabledState = nil  -- Track last state to prevent spam
-
--- Store original colors/opacity
-local originalAppearance = {}
 
 -- Centralized logging through document script
 local function log(message)
@@ -79,31 +76,7 @@ local function getChild(parent, name)
     return nil
 end
 
--- Store original appearance on first run
-local function storeOriginalAppearance()
-    if not self.children then
-        return
-    end
-    
-    local controlsToCheck = {"fader", "mute", "pan", "meter", "track_label"}
-    
-    for _, name in ipairs(controlsToCheck) do
-        local child = getChild(self, name)
-        if child and name ~= "status_indicator" then
-            -- Store original color if it exists
-            if child.color then
-                originalAppearance[name] = {
-                    r = child.color.r,
-                    g = child.color.g,
-                    b = child.color.b,
-                    a = child.color.a
-                }
-            end
-        end
-    end
-end
-
--- Enable/disable all controls in the group WITHOUT changing appearance
+-- Enable/disable all controls in the group - ONLY INTERACTIVITY
 local function setGroupEnabled(enabled, silent)
     -- Skip if state hasn't changed to prevent spam
     if lastEnabledState == enabled then
@@ -125,16 +98,8 @@ local function setGroupEnabled(enabled, silent)
     for _, name in ipairs(controlsToCheck) do
         local child = getChild(self, name)
         if child and name ~= "status_indicator" then
-            -- ONLY disable interaction - DON'T CHANGE APPEARANCE!
+            -- ONLY CHANGE INTERACTIVITY - NO VISUAL CHANGES!
             child.interactive = enabled
-            
-            -- If we're re-enabling and have stored colors, restore them
-            if enabled and originalAppearance[name] and child.color then
-                local orig = originalAppearance[name]
-                child.color = Color(orig.r, orig.g, orig.b, orig.a)
-            end
-            -- DON'T dim or change colors when disabling!
-            
             childCount = childCount + 1
         end
     end
@@ -185,9 +150,6 @@ function init()
     -- Log initialization
     log("Group init v" .. SCRIPT_VERSION .. " loaded")
     log("Config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
-    
-    -- Store original appearance BEFORE any changes
-    storeOriginalAppearance()
     
     -- SAFETY: Disable all controls until properly mapped
     setGroupEnabled(false, true)  -- Silent
