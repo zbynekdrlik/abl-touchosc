@@ -1,8 +1,11 @@
 -- TouchOSC Global Refresh Button Script
--- Version: 1.3.0
--- Added: Centralized logging through document script
+-- Version: 1.3.1
+-- Debug: Added immediate console output to verify script loads
 
-local SCRIPT_VERSION = "1.3.0"
+local SCRIPT_VERSION = "1.3.1"
+
+-- IMMEDIATE TEST - This should appear in console when script loads
+print("[REFRESH BUTTON DEBUG] Script file loaded, version " .. SCRIPT_VERSION)
 
 -- Store last tap time to prevent double triggers
 local lastTapTime = 0
@@ -19,6 +22,9 @@ local function log(message)
 end
 
 function onValueChanged(valueName)
+    -- Debug output
+    print("[REFRESH BUTTON DEBUG] onValueChanged called with: " .. (valueName or "nil"))
+    
     -- Handle both button-style (touch) and label-style (x) touches
     if valueName == "touch" or valueName == "x" then
         -- Prevent double triggers
@@ -52,6 +58,8 @@ function update()
 end
 
 function init()
+    print("[REFRESH BUTTON DEBUG] init() called")
+    
     log("v" .. SCRIPT_VERSION .. " initialized")
     
     -- Set button text
@@ -61,4 +69,9 @@ function init()
     
     -- Set initial color
     self.color = Color(0.5, 0.5, 0.5, 1)  -- Gray
+    
+    print("[REFRESH BUTTON DEBUG] init() completed")
 end
+
+-- This should print immediately when script loads
+print("[REFRESH BUTTON DEBUG] Script fully parsed")
