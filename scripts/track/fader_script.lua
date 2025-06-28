@@ -1,11 +1,11 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.3.2
--- Fixed: OSC send now includes both track and volume (was missing volume parameter)
+-- Version: 2.3.3
+-- Fixed: Volume change logs now only in debug mode
 -- Added: Centralized logging and multi-connection routing
 -- Preserved: ALL original fader functionality
 
 -- Version constant
-local VERSION = "2.3.2"
+local VERSION = "2.3.3"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -728,10 +728,8 @@ function onValueChanged()
   if trackNumber then
     sendOSCRouted('/live/track/set/volume', trackNumber, audio_value)
     
-    -- Non-debug log for normal operation
-    if not DEBUG or DEBUG ~= 1 then
-      log(string.format("Volume change for track %d: %.3f", trackNumber, scaled_fader_position))
-    end
+    -- Volume change log ONLY in debug mode
+    debugPrint(string.format("Volume change for track %d: %.3f", trackNumber, scaled_fader_position))
   end
   
   -- TOUCH DETECTION WITH DEBUG
