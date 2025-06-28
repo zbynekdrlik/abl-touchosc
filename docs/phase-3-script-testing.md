@@ -20,7 +20,7 @@ We'll start by creating and perfecting the `band_CG #` group with all controls, 
 
 ### Phase 1: Perfect the band_CG # Group
 
-#### 1.1 Create the Band Track Group
+#### 1.1 Create the Band Track Group ✅
 1. Create a **Group** control
 2. Name it: `band_CG #`
 3. Inside the group, add:
@@ -30,43 +30,33 @@ We'll start by creating and perfecting the `band_CG #` group with all controls, 
    - In the OSC tab, set Receive to: `/live/song/get/track_names`
    - **Enable ALL connections** (1-10) in the receive settings
 
-#### 1.2 Expected Initial Behavior
-After creating the group and reloading:
-- Logger should show: `CONTROL(band_CG #): Group init v1.7.0 for band_CG #`
-- Logger should show: `CONTROL(band_CG #): Group config - Instance: band, Track: CG #, Connection: 1`
-- Status indicator should be RED (unmapped)
+#### 1.2 Group Behavior ✅
+- Status indicator RED initially (unmapped)
+- After refresh: Status indicator GREEN
+- Group mapped to Track 39
+- Controls enabled
 
-#### 1.3 Test Refresh and Mapping
-1. Press the global refresh button
-2. Expected logs:
-   ```
-   === GLOBAL REFRESH ===
-   CONTROL(band_CG #): Refreshing group
-   CONTROL(band_CG #): Requesting track names
-   CONTROL(band_CG #): Mapped band_CG # -> Track [number]
-   ```
-3. Status indicator should turn GREEN
-4. Group should store its track number
+#### 1.3 Fader Control ✅
+**Status: FULLY WORKING (v2.3.3)**
+
+Issues fixed:
+1. **Script isolation** - Fader now reads config directly
+2. **Tag format** - Handles "band:39" format correctly
+3. **OSC parameters** - Sends both track and volume
+4. **Logger spam** - Volume logs only in debug mode
+
+Fader features working:
+- Movement smoothing with gradual scaling
+- Immediate 0.1dB response
+- Reaction time compensation
+- Emergency movement detection
+- Double-tap to 0dB
+- Logarithmic curve (-6dB at 50%)
+- OSC sync with delay
 
 ### Phase 2: Add and Test Each Control
 
-#### 2.1 Fader Control
-1. Inside `band_CG #` group, add:
-   - **Name**: `fader`
-   - **Type**: Fader (vertical)
-   - **Script**: `fader_script.lua` (v2.1.0)
-
-2. Expected behavior:
-   - Logger shows: `FADER(band_CG #): Fader Script v2.1.0 loaded`
-   - When group is mapped (green):
-     - Fader is enabled and bright
-     - Moving fader logs: `FADER(band_CG #): Volume change for track [n]: [value]`
-     - OSC sent ONLY to connection 1: `/live/track/set/volume [track] [value]`
-   - Before mapping (red):
-     - Fader appears dimmed (0.3 alpha)
-     - Moving fader does nothing
-
-#### 2.2 Meter Display
+#### 2.1 Meter Display
 1. Inside `band_CG #` group, create a sub-group:
    - **Name**: `meter`
    - **Type**: Group
@@ -77,9 +67,9 @@ After creating the group and reloading:
    - **OSC Receive**: `/live/track/get/output_meter_level` (Enable ALL connections)
 
 2. Expected behavior:
-   - Logger shows: `METER(band_CG #): Meter Script v2.1.0 loaded`
+   - Logger shows: `METER(band_CG #): Script v2.1.0 loaded`
    - When group is mapped:
-     - Meter responds ONLY to levels from connection 1
+     - Meter responds ONLY to levels from connection 2
      - Level bar animates with audio
      - Colors: green (low) → yellow (medium) → red (high)
      - Smooth decay when signal drops
@@ -87,7 +77,12 @@ After creating the group and reloading:
      - Meter dimmed (0.3 alpha)
      - No response to OSC
 
-#### 2.3 Mute Button
+**Note**: Meter script will need same fixes as fader:
+- Read configuration directly
+- Handle "band:39" tag format
+- Filter by connection properly
+
+#### 2.2 Mute Button
 1. Inside `band_CG #` group, add:
    - **Name**: `mute`
    - **Type**: Button
@@ -95,29 +90,29 @@ After creating the group and reloading:
    - **Script**: `mute_button.lua` (v1.1.0)
 
 2. Expected behavior:
-   - Logger shows: `MUTE(band_CG #): Mute Button v1.1.0 loaded`
+   - Logger shows: `MUTE(band_CG #): Script v1.1.0 loaded`
    - When group is mapped:
      - Button enabled
      - Press toggles between gray (unmuted) and red (muted)
      - Logs: `MUTE(band_CG #): Mute [ON/OFF] for track [n]`
-     - OSC sent to connection 1: `/live/track/set/mute [track] [0/1]`
+     - OSC sent to connection 2: `/live/track/set/mute [track] [0/1]`
    - Before mapping:
      - Button dimmed
      - Press does nothing
 
-#### 2.4 Pan Control
+#### 2.3 Pan Control
 1. Inside `band_CG #` group, add:
    - **Name**: `pan`
    - **Type**: Radial/Knob
    - **Script**: `pan_control.lua` (v1.1.0)
 
 2. Expected behavior:
-   - Logger shows: `PAN(band_CG #): Pan Control v1.1.0 loaded`
+   - Logger shows: `PAN(band_CG #): Script v1.1.0 loaded`
    - When group is mapped:
      - Control enabled
      - Center position = 0.5
      - Logs pan changes
-     - OSC sent to connection 1: `/live/track/set/panning [track] [value]`
+     - OSC sent to connection 2: `/live/track/set/panning [track] [value]`
    - Before mapping:
      - Control dimmed
      - No OSC sent
@@ -126,25 +121,25 @@ After creating the group and reloading:
 
 Once all controls are added to `band_CG #`:
 
-1. **Initial State Test** (before refresh)
+1. **Initial State Test** (before refresh) ✅
    - All controls should be dimmed
    - Status indicator RED
    - No OSC communication
 
-2. **Refresh and Map Test**
+2. **Refresh and Map Test** ✅
    - Press global refresh
    - Status should turn GREEN
    - All controls should brighten/enable
 
 3. **Functionality Test**
-   - Move fader → volume changes in Ableton (band instance only)
+   - Move fader → volume changes in Ableton (band instance only) ✅
    - Meter shows audio levels from band instance only
    - Mute button toggles mute state
    - Pan control adjusts panning
 
-4. **Connection Isolation Test**
-   - Verify NO response to OSC from master instance (connection 2)
-   - All OSC output goes ONLY to connection 1
+4. **Connection Isolation Test** ✅
+   - Verify NO response to OSC from master instance (connection 3)
+   - All OSC output goes ONLY to connection 2
 
 ### Phase 4: Add master_Hand1 # Group
 
@@ -152,53 +147,58 @@ Only after `band_CG #` is working perfectly:
 
 1. Create `master_Hand1 #` group with same controls
 2. This should:
-   - Auto-route to connection 2 (master)
+   - Auto-route to connection 3 (master)
    - Find track on master instance
    - Operate completely independently
 
+## Critical Configuration Note
+
+Real-world configuration:
+```
+connection_band: 2
+connection_master: 3
+```
+
+This differs from typical examples where band=1, master=2.
+
 ## Success Criteria for band_CG #
 
-- [ ] Group initializes with correct logging
-- [ ] Status indicator shows mapping state
-- [ ] All controls log their versions
-- [ ] Refresh button successfully maps the track
-- [ ] Fader controls volume on band instance only
+- [x] Group initializes with correct logging
+- [x] Status indicator shows mapping state
+- [x] All controls log their versions
+- [x] Refresh button successfully maps the track
+- [x] Fader controls volume on band instance only
 - [ ] Meter shows levels from band instance only
 - [ ] Mute button works correctly
 - [ ] Pan control works correctly
-- [ ] NO cross-talk with master instance
-- [ ] All logs use centralized logging pattern
-- [ ] Visual feedback is consistent
+- [x] NO cross-talk with master instance
+- [x] All logs use centralized logging pattern
+- [x] Visual feedback is consistent
 
-## Logging Examples
+## Known Issues and Solutions
 
-### Expected Log Sequence
-```
-16:26:14 CONTROL(band_CG #): Group init v1.7.0 for band_CG #
-16:26:14 CONTROL(band_CG #): Group config - Instance: band, Track: CG #, Connection: 1
-16:26:14 FADER(band_CG #): Fader Script v2.1.0 loaded
-16:26:14 METER(band_CG #): Meter Script v2.1.0 loaded
-16:26:14 MUTE(band_CG #): Mute Button v1.1.0 loaded
-16:26:14 PAN(band_CG #): Pan Control v1.1.0 loaded
-16:26:18 === GLOBAL REFRESH ===
-16:26:18 REFRESH BUTTON: Refreshing...
-16:26:18 CONTROL(band_CG #): Refreshing group
-16:26:18 CONTROL(band_CG #): Requesting track names
-16:26:18 CONTROL(band_CG #): Mapped band_CG # -> Track 5
-16:26:18 REFRESH BUTTON: Refreshed 1 groups
-```
+### Script Isolation
+- **Issue**: Scripts cannot share functions or variables
+- **Solution**: Each script must read configuration directly
+- **Pattern**: Use `root:findByName("configuration", true)` in each script
 
-## Common Issues and Solutions
+### Tag Format Changes
+- **Issue**: Parent uses "instance:track" format, children expect just track number
+- **Solution**: Parse tag with pattern matching: `tag:match("(%w+):(%d+)")`
 
-1. **Controls not dimming**: Check script versions (need v2.1.0 for controls)
-2. **No logging**: Verify document script is v2.5.9 with log_message handler
-3. **Wrong connection**: Check configuration text has correct connection numbers
-4. **Track not found**: Verify exact track name match including spaces/special characters
+### OSC Parameter Order
+- **Issue**: Variadic parameters with connection tables can fail
+- **Solution**: Use explicit parameters in sendOSC functions
+
+### Logger Verbosity
+- **Issue**: Frequent updates spam the logger
+- **Solution**: Use debug mode for verbose logging, normal mode for essential messages only
 
 ## Next Steps
 
-After successfully testing:
-1. Document any issues found
-2. Create the `master_Hand1 #` group
-3. Test both groups working simultaneously
-4. Scale to full production layout
+1. Complete testing of meter, mute, and pan controls
+2. Fix any issues found (likely same pattern as fader fixes)
+3. Document any additional workarounds needed
+4. Create `master_Hand1 #` group
+5. Test full multi-instance functionality
+6. Scale to production layout
