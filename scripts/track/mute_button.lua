@@ -1,8 +1,8 @@
 -- mute_button.lua
--- Version: 1.4.2
--- Fixed: Track string/float mismatch and toggle logic
+-- Version: 1.4.3
+-- Fixed: Ensure track number is sent as integer/float
 
-local VERSION = "1.4.2"
+local VERSION = "1.4.3"
 local debugMode = false
 
 -- State tracking
@@ -103,7 +103,8 @@ end
 local function sendOSCRouted(path, track, value)
     local connectionIndex = getConnectionIndex()
     local connections = buildConnectionTable(connectionIndex)
-    sendOSC(path, track, value, connections)
+    -- CRITICAL: Ensure track is sent as number (integer/float in OSC)
+    sendOSC(path, tonumber(track), value, connections)
 end
 
 -- Handle OSC messages
@@ -173,9 +174,9 @@ function onValueChanged(key)
             currentMuteState = newMuteState  -- Update state immediately
             
             log("Sending mute " .. (newMuteState and "ON" or "OFF") .. 
-                " for track " .. trackNumber)
+                " for track " .. trackNumber .. " (type: " .. type(trackNumber) .. ")")
             
-            -- Send as boolean
+            -- Send as boolean with track as number
             sendOSCRouted("/live/track/set/mute", trackNumber, newMuteState)
             
             -- Update visual state optimistically
