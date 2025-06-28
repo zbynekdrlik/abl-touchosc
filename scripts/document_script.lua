@@ -1,8 +1,8 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.5.7
+-- Version: 2.5.8
 -- Purpose: Main document script with configuration, logging, and track management
 
-local VERSION = "2.5.7"
+local VERSION = "2.5.8"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -128,6 +128,10 @@ function onReceiveNotify(action, value)
     elseif action == "configuration_updated" then
         -- Configuration text has been updated - reparse silently
         parseConfiguration()
+        
+    elseif action == "refresh_all_groups" then
+        -- Global refresh button pressed
+        refreshAllGroups()
     end
 end
 
