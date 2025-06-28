@@ -1,11 +1,9 @@
 -- TouchOSC Meter Script (Output Level Display)
--- Version: 2.0.0
--- Phase: 01 (Connection-aware update) - Now checks parent group mapping
--- before processing meter updates
+-- Version: 2.1.0
+-- Added: Centralized logging through document script
 
--- CRITICAL VERSION LOGGING - DO NOT REMOVE
-local VERSION = "2.0.0"
-print("[" .. os.date("%H:%M:%S") .. "] Meter Script v" .. VERSION .. " loaded")
+-- Version constant
+local VERSION = "2.1.0"
 
 -- ===========================
 -- CONFIGURATION SECTION
@@ -34,6 +32,34 @@ local lastClipTime = 0             -- When clipping last occurred
 
 -- Reference to document script for connection routing
 local documentScript = nil
+
+-- ===========================
+-- LOGGING
+-- ===========================
+
+-- Centralized logging through document script
+local function log(message)
+    -- Get parent name for context
+    local context = "METER"
+    if self.parent and self.parent.name then
+        context = "METER(" .. self.parent.name .. ")"
+    end
+    
+    -- Send to document script for logger text update
+    root:notify("log_message", context .. ": " .. message)
+    
+    -- Also print to console for development/debugging
+    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
+end
+
+-- Debug logging (only if DEBUG_MODE is true)
+local function debugLog(...)
+    if DEBUG_MODE then
+        local args = {...}
+        local msg = table.concat(args, " ")
+        log("[DEBUG] " .. msg)
+    end
+end
 
 -- ===========================
 -- UTILITY FUNCTIONS
@@ -118,16 +144,6 @@ local function getConnectionIndex()
 end
 
 -- ===========================
--- DEBUG LOGGING
--- ===========================
-
-local function debugLog(...)
-    if DEBUG_MODE then
-        print("[Meter]", ...)
-    end
-end
-
--- ===========================
 -- VISUAL UPDATES
 -- ===========================
 
@@ -154,7 +170,7 @@ local function updateMeterDisplay()
     end
     
     -- Update peak indicator if we have one
-    if self.children.peak_indicator then
+    if self.children and self.children.peak_indicator then
         -- Position peak indicator
         self.children.peak_indicator.values.x = peakLevel
         
@@ -291,6 +307,9 @@ end
 -- ===========================
 
 function init()
+    -- Log version
+    log("Script v" .. VERSION .. " loaded")
+    
     -- Ensure we're starting at 0
     self.values.x = 0
     currentLevel = 0
@@ -303,9 +322,10 @@ function init()
     -- Initial color
     self.color = Color(0, 1, 0, 1)
     
-    -- Log initialization with version
-    print("[" .. os.date("%H:%M:%S") .. "] Meter initialized for parent: " .. 
-        (self.parent and self.parent.name or "unknown") .. " (v" .. VERSION .. ")")
+    -- Log parent info
+    if self.parent and self.parent.name then
+        log("Initialized for parent: " .. self.parent.name)
+    end
     
     -- Set initial state based on track mapping
     if not isTrackMapped() then
