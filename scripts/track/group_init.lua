@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.9.2
--- Fixed: Use correct label name "fdr_label" from original script
+-- Version: 1.9.3
+-- Fixed: Use direct children access for track_label like original script
 
 -- Version constant
-local SCRIPT_VERSION = "1.9.2"
+local SCRIPT_VERSION = "1.9.3"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -93,7 +93,7 @@ local function setGroupEnabled(enabled, silent)
     local childCount = 0
     
     -- Only check for controls we know exist
-    local controlsToCheck = {"fader", "mute", "pan", "meter", "fdr_label"}  -- Changed from track_label
+    local controlsToCheck = {"fader", "mute", "pan", "meter", "track_label"}
     
     for _, name in ipairs(controlsToCheck) do
         local child = getChild(self, name)
@@ -239,14 +239,14 @@ function onReceiveOSC(message, connections)
                         sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
                         sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
                         
-                        -- Update label if it exists - using ORIGINAL method
-                        if self.children and self.children["fdr_label"] then
-                            -- Use original pattern match that captures only word characters
+                        -- Update label using direct children access like original
+                        if self.children and self.children["track_label"] then
+                            -- Use pattern match that captures only word characters like original
                             local displayName = trackName:match("(%w+)")
                             if displayName then
-                                self.children["fdr_label"].values.text = displayName
+                                self.children["track_label"].values.text = displayName
                             else
-                                self.children["fdr_label"].values.text = trackName
+                                self.children["track_label"].values.text = trackName
                             end
                         end
                         break
@@ -269,9 +269,9 @@ function onReceiveOSC(message, connections)
                     end
                 end
                 
-                -- Update label to show error - using ORIGINAL method
-                if self.children and self.children["fdr_label"] then
-                    self.children["fdr_label"].values.text = "???"
+                -- Update label to show error using direct access
+                if self.children and self.children["track_label"] then
+                    self.children["track_label"].values.text = "???"
                 end
             end
             
