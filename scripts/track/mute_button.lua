@@ -1,13 +1,19 @@
 -- mute_button.lua
--- Version: 1.3.0
--- Fixed: Removed text updates (buttons don't have text in TouchOSC)
+-- Version: 1.3.1
+-- Fixed: root access timing issue
 
-local scriptVersion = "1.3.0"
+local scriptVersion = "1.3.1"
 local debugMode = false
 
--- Logging helper
+-- Logging helper with safety checks
 local function log(control, message, isDebug)
     if isDebug and not debugMode then return end
+    
+    -- Safety check for root
+    if not control or not control.root then
+        print("[mute_button] " .. message)
+        return
+    end
     
     local logControl = control.root:findByName("log_display", true)
     if logControl then
@@ -17,20 +23,26 @@ local function log(control, message, isDebug)
     end
 end
 
--- Initialize on script load
+-- Initialize function (called when control is ready)
 function init()
+    -- Delay initialization slightly to ensure hierarchy is ready
+    if not self.root then
+        print("[mute_button] Waiting for root...")
+        return
+    end
+    
     log(self, "Script version " .. scriptVersion .. " loaded")
     
     -- Log parent group info
     if self.parent and self.parent.tag then
         log(self, "Parent tag: " .. tostring(self.parent.tag))
     end
-    
-    -- Buttons don't have text - only visual state matters
 end
 
 -- Helper to read configuration
 local function getConfiguration(control)
+    if not control or not control.root then return nil end
+    
     local configControl = control.root:findByName("configuration", true)
     if not configControl then
         log(control, "Configuration control not found", false)
@@ -108,6 +120,7 @@ end
 local currentMuteState = false
 local lastPressTime = 0
 local DEBOUNCE_TIME = 50  -- ms
+local initialized = false
 
 -- Handle OSC messages
 function onReceiveOSC(message, connections)
@@ -183,5 +196,10 @@ function onReceiveNotify(key, value)
     end
 end
 
--- Initialize the script
-init()
+-- Update function to handle delayed initialization
+function update()
+    if not initialized and self.root then
+        initialized = true
+        init()
+    end
+end
