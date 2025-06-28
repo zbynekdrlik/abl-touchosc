@@ -2,7 +2,7 @@
 
 ## Current Status
 - **Phase**: 3 - Script Functionality Testing
-- **Step**: Group script working, logging issue remains
+- **Step**: Group script fixed - removed pcall (not available in TouchOSC)
 - **Date**: 2025-06-28
 - **Branch**: feature/selective-connection-routing
 
@@ -12,7 +12,7 @@
 - Global refresh button (v1.2.2) working with proper logging
 - **Test track**: "band_CG #"
 - Group functionality WORKING (track found, controls enabled/disabled)
-- Group logging to logger text NOT working (but console works)
+- **FIXED**: pcall error - removed pcall as it's not available in TouchOSC
 
 ## Phase 3 Progress
 
@@ -21,13 +21,14 @@
 - ✅ Logger text object (for document script and refresh button)
 - ✅ Document script attached to root (v2.5.9)
 - ✅ Global refresh button (v1.2.2)
-- ✅ Group script functionality (v1.5.9)
+- ✅ Group script functionality (v1.6.5)
   - ✅ Finds track "CG #" correctly
   - ✅ Status indicator turns green
   - ✅ Controls enable/disable with alpha changes
   - ✅ No more fader value changes
   - ✅ Connection routing works
-  - ❌ Logging to logger text object
+  - ✅ FIXED: pcall error
+  - ❌ Logging to logger text object (console works)
 
 ### Known Issues
 1. Group script logs appear in console but not in logger text object
@@ -42,22 +43,28 @@
 
 ## Script Versions in Use
 - **document_script.lua**: v2.5.9 (handles log_message notify)
-- **group_init.lua**: v1.5.9 (simplified logging)
+- **group_init.lua**: v1.6.5 (fixed pcall error)
 - **global_refresh_button.lua**: v1.2.2
 - **fader_script.lua**: v2.0.0
 - **meter_script.lua**: v2.0.0
 - **mute_button.lua**: v1.0.0
 - **pan_control.lua**: v1.0.0
 
+## Latest Fix
+**v1.6.5** - Removed `pcall` usage from the `getChild` function. TouchOSC's Lua environment doesn't include `pcall`, so we now use direct property access with proper null checks instead.
+
 ## Next Steps
-1. Accept that console logging works for debugging
-2. Add remaining controls to test group:
+1. Test the fixed group script to ensure pcall error is resolved
+2. Accept that console logging works for debugging
+3. Add remaining controls to test group:
    - Fader (already have?)
    - Meter group with level child
    - Mute button
    - Pan knob
-3. Test each control with the working group
-4. Move to production implementation
+4. Test each control with the working group
+5. Move to production implementation
 
 ## Key Learning
-The logging issue seems specific to how TouchOSC handles script output routing. Since functionality works and console shows the logs, we can proceed with testing.
+- TouchOSC Lua environment has limitations - no pcall available
+- The logging issue seems specific to how TouchOSC handles script output routing
+- Since functionality works and console shows the logs, we can proceed with testing
