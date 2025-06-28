@@ -1,8 +1,12 @@
 -- mute_button.lua
--- Version: 1.6.2
--- Added: Multi-connection support for receiving
+-- Version: 1.6.3
+-- Added: Sending functionality with simple approach
 
-local VERSION = "1.6.2"
+local VERSION = "1.6.3"
+
+-- State tracking
+local currentMuteState = false
+local lastTouchValue = false
 
 -- Logging
 local function log(message)
@@ -53,6 +57,15 @@ local function getConnectionIndex()
     return 1
 end
 
+-- Build connection table
+local function buildConnectionTable(index)
+    local connections = {}
+    for i = 1, 10 do
+        connections[i] = (i == index)
+    end
+    return connections
+end
+
 -- Handle incoming OSC
 function onReceiveOSC(message, connections)
     local arguments = message[2]
@@ -68,14 +81,17 @@ function onReceiveOSC(message, connections)
             -- Check if message is from correct connection
             local expectedConnection = getConnectionIndex()
             if connections[expectedConnection] then
+                -- Update state
+                currentMuteState = arguments[2].value == true
+                
                 -- Update button visual state
-                if arguments[2].value then
+                if currentMuteState then
                     self.values.x = 0  -- Muted = pressed
                 else
                     self.values.x = 1  -- Unmuted = released
                 end
                 
-                log("Received mute state: " .. (arguments[2].value and "MUTED" or "UNMUTED"))
+                log("Received mute state: " .. (currentMuteState and "MUTED" or "UNMUTED"))
             end
         end
     end
@@ -83,5 +99,33 @@ function onReceiveOSC(message, connections)
     return false
 end
 
+-- Handle value changes
+function onValueChanged(key)
+    if key == "touch" then
+        local touchValue = self.values.touch
+        
+        -- Detect touch press (false to true transition)
+        if touchValue and not lastTouchValue then
+            local trackNumber = getTrackNumber()
+            if trackNumber then
+                -- Toggle mute
+                local newMuteState = not currentMuteState
+                
+                -- Send with connection routing
+                local connectionIndex = getConnectionIndex()
+                local connections = buildConnectionTable(connectionIndex)
+                
+                sendOSC("/live/track/set/mute", trackNumber, newMuteState, connections)
+                log("Sent mute " .. (newMuteState and "ON" or "OFF") .. " for track " .. trackNumber)
+                
+                -- Update our state (will be confirmed by OSC response)
+                currentMuteState = newMuteState
+            end
+        end
+        
+        lastTouchValue = touchValue
+    end
+end
+
 -- Initialize
-log("Script v" .. VERSION .. " loaded (receive with multi-connection)")
+log("Script v" .. VERSION .. " loaded (with sending)")
