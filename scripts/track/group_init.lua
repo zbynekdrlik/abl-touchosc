@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.5.9
--- Fixed: Simplified logging using only print() like other working scripts
+-- Version: 1.6.0
+-- Fixed: Use color transparency instead of alpha property
 
 -- Version constant
-local SCRIPT_VERSION = "1.5.9"
+local SCRIPT_VERSION = "1.6.0"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -79,7 +79,7 @@ local function setGroupEnabled(enabled, silent)
     
     -- Safe iteration with bounds checking
     local i = 1
-    local maxIterations = 50  -- Safety limit
+    local maxIterations = 20  -- Reduced since we know there are ~13 controls
     
     while i <= maxIterations do
         local child = self.children[i]
@@ -92,13 +92,16 @@ local function setGroupEnabled(enabled, silent)
             -- Disable interaction
             child.interactive = enabled
             
-            -- Visual feedback - adjust opacity
-            if enabled then
-                -- Restore normal appearance
-                child.alpha = 1.0
-            else
-                -- Dim to show disabled (but don't change values!)
-                child.alpha = 0.3
+            -- Visual feedback - use color with transparency
+            if child.color then
+                local r, g, b = child.color.r, child.color.g, child.color.b
+                if enabled then
+                    -- Restore full opacity
+                    child.color = Color(r, g, b, 1.0)
+                else
+                    -- Dim with transparency (but don't change values!)
+                    child.color = Color(r, g, b, 0.3)
+                end
             end
             
             childCount = childCount + 1
