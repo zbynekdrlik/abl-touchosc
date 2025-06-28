@@ -1,11 +1,11 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.3.4
--- Fixed: Removed color changes to preserve visual design
+-- Version: 2.3.5
+-- Fixed: Never change fader position based on assumptions
 -- Added: Centralized logging and multi-connection routing
 -- Preserved: ALL original fader functionality
 
 -- Version constant
-local VERSION = "2.3.4"
+local VERSION = "2.3.5"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -638,8 +638,8 @@ end
 function onValueChanged()
   -- Safety check: only process if track is mapped
   if not isTrackMapped() then
-    -- Reset fader to 0 if track not mapped
-    self.values.x = 0
+    -- FIXED: Don't change fader position - just return
+    debugPrint("Track not mapped - ignoring value change")
     return
   end
   
@@ -817,19 +817,14 @@ end
 function onReceiveNotify(key, value)
   -- Parent might notify us of track changes
   if key == "track_changed" then
-    -- Reset state when track changes
+    -- FIXED: Don't change fader position - just reset internal state
     touched = false
-    last_osc_x = 0
-    last_osc_audio = 0
     synced = true
-    self.values.x = 0
-    last_position = 0
-    debugPrint("Track changed - reset fader")
+    last_position = self.values.x  -- Keep current position
+    debugPrint("Track changed - state reset, position preserved")
   elseif key == "track_unmapped" then
-    -- Disable fader when track is unmapped
-    self.values.x = 0
-    last_position = 0
-    debugPrint("Track unmapped - disabled fader")
+    -- FIXED: Don't change fader position
+    debugPrint("Track unmapped - fader position preserved")
   end
 end
 
@@ -871,7 +866,7 @@ function init()
   debugPrint("50% fader:", string.format("%.3f", test_50), "audio", formatDB(value2db(test_50)))
   debugPrint("Unity position:", string.format("%.1f%%", logToLinear(0.85) * 100), "fader")
   
-  -- Initialize scaling variables
+  -- Initialize scaling variables - preserve current position
   last_position = self.values.x or 0
   
   -- REMOVED: Initial color setting
