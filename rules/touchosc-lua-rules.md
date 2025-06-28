@@ -183,8 +183,16 @@ local function log(message)
 end
 ```
 
-## 12. Control Type Differences
+## 12. Control Type Differences (CRITICAL)
 ```lua
+-- BUTTONS - DO NOT HAVE TEXT PROPERTY!
+-- ❌ WRONG - Buttons cannot display text
+self.values.text = "MUTED"  -- Will fail on button controls!
+
+-- ✅ CORRECT - Buttons only have visual state
+self.values.x = 0  -- Pressed/on state
+self.values.x = 1  -- Released/off state
+
 -- Buttons use 'touch' value
 function onValueChanged(valueName)
     if valueName == "touch" and self.values.touch == 1 then
@@ -192,12 +200,16 @@ function onValueChanged(valueName)
     end
 end
 
+-- LABELS - Have text but behave differently
 -- Labels use 'x' value when interactive
 function onValueChanged(valueName)
     if valueName == "x" then
         -- Label tapped
     end
 end
+
+-- Labels CAN have text
+self.values.text = "Track Name"  -- Works on labels
 
 -- Handle both for flexibility
 if valueName == "touch" or valueName == "x" then
@@ -236,7 +248,10 @@ for k, v in pairs(self.values) do  -- May error!
 
 -- ✅ CORRECT - Check type first
 if self.values and type(self.values) == "table" then
-    self.values.text = "Hello"
+    -- For labels only:
+    if self.type == ControlType.LABEL then
+        self.values.text = "Hello"
+    end
 end
 ```
 
@@ -341,6 +356,35 @@ local function sendOSCRouted(path, param1, param2)
 end
 ```
 
+## 20. Button Text Workarounds (CRITICAL)
+Since buttons cannot display text, use these patterns:
+
+```lua
+-- ❌ WRONG - Trying to show state on button
+self.values.text = isMuted and "MUTED" or "MUTE"  -- FAILS!
+
+-- ✅ OPTION 1 - Use separate label for text
+local label = self.parent.children.mute_label
+if label then
+    label.values.text = isMuted and "MUTED" or "MUTE"
+end
+
+-- ✅ OPTION 2 - Use only visual state (recommended)
+self.values.x = isMuted and 0 or 1  -- Visual feedback only
+
+-- ✅ OPTION 3 - Use color changes (if design allows)
+self.color = isMuted and Color(1, 0, 0, 1) or Color(0.5, 0.5, 0.5, 1)
+
+-- ✅ OPTION 4 - Parent group manages companion label
+-- In parent group script:
+function updateMuteLabel(isMuted)
+    local label = self.children.mute_label
+    if label then
+        label.values.text = isMuted and "MUTED" or "MUTE"
+    end
+end
+```
+
 ## Key Gotchas
 
 1. **No global variables** between scripts - use notify()
@@ -359,6 +403,7 @@ end
 14. **Each script reads config** - no shared config functions
 15. **Tag formats can change** - handle multiple formats
 16. **OSC parameter order matters** - be explicit with connections
+17. **BUTTONS DON'T HAVE TEXT** - use visual state or companion labels
 
 ## Testing Checklist
 - [ ] Test with missing controls
@@ -373,3 +418,5 @@ end
 - [ ] Test configuration reading in each script
 - [ ] Verify tag format handling
 - [ ] Check OSC parameter order
+- [ ] Verify button scripts don't use text property
+- [ ] Test companion labels for button text display
