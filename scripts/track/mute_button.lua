@@ -1,14 +1,15 @@
 -- mute_button.lua
--- Version: 1.4.6
--- Fixed: Removed after() method, use simpler approach
+-- Version: 1.4.7
+-- Fixed: Use x value changes like original script, with proper state tracking
 
-local VERSION = "1.4.6"
+local VERSION = "1.4.7"
 local debugMode = false
 
 -- State tracking
 local currentMuteState = false
 local lastPressTime = 0
 local DEBOUNCE_TIME = 50  -- ms
+local ignoreNextChange = false  -- Flag to ignore OSC-triggered changes
 
 -- Logging (copied from working fader)
 local function log(message)
@@ -137,6 +138,9 @@ function onReceiveOSC(message, connections)
                 local isMuted = arguments[2] and arguments[2].value
                 currentMuteState = isMuted
                 
+                -- Set flag to ignore the next value change
+                ignoreNextChange = true
+                
                 -- FIXED: Correct visual state mapping
                 -- When muted (true) → button pressed (x=0)
                 -- When unmuted (false) → button released (x=1)
@@ -158,15 +162,27 @@ function onReceiveOSC(message, connections)
     return false
 end
 
--- Handle button press
+-- Handle button press (using x value like original)
 function onValueChanged(key)
+    -- Only process x value changes
+    if key ~= "x" then
+        return
+    end
+    
+    -- Check if we should ignore this change (from OSC update)
+    if ignoreNextChange then
+        ignoreNextChange = false
+        debugLog("Ignoring value change from OSC update")
+        return
+    end
+    
     -- Safety check: only process if track is mapped
     if not isTrackMapped() then
         return
     end
     
-    -- Only process touch events when pressed down
-    if key == "touch" and self.values.touch == 1 then
+    -- Only process if this is a user action (touch is active)
+    if self.values.touch then
         -- Debounce check
         local now = getMillis()
         if now - lastPressTime < DEBOUNCE_TIME then
@@ -177,7 +193,8 @@ function onValueChanged(key)
         
         local trackNumber = getTrackNumber()
         if trackNumber then
-            -- Toggle mute state
+            -- Toggle mute state based on button press
+            -- When user presses (x goes to 0), we want to toggle
             local newMuteState = not currentMuteState
             currentMuteState = newMuteState  -- Update state immediately
             
@@ -186,13 +203,6 @@ function onValueChanged(key)
             
             -- Send as boolean with track as number
             sendOSCRouted("/live/track/set/mute", trackNumber, newMuteState)
-            
-            -- Update visual immediately for responsiveness
-            if newMuteState then
-                self.values.x = 0  -- Muted = pressed
-            else
-                self.values.x = 1  -- Unmuted = released
-            end
         end
     end
 end
@@ -202,6 +212,7 @@ function onReceiveNotify(key, value)
     if key == "track_changed" then
         -- Reset state when track changes
         currentMuteState = false
+        ignoreNextChange = true
         self.values.x = 1  -- Start unmuted (button released)
         debugLog("Track changed - reset mute button")
     elseif key == "track_unmapped" then
