@@ -1,8 +1,8 @@
 -- mute_button.lua
--- Version: 1.7.0
--- Dead simple: x changed = send inverted value
+-- Version: 1.7.1
+-- Keep local print only (no root notify)
 
-local VERSION = "1.7.0"
+local VERSION = "1.7.1"
 
 -- Logging
 local function log(message)
@@ -11,7 +11,7 @@ local function log(message)
         context = "MUTE(" .. self.parent.name .. ")"
     end
     
-    root:notify("log_message", context .. ": " .. message)
+    -- Direct console print only
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
