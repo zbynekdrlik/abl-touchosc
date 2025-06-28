@@ -1,48 +1,18 @@
 -- TouchOSC Pan Control Script
--- Version: 1.2.0
--- Added: Double-tap to center and visual color feedback from original script
+-- Version: 1.3.0
+-- Simple pan control with multi-connection support and logging
 
 -- Version constant
-local VERSION = "1.2.0"
+local VERSION = "1.3.0"
 
--- ===========================
--- CONFIGURATION SECTION
--- ===========================
+-- Double-tap configuration
+local delay = 300 -- the maximum elapsed time between taps
+local last = 0
+local touch_on_first = false
 
-local SMOOTHING_SPEED = 0.15       -- Smoothing speed (0.0 = instant, 1.0 = very slow)
-local SEND_THRESHOLD = 0.001       -- Minimum change to send OSC
-local CATCH_THRESHOLD = 0.02       -- Distance to "catch" incoming value
-local UPDATE_RATE = 30             -- Updates per second
-local AUTO_RELEASE_TIME = 500      -- Time to wait before auto-releasing (ms)
-local TOUCH_DEBOUNCE = 50          -- Debounce time for touch detection (ms)
-local CENTER_SNAP = 0.05           -- Snap to center within this range
-local DEBUG_MODE = false           -- Enable debug logging
-local DOUBLE_TAP_DELAY = 300      -- Maximum time between taps for double-tap (ms)
-
--- Color constants (from original script)
+-- Color constants
 local COLOR_CENTERED = Color(0.39, 0.39, 0.39, 1.0)  -- #646464FF when at center
 local COLOR_OFF_CENTER = Color(0.20, 0.76, 0.86, 1.0) -- #34C1DC when out of center
-
--- ===========================
--- STATE VARIABLES
--- ===========================
-
-local targetValue = 0.5            -- Current target from Ableton (0.5 = center)
-local displayValue = 0.5           -- Current displayed value (smoothed)
-local lastSentValue = 0.5          -- Last value sent to Ableton
-local lastTouchTime = 0            -- Last time user touched control
-local isUserTouching = false       -- Is user currently touching?
-local isCaught = true              -- Has control "caught" the Ableton value?
-local lastUpdateTime = 0           -- For frame rate limiting
-local touchStartValue = 0.5        -- Value when touch began
-local hasMoved = false             -- Has user moved control since touching?
-
--- Double-tap detection (from original script)
-local lastTapReleaseTime = 0       -- Time of last tap release
-local touchOnFirst = false         -- Flag for double-tap detection
-
--- Reference to document script for connection routing
-local documentScript = nil
 
 -- ===========================
 -- LOGGING
@@ -55,48 +25,6 @@ local function log(message)
         context = "PAN(" .. self.parent.name .. ")"
     end
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
-end
-
--- Debug logging (only if DEBUG_MODE is true)
-local function debugLog(...)
-    if DEBUG_MODE then
-        local args = {...}
-        local msg = table.concat(args, " ")
-        log("[DEBUG] " .. msg)
-    end
-end
-
--- ===========================
--- UTILITY FUNCTIONS
--- ===========================
-
--- Convert TouchOSC value (0-1) to Ableton pan (-1 to 1)
-local function touchOSCToAbleton(value)
-    return (value * 2) - 1
-end
-
--- Convert Ableton pan (-1 to 1) to TouchOSC value (0-1)
-local function abletonToTouchOSC(value)
-    return (value + 1) / 2
-end
-
--- Apply center snap
-local function applyCenterSnap(value)
-    if math.abs(value - 0.5) < CENTER_SNAP then
-        return 0.5
-    end
-    return value
-end
-
--- Update visual color based on pan position (from original script)
-local function updateVisualColor()
-    if math.abs(self.values.x - 0.5) > 0.01 then
-        -- Pan is off-center
-        self.color = COLOR_OFF_CENTER
-    else
-        -- Pan is centered
-        self.color = COLOR_CENTERED
-    end
 end
 
 -- ===========================
@@ -141,7 +69,6 @@ local function getConnectionIndex()
                 local connectionKey = "connection_" .. instance
                 local connectionIndex = config[connectionKey]
                 if connectionIndex then
-                    debugLog("Found connection index:", connectionIndex, "for instance:", instance)
                     return connectionIndex
                 end
             end
@@ -149,7 +76,6 @@ local function getConnectionIndex()
     end
     
     -- Fallback to default
-    debugLog("Using default connection index: 1")
     return 1
 end
 
@@ -178,234 +104,56 @@ local function getTrackNumber()
     return nil
 end
 
--- Check if track is properly mapped
-local function isTrackMapped()
-    -- If parent doesn't have proper tag format, it's not mapped
-    if not self.parent or not self.parent.tag then
-        return false
-    end
-    
-    -- Check for instance:trackNumber format
-    local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
-    return instance ~= nil and trackNum ~= nil
-end
-
 -- ===========================
--- SMOOTHING FUNCTIONS
+-- MAIN FUNCTIONS
 -- ===========================
 
--- Smooth interpolation between values
-local function smoothValue(current, target, speed, deltaTime)
-    if speed <= 0 then
-        return target
-    end
-    
-    -- Calculate interpolation factor based on speed and deltaTime
-    local factor = 1 - math.exp(-deltaTime * (1 - speed) * 10)
-    
-    -- Interpolate
-    return current + (target - current) * factor
-end
-
--- Check if we should "catch" the value
-local function shouldCatch(current, target)
-    return math.abs(current - target) < CATCH_THRESHOLD
-end
-
--- ===========================
--- OSC COMMUNICATION
--- ===========================
-
--- Send pan to Ableton (with connection routing)
-local function sendPan(value)
+-- Handle value changes (touch and movement)
+function onValueChanged()
     local trackNumber = getTrackNumber()
     if not trackNumber then
         return
     end
     
-    -- Apply center snap
-    local snappedValue = applyCenterSnap(value)
+    -- Double-tap detection
+    if self.values.touch then
+        touch_on_first = true
+    end
     
-    -- Convert to Ableton range
-    local abletonValue = touchOSCToAbleton(snappedValue)
+    if touch_on_first and not self.values.touch then
+        local now = getMillis()
+        if now - last < delay then
+            -- Double-tap detected - center the pan
+            self.values.x = 0.5
+            last = 0
+            touch_on_first = false
+            log("Double-tap detected - pan centered")
+        else
+            last = now
+        end
+    end
     
-    -- Get connection for this instance
+    -- Send pan value with connection routing
     local connectionIndex = getConnectionIndex()
     local connections = buildConnectionTable(connectionIndex)
     
-    -- Send with connection routing
+    -- Convert to Ableton range (-1 to 1)
+    local abletonValue = (self.values.x * 2) - 1
+    
     sendOSC('/live/track/set/panning', trackNumber, abletonValue, connections)
-    lastSentValue = value
-    
-    debugLog(string.format("Sent pan: %.3f (Ableton: %.3f) to track %d on connection %d", 
-        value, abletonValue, trackNumber, connectionIndex))
 end
 
--- ===========================
--- TOUCH HANDLING
--- ===========================
-
--- Called when user touches the control
-local function onTouch()
-    -- Safety check: only process if track is mapped
-    if not isTrackMapped() then
-        -- Reset to center if track not mapped
-        self.values.x = 0.5
-        displayValue = 0.5
-        updateVisualColor()
-        return
-    end
-    
-    local now = getMillis()
-    
-    -- Debounce touch events
-    if now - lastTouchTime < TOUCH_DEBOUNCE then
-        return
-    end
-    
-    isUserTouching = true
-    lastTouchTime = now
-    touchStartValue = self.values.x
-    hasMoved = false
-    touchOnFirst = true  -- Flag for double-tap detection
-    
-    debugLog("Touch started at:", touchStartValue)
-end
-
--- Called when user releases the control
-local function onRelease()
-    if not isUserTouching then
-        return
-    end
-    
-    isUserTouching = false
-    local now = getMillis()
-    
-    -- Double-tap detection (from original script)
-    if touchOnFirst and not hasMoved then
-        if (now - lastTapReleaseTime) < DOUBLE_TAP_DELAY then
-            -- Double-tap detected - center the pan
-            self.values.x = 0.5
-            displayValue = 0.5
-            sendPan(0.5)
-            updateVisualColor()
-            lastTapReleaseTime = 0
-            touchOnFirst = false
-            log("Double-tap detected - pan centered")
-        else
-            lastTapReleaseTime = now
-        end
-    end
-    
-    lastTouchTime = now
-    
-    -- If user didn't move, treat as a tap to catch
-    if not hasMoved then
-        isCaught = false
-        debugLog("Tap detected - releasing catch")
-    end
-    
-    debugLog("Touch released")
-end
-
--- ===========================
--- UPDATE LOGIC
--- ===========================
-
--- Main update function
+-- Update visual color based on pan position
 function update()
-    -- Safety check: skip update if track not mapped
-    if not isTrackMapped() then
-        return
-    end
-    
-    local now = getMillis()
-    
-    -- Frame rate limiting
-    if now - lastUpdateTime < (1000 / UPDATE_RATE) then
-        return
-    end
-    
-    local deltaTime = (now - lastUpdateTime) / 1000
-    lastUpdateTime = now
-    
-    -- Detect movement
-    if isUserTouching and math.abs(self.values.x - touchStartValue) > 0.001 then
-        hasMoved = true
-    end
-    
-    -- Handle user interaction
-    if isUserTouching and hasMoved then
-        -- User is actively moving the control
-        displayValue = self.values.x
-        isCaught = true
-        
-        -- Send if changed enough
-        if math.abs(displayValue - lastSentValue) > SEND_THRESHOLD then
-            sendPan(displayValue)
-        end
-        
-        -- Update visual color
-        updateVisualColor()
+    local value = self.values.x
+    if math.abs(value - 0.5) > 0.01 then
+        -- Pan is off-center
+        self.color = COLOR_OFF_CENTER
     else
-        -- Not touching or hasn't moved
-        
-        -- Auto-release catch after timeout
-        if isCaught and not isUserTouching and (now - lastTouchTime) > AUTO_RELEASE_TIME then
-            isCaught = false
-            debugLog("Auto-released catch")
-        end
-        
-        -- Smooth to target if not caught
-        if not isCaught then
-            -- Check if we should catch
-            if shouldCatch(displayValue, targetValue) then
-                isCaught = true
-                displayValue = targetValue
-                debugLog("Caught target value:", targetValue)
-            else
-                -- Smooth towards target
-                displayValue = smoothValue(displayValue, targetValue, SMOOTHING_SPEED, deltaTime)
-            end
-            
-            -- Update visual
-            self.values.x = displayValue
-            updateVisualColor()
-        end
+        -- Pan is centered
+        self.color = COLOR_CENTERED
     end
 end
-
--- ===========================
--- VALUE CHANGE HANDLERS
--- ===========================
-
--- Handle control value changes
-function onValueChanged(valueName)
-    if valueName == "touch" then
-        if self.values.touch then
-            onTouch()
-        else
-            onRelease()
-        end
-    elseif valueName == "x" then
-        -- Only process if we're touching and track is mapped
-        if isUserTouching and hasMoved and isTrackMapped() then
-            displayValue = self.values.x
-            
-            -- Send if changed enough
-            if math.abs(displayValue - lastSentValue) > SEND_THRESHOLD then
-                sendPan(displayValue)
-            end
-            
-            -- Update visual color
-            updateVisualColor()
-        end
-    end
-end
-
--- ===========================
--- OSC RECEIVE HANDLERS
--- ===========================
 
 -- Handle incoming pan updates from Ableton
 function onReceiveOSC(message, connections)
@@ -437,47 +185,9 @@ function onReceiveOSC(message, connections)
     local abletonPan = arguments[2].value
     
     -- Convert to TouchOSC range (0-1)
-    targetValue = abletonToTouchOSC(abletonPan)
-    
-    debugLog(string.format("Received pan: %.3f (TouchOSC: %.3f) for track %d", 
-        abletonPan, targetValue, msgTrackNumber))
-    
-    -- Don't update if user is touching
-    if not isUserTouching then
-        -- Update display if not caught
-        if not isCaught then
-            displayValue = targetValue
-            self.values.x = displayValue
-            updateVisualColor()
-        end
-    end
+    self.values.x = (abletonPan + 1) / 2
     
     return true
-end
-
--- ===========================
--- PARENT NOTIFICATION
--- ===========================
-
--- Handle notifications from parent group
-function onReceiveNotify(key, value)
-    -- Parent might notify us of track changes
-    if key == "track_changed" then
-        -- Reset state when track changes
-        targetValue = 0.5
-        displayValue = 0.5
-        lastSentValue = 0.5
-        isCaught = false
-        self.values.x = 0.5
-        updateVisualColor()
-        debugLog("Track changed - reset pan to center")
-    elseif key == "track_unmapped" then
-        -- Disable control when track is unmapped
-        self.values.x = 0.5
-        displayValue = 0.5
-        updateVisualColor()
-        debugLog("Track unmapped - disabled pan control")
-    end
 end
 
 -- ===========================
@@ -490,20 +200,10 @@ function init()
     
     -- Ensure we're starting at center
     self.values.x = 0.5
-    displayValue = 0.5
-    targetValue = 0.5
-    
-    -- Set initial color
-    updateVisualColor()
     
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-    end
-    
-    -- Set initial interactive state based on track mapping
-    if not isTrackMapped() then
-        self.color = Color(0.3, 0.3, 0.3, 0.5)
     end
 end
 
