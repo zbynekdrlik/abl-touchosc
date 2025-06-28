@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.5.8
--- Fixed: Bounds checking for children iteration, force logging to document script
+-- Version: 1.5.9
+-- Fixed: Simplified logging using only print() like other working scripts
 
 -- Version constant
-local SCRIPT_VERSION = "1.5.8"
+local SCRIPT_VERSION = "1.5.9"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -15,36 +15,9 @@ local trackNumber = nil
 local trackMapped = false
 local lastEnabledState = nil  -- Track last state to prevent spam
 
--- Local logger function - notify document script instead
+-- Simple logging - just use print like the working scripts
 local function log(message)
-    -- Always print to console
     print("[" .. os.date("%H:%M:%S") .. "] " .. message)
-    
-    -- Try to notify document script to log for us
-    local docScript = root
-    if docScript then
-        docScript:notify("log_message", message)
-    end
-    
-    -- Also try direct logger update as backup
-    local loggerObj = root:findByName("logger", true)
-    if loggerObj and loggerObj.values and loggerObj.values.text ~= nil then
-        local currentText = loggerObj.values.text or ""
-        local lines = {}
-        for line in currentText:gmatch("[^\r\n]+") do
-            table.insert(lines, line)
-        end
-        
-        local timestamp = os.date("%H:%M:%S")
-        table.insert(lines, timestamp .. " " .. message)
-        
-        -- Keep last 60 lines
-        while #lines > 60 do
-            table.remove(lines, 1)
-        end
-        
-        loggerObj.values.text = table.concat(lines, "\n")
-    end
 end
 
 -- Get connection configuration
@@ -106,7 +79,7 @@ local function setGroupEnabled(enabled, silent)
     
     -- Safe iteration with bounds checking
     local i = 1
-    local maxIterations = 100  -- Safety limit
+    local maxIterations = 50  -- Safety limit
     
     while i <= maxIterations do
         local child = self.children[i]
@@ -176,21 +149,17 @@ function init()
     instance, trackName = parseGroupName(self.name)
     connectionIndex = getConnectionIndex(instance)
     
+    -- Log initialization
+    log("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
+    log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
+    
     -- SAFETY: Disable all controls until properly mapped
-    setGroupEnabled(false, true)  -- Silent to avoid logging before logger ready
+    setGroupEnabled(false, true)  -- Silent
     
     -- Set initial status
     updateStatus("error")
     
-    -- Log after a short delay to ensure document script is ready
-    local initMessage = "Group init v" .. SCRIPT_VERSION .. " for " .. self.name .. 
-                       " (Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex .. ")"
-    
-    -- Print to console immediately
-    print(initMessage)
-    
-    -- Schedule logging for next update
-    self.needsInitLog = true
+    log("Group ready - waiting for refresh")
 end
 
 function refreshTrackMapping()
@@ -303,13 +272,6 @@ function onReceiveNotify(action)
 end
 
 function update()
-    -- Log initialization on first update
-    if self.needsInitLog then
-        log("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
-        log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
-        self.needsInitLog = false
-    end
-    
     -- Only check stale data if mapped
     if trackMapped and lastVerified > 0 then
         local age = getMillis() - lastVerified
