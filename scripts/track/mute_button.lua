@@ -1,8 +1,8 @@
 -- mute_button.lua
--- Version: 1.6.4
--- Simplified: React to x changes, send inverted value
+-- Version: 1.6.5
+-- Added: Debug logging to track the issue
 
-local VERSION = "1.6.4"
+local VERSION = "1.6.5"
 
 -- State tracking
 local ignoreNextChange = false
@@ -80,16 +80,20 @@ function onReceiveOSC(message, connections)
             -- Check if message is from correct connection
             local expectedConnection = getConnectionIndex()
             if connections[expectedConnection] then
+                log("DEBUG: About to update x value from OSC")
+                
                 -- Set flag to ignore the next value change
                 ignoreNextChange = true
                 
                 -- Update button visual state
+                local oldX = self.values.x
                 if arguments[2].value then
                     self.values.x = 0  -- Muted = pressed
                 else
                     self.values.x = 1  -- Unmuted = released
                 end
                 
+                log("DEBUG: x changed from " .. oldX .. " to " .. self.values.x)
                 log("Received mute state: " .. (arguments[2].value and "MUTED" or "UNMUTED"))
             end
         end
@@ -100,10 +104,13 @@ end
 
 -- Handle value changes
 function onValueChanged(key)
+    log("DEBUG: onValueChanged called with key=" .. key .. " x=" .. self.values.x .. " touch=" .. tostring(self.values.touch))
+    
     if key == "x" then
         -- Skip if this was from OSC
         if ignoreNextChange then
             ignoreNextChange = false
+            log("DEBUG: Ignoring x change from OSC update")
             return
         end
         
@@ -123,6 +130,8 @@ function onValueChanged(key)
                 sendOSC("/live/track/set/mute", trackNumber, muteState, connections)
                 log("Sent mute " .. (muteState and "ON" or "OFF") .. " for track " .. trackNumber)
             end
+        else
+            log("DEBUG: x changed but touch is false, not sending")
         end
     end
 end
