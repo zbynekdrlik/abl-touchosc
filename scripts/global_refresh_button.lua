@@ -1,13 +1,22 @@
 -- TouchOSC Global Refresh Button Script
--- Version: 1.3.2
--- Test: Direct notify without console print
+-- Version: 1.4.0
+-- Cleaned up with proper centralized logging
 
-local SCRIPT_VERSION = "1.3.2"
+local SCRIPT_VERSION = "1.4.0"
 
 -- Store last tap time to prevent double triggers
 local lastTapTime = 0
 local colorResetTime = 0
 local needsColorReset = false
+
+-- Centralized logging through document script
+local function log(message)
+    -- Send to document script for logger text update
+    root:notify("log_message", "REFRESH BUTTON: " .. message)
+    
+    -- Also print to console for development/debugging
+    print("[" .. os.date("%H:%M:%S") .. "] REFRESH BUTTON: " .. message)
+end
 
 function onValueChanged(valueName)
     -- Handle both button-style (touch) and label-style (x) touches
@@ -19,8 +28,8 @@ function onValueChanged(valueName)
         end
         lastTapTime = currentTime
         
-        -- TEST: Send log message directly without print
-        root:notify("log_message", "REFRESH BUTTON: Refresh triggered (v" .. SCRIPT_VERSION .. ")")
+        -- Log the action
+        log("Refresh triggered")
         
         -- Visual feedback - bright yellow
         self.color = Color(1, 1, 0, 1)  -- Yellow while refreshing
@@ -43,8 +52,7 @@ function update()
 end
 
 function init()
-    -- TEST: Direct notify for init message
-    root:notify("log_message", "REFRESH BUTTON: Script v" .. SCRIPT_VERSION .. " initialized")
+    log("Script v" .. SCRIPT_VERSION .. " initialized")
     
     -- Set button text
     if self.values and type(self.values) == "table" and self.values.text ~= nil then
