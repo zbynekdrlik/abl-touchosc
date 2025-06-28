@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.5.4
--- Fixed: Prevent log spam from update() function
+-- Version: 1.5.5
+-- Fixed: Delay initial logging to ensure logger is ready
 
 -- Version constant
-local SCRIPT_VERSION = "1.5.4"
+local SCRIPT_VERSION = "1.5.5"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -14,6 +14,7 @@ local needsRefresh = false
 local trackNumber = nil
 local trackMapped = false
 local lastEnabledState = nil  -- Track last state to prevent spam
+local initLogged = false  -- Track if we've logged initialization
 
 -- Local logger function
 local function log(...)
@@ -26,7 +27,7 @@ local function log(...)
         if i < #args then message = message .. " " end
     end
     
-    print(message)
+    print(message)  -- Always print to console
     
     -- Update logger if exists
     local loggerObj = root:findByName("logger", true)  -- recursive search
@@ -169,11 +170,17 @@ local function clearListeners()
     end
 end
 
+-- Delayed initialization logging
+local function logInitialization()
+    if not initLogged then
+        log("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
+        log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
+        log("Group ready - waiting for refresh")
+        initLogged = true
+    end
+end
+
 function init()
-    -- Version logging moved here
-    log("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
-    log("Initializing group: " .. self.name)
-    
     -- Set tag programmatically
     self.tag = "trackGroup"
     
@@ -181,22 +188,20 @@ function init()
     instance, trackName = parseGroupName(self.name)
     connectionIndex = getConnectionIndex(instance)
     
-    log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
-    
     -- SAFETY: Disable all controls until properly mapped
-    setGroupEnabled(false)
+    setGroupEnabled(false, true)  -- Silent to avoid logging before logger ready
     
     -- Set initial status
     updateStatus("error")
     
-    -- Note: OSC routing must be configured in TouchOSC editor
-    log("NOTE: Ensure group has OSC receive pattern: /live/song/get/track_names")
-    
-    -- Don't do initial refresh - wait for global refresh or manual trigger
-    log("Group ready - waiting for refresh")
+    -- Print to console immediately
+    print("Group init v" .. SCRIPT_VERSION .. " for " .. self.name .. " (Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex .. ")")
 end
 
 function refreshTrackMapping()
+    -- Log initialization if not done yet
+    logInitialization()
+    
     log("Refreshing " .. self.name)
     
     -- SAFETY: Clear any existing listeners and disable controls
@@ -306,6 +311,11 @@ function onReceiveNotify(action)
 end
 
 function update()
+    -- Log initialization on first update if not done yet
+    if not initLogged then
+        logInitialization()
+    end
+    
     -- Only check stale data if mapped
     if trackMapped and lastVerified > 0 then
         local age = getMillis() - lastVerified
@@ -313,6 +323,4 @@ function update()
             updateStatus("stale")
         end
     end
-    
-    -- No need to repeatedly call setGroupEnabled - it's handled by state changes
 end
