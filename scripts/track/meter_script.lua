@@ -1,43 +1,46 @@
--- TouchOSC Meter Script (Output Level Display)
--- Version: 2.1.0
--- Added: Centralized logging through document script
+-- TouchOSC Meter Script with Multi-Connection Support
+-- Version: 2.2.0
+-- Preserves exact calibration from working meter
+-- Added: Multi-connection routing without documentScript calls
 
--- Version constant
-local VERSION = "2.1.0"
+local VERSION = "2.2.0"
 
--- ===========================
--- CONFIGURATION SECTION
--- ===========================
+-- DEBUG MODE
+local DEBUG = 0  -- Set to 1 to see meter values and conversions in console
 
-local METER_SMOOTHING = 0.15       -- Smoothing for meter display (0-1, lower = smoother)
-local PEAK_HOLD_TIME = 1500        -- Time to hold peak indicator (ms)
-local PEAK_FALL_SPEED = 0.05       -- Speed of peak indicator falling
-local UPDATE_RATE = 30             -- Updates per second
-local MIN_DB = -70                 -- Minimum dB to display
-local MAX_DB = 6                   -- Maximum dB to display
-local CLIP_THRESHOLD = 0           -- dB level for clipping indication
-local DEBUG_MODE = false           -- Enable debug logging
+-- COLOR THRESHOLDS (in dB) - PRESERVED FROM ORIGINAL
+local COLOR_THRESHOLD_YELLOW = -12    -- Above this = yellow (caution)
+local COLOR_THRESHOLD_RED = -3        -- Above this = red (clipping warning)
 
--- ===========================
--- STATE VARIABLES
--- ===========================
+-- COLOR DEFINITIONS (RGBA values 0-1) - PRESERVED FROM ORIGINAL
+local COLOR_GREEN = {0.0, 0.8, 0.0, 1.0}     -- Normal level
+local COLOR_YELLOW = {1.0, 0.8, 0.0, 1.0}    -- Caution level  
+local COLOR_RED = {1.0, 0.0, 0.0, 1.0}       -- Clipping level
 
-local currentLevel = 0             -- Current smoothed level
-local targetLevel = 0              -- Target level from Ableton
-local peakLevel = 0                -- Peak level
-local peakHoldTimer = 0            -- Timer for peak hold
-local lastUpdateTime = 0           -- For frame rate limiting
-local isClipping = false           -- Clipping indicator
-local lastClipTime = 0             -- When clipping last occurred
+-- Smooth color transitions - PRESERVED FROM ORIGINAL
+local current_color = {COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4]}
+local color_smoothing = 0.3  -- Smoothing factor (0-1, higher = faster)
 
--- Reference to document script for connection routing
-local documentScript = nil
+-- HARDCODED CALIBRATION BASED ON YOUR EXACT FADER DATA - PRESERVED
+local CALIBRATION_POINTS = {
+  -- AbletonOSC value -> Fader position (EXACT from your fader_volume logs)
+  {0.0, 0.0},      -- Silent -> 0%
+  {0.3945, 0.027}, -- -40dB -> 2.7% (EXACT from your fader_volume log!)
+  {0.6839, 0.169}, -- -18dB -> 16.9% (EXACT from your fader_volume log!)
+  {0.7629, 0.313}, -- -12dB -> 31.3% (EXACT from your fader_volume log!)
+  {0.8399, 0.5},   -- -6dB -> 50% (verified working)
+  {0.9200, 0.729}, -- 0dB -> 72.9% (verified working)  
+  {1.0, 1.0}       -- Max -> 100%
+}
+
+-- CURVE SETTINGS - Must exactly match fader curve - PRESERVED
+local use_log_curve = true
+local log_exponent = 0.515
 
 -- ===========================
 -- LOGGING
 -- ===========================
 
--- Centralized logging through document script
 local function log(message)
     -- Get parent name for context
     local context = "METER"
@@ -52,286 +55,303 @@ local function log(message)
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
--- Debug logging (only if DEBUG_MODE is true)
-local function debugLog(...)
-    if DEBUG_MODE then
-        local args = {...}
-        local msg = table.concat(args, " ")
-        log("[DEBUG] " .. msg)
-    end
+function debugPrint(...)
+  if DEBUG == 1 then
+    local args = {...}
+    local msg = table.concat(args, " ")
+    log("[DEBUG] " .. msg)
+  end
 end
 
 -- ===========================
--- UTILITY FUNCTIONS
+-- MULTI-CONNECTION SUPPORT
 -- ===========================
 
--- Convert linear level (0-1) to dB
-local function linearToDb(linear)
-    if linear <= 0 then
-        return MIN_DB
-    end
-    local db = 20 * math.log10(linear)
-    return math.max(MIN_DB, math.min(MAX_DB, db))
-end
-
--- Convert dB to linear level (0-1) for display
-local function dbToDisplay(db)
-    -- Map MIN_DB to MAX_DB to 0-1 range
-    local normalized = (db - MIN_DB) / (MAX_DB - MIN_DB)
-    return math.max(0, math.min(1, normalized))
-end
-
--- Smooth value changes
-local function smoothValue(current, target, smoothing, deltaTime)
-    if smoothing <= 0 then
-        return target
-    end
-    
-    -- Calculate interpolation factor
-    local factor = 1 - math.exp(-deltaTime * (1 - smoothing) * 10)
-    
-    return current + (target - current) * factor
-end
-
--- ===========================
--- TRACK INFORMATION
--- ===========================
-
--- Get track number from parent group
+-- Get track number from parent group tag
 local function getTrackNumber()
-    -- Parent stores combined tag like "band:5"
+    -- Handle new tag format "instance:trackNumber"
     if self.parent and self.parent.tag then
+        -- Try new format first
         local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
         if trackNum then
             return tonumber(trackNum)
         end
+        -- Fallback to old format (just number)
+        return tonumber(self.parent.tag)
     end
     return nil
 end
 
--- Check if track is properly mapped
-local function isTrackMapped()
-    -- If parent doesn't have proper tag format, it's not mapped
-    if not self.parent or not self.parent.tag then
-        return false
-    end
-    
-    -- Check for instance:trackNumber format
-    local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
-    return instance ~= nil and trackNum ~= nil
-end
-
--- Get connection index from parent group
+-- Get connection index by reading configuration directly
 local function getConnectionIndex()
-    -- Check if parent has tag with instance:trackNumber format
-    if self.parent and self.parent.tag then
-        local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
-        if instance and trackNum then
-            -- Get document script reference
-            if not documentScript then
-                documentScript = root
-            end
-            
-            -- Call the helper function from document script
-            if documentScript.getConnectionForInstance then
-                return documentScript.getConnectionForInstance(instance)
-            end
+    -- Default to connection 1 if can't determine
+    local defaultConnection = 1
+    
+    -- Check parent tag for instance name
+    if not self.parent or not self.parent.tag then
+        return defaultConnection
+    end
+    
+    -- Extract instance name from tag
+    local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
+    if not instance then
+        return defaultConnection
+    end
+    
+    -- Find and read configuration
+    local configObj = root:findByName("configuration", true)
+    if not configObj or not configObj.values or not configObj.values.text then
+        debugPrint("No configuration found, using default connection")
+        return defaultConnection
+    end
+    
+    -- Parse configuration to find connection for this instance
+    local configText = configObj.values.text
+    for line in configText:gmatch("[^\r\n]+") do
+        -- Look for connection_instance: number pattern
+        local configInstance, connectionNum = line:match("connection_(%w+):%s*(%d+)")
+        if configInstance and configInstance == instance then
+            debugPrint("Found connection for", instance, ":", connectionNum)
+            return tonumber(connectionNum) or defaultConnection
         end
     end
     
-    -- Fallback to default
-    return 1
+    debugPrint("No connection found for instance:", instance)
+    return defaultConnection
 end
 
 -- ===========================
--- VISUAL UPDATES
+-- ORIGINAL METER FUNCTIONS - PRESERVED
 -- ===========================
 
--- Update meter display
-local function updateMeterDisplay()
-    -- Set meter level
-    self.values.x = currentLevel
+-- Simple linear interpolation between calibration points
+function abletonToFaderPosition(normalized)
+  if not normalized or normalized <= 0 then
+    return 0
+  end
+  
+  if normalized >= 1.0 then
+    return 1.0
+  end
+  
+  -- Check for exact calibration matches first
+  for _, point in ipairs(CALIBRATION_POINTS) do
+    if math.abs(normalized - point[1]) < 0.01 then
+      return point[2]
+    end
+  end
+  
+  -- Find the two closest points for interpolation
+  for i = 1, #CALIBRATION_POINTS - 1 do
+    local point1 = CALIBRATION_POINTS[i]
+    local point2 = CALIBRATION_POINTS[i + 1]
     
-    -- Update color based on level
-    local db = linearToDb(targetLevel)
-    
-    if isClipping or db >= CLIP_THRESHOLD then
-        -- Red for clipping
-        self.color = Color(1, 0, 0, 1)
-    elseif db >= -6 then
-        -- Yellow for hot
-        self.color = Color(1, 0.8, 0, 1)
-    elseif db >= -12 then
-        -- Green-yellow
-        self.color = Color(0.8, 1, 0, 1)
+    if normalized >= point1[1] and normalized <= point2[1] then
+      -- Linear interpolation
+      local ratio = (normalized - point1[1]) / (point2[1] - point1[1])
+      local fader_position = point1[2] + ratio * (point2[2] - point1[2])
+      return fader_position
+    end
+  end
+  
+  -- Fallback
+  return normalized
+end
+
+-- Convert linear position to logarithmic (must match fader exactly)
+function linearToLog(linear_pos)
+  if not linear_pos or linear_pos <= 0 then return 0
+  elseif linear_pos >= 1 then return 1
+  else return math.pow(linear_pos, log_exponent) end
+end
+
+-- Convert audio value to dB (EXACT copy from fader script)
+function value2db(vl)
+  if not vl then return -math.huge end
+  
+  if vl <= 1 and vl >= 0.4 then
+    return 40*vl -34
+  elseif vl < 0.4 and vl >= 0.15 then
+    local alpha = 799.503788
+    local beta = 12630.61132
+    local gamma = 201.871345
+    local delta = 399.751894
+    return -((delta*vl - gamma)^2 + beta)/alpha
+  elseif vl < 0.15 then
+    local alpha = 70.
+    local beta = 118.426374
+    local gamma = 7504./5567.
+    local db_value_str = beta*(vl^(1/gamma)) - alpha
+    if db_value_str <= -70.0 then 
+      return -math.huge  -- -inf
     else
-        -- Green for normal
-        self.color = Color(0, 1, 0, 1)
+      return db_value_str
     end
-    
-    -- Update peak indicator if we have one
-    if self.children and self.children.peak_indicator then
-        -- Position peak indicator
-        self.children.peak_indicator.values.x = peakLevel
-        
-        -- Color based on peak level
-        local peakDb = linearToDb(peakLevel)
-        if peakDb >= CLIP_THRESHOLD then
-            self.children.peak_indicator.color = Color(1, 0, 0, 1)
-        elseif peakDb >= -6 then
-            self.children.peak_indicator.color = Color(1, 0.8, 0, 1)
-        else
-            self.children.peak_indicator.color = Color(1, 1, 1, 0.8)
-        end
-    end
+  else
+    return 0
+  end
+end
+
+-- Get color based on exact dB calculation from fader position
+function getColorForLevel(fader_pos)
+  -- Convert fader position to exact dB using fader's math
+  local audio_value = linearToLog(fader_pos)
+  local actual_db = value2db(audio_value)
+  
+  if actual_db >= COLOR_THRESHOLD_RED then
+    return COLOR_RED
+  elseif actual_db >= COLOR_THRESHOLD_YELLOW then
+    return COLOR_YELLOW
+  else
+    return COLOR_GREEN
+  end
+end
+
+-- Smooth color transitions
+function smoothColor(target_color)
+  for i = 1, 4 do
+    current_color[i] = current_color[i] + (target_color[i] - current_color[i]) * color_smoothing
+  end
+  return current_color
 end
 
 -- ===========================
--- UPDATE LOGIC
+-- OSC HANDLING WITH MULTI-CONNECTION
 -- ===========================
 
--- Main update function
-function update()
-    -- Safety check: skip update if track not mapped
-    if not isTrackMapped() then
-        -- Reset meter to 0 if track not mapped
-        self.values.x = 0
-        currentLevel = 0
-        peakLevel = 0
-        return
-    end
-    
-    local now = getMillis()
-    
-    -- Frame rate limiting
-    if now - lastUpdateTime < (1000 / UPDATE_RATE) then
-        return
-    end
-    
-    local deltaTime = (now - lastUpdateTime) / 1000
-    lastUpdateTime = now
-    
-    -- Smooth meter movement
-    currentLevel = smoothValue(currentLevel, targetLevel, METER_SMOOTHING, deltaTime)
-    
-    -- Update peak level
-    if targetLevel > peakLevel then
-        peakLevel = targetLevel
-        peakHoldTimer = now
-    elseif now - peakHoldTimer > PEAK_HOLD_TIME then
-        -- Peak falls after hold time
-        peakLevel = math.max(targetLevel, peakLevel - PEAK_FALL_SPEED * deltaTime)
-    end
-    
-    -- Clear clipping after a moment
-    if isClipping and now - lastClipTime > 500 then
-        isClipping = false
-    end
-    
-    -- Update visual
-    updateMeterDisplay()
-end
-
--- ===========================
--- OSC RECEIVE HANDLERS
--- ===========================
-
--- Handle incoming meter data from Ableton
 function onReceiveOSC(message, connections)
-    -- Only process meter messages
-    if message[1] ~= '/live/track/get/output_meter_level' then
-        return false
-    end
-    
-    -- Check if this message is from our connection
-    local myConnection = getConnectionIndex()
-    if not connections[myConnection] then
-        return false
-    end
-    
-    -- Check if this is our track
-    local arguments = message[2]
-    if not arguments or #arguments < 2 then
-        return false
-    end
-    
-    local msgTrackNumber = arguments[1].value
-    local myTrackNumber = getTrackNumber()
-    
-    if msgTrackNumber ~= myTrackNumber then
-        return false
-    end
-    
-    -- Get the meter level (linear 0-1)
-    local newLevel = arguments[2].value
-    targetLevel = newLevel
-    
-    -- Check for clipping
-    local db = linearToDb(newLevel)
-    if db >= CLIP_THRESHOLD then
-        isClipping = true
-        lastClipTime = getMillis()
-    end
-    
-    debugLog(string.format("Received level: %.3f (%.1f dB) for track %d", 
-        newLevel, db, msgTrackNumber))
-    
-    return true
+  -- Check if this is a meter message
+  if message[1] ~= '/live/track/get/output_meter_level' then
+    return false
+  end
+  
+  -- Check if this message is from our connection
+  local myConnection = getConnectionIndex()
+  if connections and not connections[myConnection] then
+    debugPrint("Message not from our connection", myConnection)
+    return false
+  end
+  
+  local arguments = message[2]
+  if not arguments or #arguments < 2 then
+    return false
+  end
+  
+  -- Check if this message is for our track
+  local msgTrackNumber = arguments[1].value
+  local myTrackNumber = getTrackNumber()
+  
+  if not myTrackNumber or msgTrackNumber ~= myTrackNumber then
+    return false
+  end
+  
+  local normalized_meter = arguments[2].value
+  
+  debugPrint("=== METER UPDATE ===")
+  debugPrint("Track:", myTrackNumber, "Connection:", myConnection)
+  debugPrint("AbletonOSC normalized:", string.format("%.4f", normalized_meter))
+  
+  -- Convert AbletonOSC normalized value to fader position
+  local fader_position = abletonToFaderPosition(normalized_meter)
+  
+  -- Update meter position
+  self.values.x = fader_position
+  
+  -- Get target color based on fader position
+  local target_color = getColorForLevel(fader_position)
+  
+  -- Apply smoothed color transition
+  local smoothed = smoothColor(target_color)
+  self.color = Color(smoothed[1], smoothed[2], smoothed[3], smoothed[4])
+  
+  debugPrint("→ Fader position:", string.format("%.1f%%", fader_position * 100))
+  
+  -- Calculate actual dB for display
+  local audio_value = linearToLog(fader_position)
+  local actual_db = value2db(audio_value)
+  debugPrint("→ Actual dB:", string.format("%.1f", actual_db))
+  debugPrint("→ Color:", actual_db >= COLOR_THRESHOLD_RED and "RED" or
+                       actual_db >= COLOR_THRESHOLD_YELLOW and "YELLOW" or "GREEN")
+  
+  -- Calibration checks
+  if math.abs(normalized_meter - 0.3945) < 0.01 then
+    debugPrint("*** -40dB CALIBRATION POINT ***")
+  elseif math.abs(normalized_meter - 0.6839) < 0.01 then
+    debugPrint("*** -18dB CALIBRATION POINT ***")
+  elseif math.abs(normalized_meter - 0.7629) < 0.01 then
+    debugPrint("*** -12dB CALIBRATION POINT ***")
+  elseif math.abs(normalized_meter - 0.8399) < 0.01 then
+    debugPrint("*** -6dB CALIBRATION POINT ***")
+  elseif math.abs(normalized_meter - 0.9200) < 0.01 then
+    debugPrint("*** 0dB CALIBRATION POINT ***")
+  end
+  
+  return true  -- Stop propagation
 end
-
--- ===========================
--- PARENT NOTIFICATION
--- ===========================
 
 -- Handle notifications from parent group
 function onReceiveNotify(key, value)
-    -- Parent might notify us of track changes
     if key == "track_changed" then
-        -- Reset state when track changes
-        targetLevel = 0
-        currentLevel = 0
-        peakLevel = 0
-        isClipping = false
+        -- Reset meter when track changes
         self.values.x = 0
-        debugLog("Track changed - reset meter")
+        current_color = {COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4]}
+        self.color = Color(current_color[1], current_color[2], current_color[3], current_color[4])
+        debugPrint("Track changed - reset meter")
     elseif key == "track_unmapped" then
         -- Disable meter when track is unmapped
         self.values.x = 0
-        currentLevel = 0
-        debugLog("Track unmapped - disabled meter")
+        debugPrint("Track unmapped - disabled meter")
     end
 end
 
--- ===========================
--- INITIALIZATION
--- ===========================
-
+-- Initialize
 function init()
-    -- Log version
-    log("Script v" .. VERSION .. " loaded")
-    
-    -- Ensure we're starting at 0
-    self.values.x = 0
-    currentLevel = 0
-    targetLevel = 0
-    peakLevel = 0
-    
-    -- Set meter orientation (assuming vertical)
-    self.orientation = Orientation.VERTICAL
-    
-    -- Initial color
-    self.color = Color(0, 1, 0, 1)
-    
-    -- Log parent info
-    if self.parent and self.parent.name then
-        log("Initialized for parent: " .. self.parent.name)
+  -- Log version
+  log("Script v" .. VERSION .. " loaded")
+  
+  -- Set initial color to green
+  self.color = Color(COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4])
+  
+  -- Initialize meter at minimum
+  self.values.x = 0
+  
+  log("=== METER SCRIPT WITH MULTI-CONNECTION ===")
+  log("Using hardcoded calibration points from your tests")
+  log("Multi-connection routing enabled")
+  
+  if DEBUG == 1 then
+    log("")
+    log("Calibration points:")
+    for i, point in ipairs(CALIBRATION_POINTS) do
+      local ableton_val = point[1]
+      local fader_pos = point[2]
+      
+      if ableton_val == 0.3945 then
+        log(string.format("  %.4f → %.1f%% (-40dB) EXACT MATCH", ableton_val, fader_pos * 100))
+      elseif ableton_val == 0.6839 then
+        log(string.format("  %.4f → %.1f%% (-18dB) EXACT MATCH", ableton_val, fader_pos * 100))
+      elseif ableton_val == 0.7629 then
+        log(string.format("  %.4f → %.1f%% (-12dB) EXACT MATCH", ableton_val, fader_pos * 100))
+      elseif ableton_val == 0.8399 then
+        log(string.format("  %.4f → %.1f%% (-6dB) ✓", ableton_val, fader_pos * 100))
+      elseif ableton_val == 0.9200 then
+        log(string.format("  %.4f → %.1f%% (0dB) ✓", ableton_val, fader_pos * 100))
+      else
+        log(string.format("  %.4f → %.1f%%", ableton_val, fader_pos * 100))
+      end
     end
-    
-    -- Set initial state based on track mapping
-    if not isTrackMapped() then
-        self.color = Color(0.3, 0.3, 0.3, 0.5)
+    log("")
+  end
+  
+  -- Log parent info
+  if self.parent then
+    if self.parent.name then
+      log("Attached to parent: " .. self.parent.name)
     end
+    if self.parent.tag then
+      log("Parent tag: " .. tostring(self.parent.tag))
+    end
+  end
 end
 
--- Initialize on script load
 init()
