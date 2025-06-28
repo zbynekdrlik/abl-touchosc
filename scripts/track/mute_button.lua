@@ -1,10 +1,9 @@
 -- TouchOSC Mute Button Script
--- Version: 1.0.0
--- Phase: 01 (Connection-aware) - Checks parent group mapping and routes to correct connection
+-- Version: 1.1.0
+-- Added: Centralized logging through document script
 
--- CRITICAL VERSION LOGGING - DO NOT REMOVE
-local VERSION = "1.0.0"
-print("[" .. os.date("%H:%M:%S") .. "] Mute Button Script v" .. VERSION .. " loaded")
+-- Version constant
+local VERSION = "1.1.0"
 
 -- ===========================
 -- CONFIGURATION SECTION
@@ -31,6 +30,34 @@ local pressStartTime = 0           -- When press started (for visual feedback)
 
 -- Reference to document script for connection routing
 local documentScript = nil
+
+-- ===========================
+-- LOGGING
+-- ===========================
+
+-- Centralized logging through document script
+local function log(message)
+    -- Get parent name for context
+    local context = "MUTE"
+    if self.parent and self.parent.name then
+        context = "MUTE(" .. self.parent.name .. ")"
+    end
+    
+    -- Send to document script for logger text update
+    root:notify("log_message", context .. ": " .. message)
+    
+    -- Also print to console for development/debugging
+    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
+end
+
+-- Debug logging (only if DEBUG_MODE is true)
+local function debugLog(...)
+    if DEBUG_MODE then
+        local args = {...}
+        local msg = table.concat(args, " ")
+        log("[DEBUG] " .. msg)
+    end
+end
 
 -- ===========================
 -- CONNECTION HELPERS
@@ -93,16 +120,6 @@ local function isTrackMapped()
     -- Check for instance:trackNumber format
     local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
     return instance ~= nil and trackNum ~= nil
-end
-
--- ===========================
--- DEBUG LOGGING
--- ===========================
-
-local function debugLog(...)
-    if DEBUG_MODE then
-        print("[MuteButton]", ...)
-    end
 end
 
 -- ===========================
@@ -288,6 +305,9 @@ end
 -- ===========================
 
 function init()
+    -- Log version
+    log("Script v" .. VERSION .. " loaded")
+    
     -- Set button type
     self.type = ControlType.BUTTON
     
@@ -298,9 +318,10 @@ function init()
     -- Initial visual
     updateVisual()
     
-    -- Log initialization with version
-    print("[" .. os.date("%H:%M:%S") .. "] Mute button initialized for parent: " .. 
-        (self.parent and self.parent.name or "unknown") .. " (v" .. VERSION .. ")")
+    -- Log parent info
+    if self.parent and self.parent.name then
+        log("Initialized for parent: " .. self.parent.name)
+    end
 end
 
 -- Initialize on script load
