@@ -1,115 +1,77 @@
 # Thread Progress Tracking
 
-## Current Status
-- **Phase**: 3 - Script Functionality Testing
-- **Step**: Testing track group scripts and fader functionality
-- **Date**: 2025-06-28
-- **Branch**: feature/selective-connection-routing
+## CRITICAL CURRENT STATE
+**⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
+- [x] Fixed fader script connection routing error (v2.2.0)
+- [ ] Currently testing: band_CG # group with fader
+- [ ] Waiting for: User to reload TouchOSC with updated fader script and test
+- [ ] Blocked by: None
 
-## What We're Actually Testing NOW
-- **Track Group Script (group_init.lua v1.7.0)**: Still needs testing verification
-- **Individual Control Scripts**: Need testing across multiple Ableton instances
-- **Full Fader Functionality**: Not yet verified
+## Implementation Status
+- Phase: 3 - Script Functionality Testing
+- Step: Testing fader control on band_CG # group
+- Status: TESTING
+- Date: 2025-06-28
 
-## Centralized Logging Architecture ✅ IMPLEMENTED (NOT TESTED)
-**Problem Solved**: Scripts are isolated and can't share the logger object directly
+## Current Testing Progress
+### band_CG # Group Setup
+- ✅ Group created with status indicator
+- ✅ Group script v1.7.0 attached
+- ✅ OSC receive pattern set
+- ✅ Successfully mapped to Track 39
+- ✅ Status indicator GREEN
+- ✅ Controls enabled (5 controls)
 
-**Solution Implemented**: Use notify system for centralized logging
-```lua
--- Standard pattern used in all scripts:
-local function log(message)
-    root:notify("log_message", "CONTEXT: " .. message)
-    print("[timestamp] " .. message)  -- Console backup
-end
-```
+### Fader Control
+- ✅ Fader added to group
+- ✅ OSC receive pattern set (/live/track/get/volume)
+- ❌ Had error: "No such property or function: 'getConnectionForInstance'"
+- ✅ Fixed in v2.2.0 - now reads config directly
+- ⏳ Needs testing with new version
 
-**Document script (v2.5.9)** handles all log messages:
-- Receives "log_message" notifications
-- Maintains log buffer
-- Updates logger text object
-- Provides consistent formatting
+## Script Versions
+- **document_script.lua**: v2.5.9 ✅ (centralized logging working)
+- **group_init.lua**: v1.7.0 ✅ (tested and working)
+- **global_refresh_button.lua**: v1.4.0 ✅ (tested and working)
+- **fader_script.lua**: v2.2.0 ✅ (JUST UPDATED - needs testing)
+- **meter_script.lua**: v2.1.0 ❌ (not tested)
+- **mute_button.lua**: v1.1.0 ❌ (not tested)
+- **pan_control.lua**: v1.1.0 ❌ (not tested)
 
-## Phase 3 Progress - IMPLEMENTATION COMPLETE, TESTING IN PROGRESS
-
-### Script Versions (All with Centralized Logging)
-- **document_script.lua**: v2.5.9 ✅ (log handler)
-- **group_init.lua**: v1.7.0 ✅ (fixed pcall, added logging) - NEEDS TESTING
-- **global_refresh_button.lua**: v1.4.0 ✅ (cleaned up, added logging)
-- **fader_script.lua**: v2.1.0 ✅ (added logging) - NEEDS TESTING
-- **meter_script.lua**: v2.1.0 ✅ (added logging) - NEEDS TESTING
-- **mute_button.lua**: v1.1.0 ✅ (added logging) - NEEDS TESTING
-- **pan_control.lua**: v1.1.0 ✅ (added logging) - NEEDS TESTING
-
-### Testing Required
-1. **Track Group Script Testing**
-   - [ ] Initialize track groups properly
-   - [ ] Logging shows correct initialization
-   - [ ] Controls are found and configured
-   - [ ] Connection routing works correctly
-
-2. **Individual Control Testing** 
-   - [ ] Fader controls volume correctly
-   - [ ] Meter displays levels
-   - [ ] Mute button toggles state
-   - [ ] Pan control adjusts position
-   - [ ] All controls log their actions
-
-3. **Multi-Ableton Testing**
-   - [ ] Test with multiple Ableton instances
-   - [ ] Verify correct connection routing
-   - [ ] Ensure no cross-talk between instances
-   - [ ] Confirm each instance updates independently
-
-### Deep Cleanup Completed
-1. ✅ Removed all debug/test code from scripts
-2. ✅ Standardized logging pattern across all scripts
-3. ✅ Fixed pcall error (not available in TouchOSC)
-4. ✅ Updated documentation with logging pattern
-5. ✅ All scripts now log to both console AND logger text
-
-### Logging Pattern Summary
-Each script uses a consistent pattern:
-- **Group**: "CONTROL(groupname): message"
-- **Refresh Button**: "REFRESH BUTTON: message"
-- **Fader**: "FADER(parent): message"
-- **Meter**: "METER(parent): message"
-- **Mute**: "MUTE(parent): message"
-- **Pan**: "PAN(parent): message"
-
-### Documentation Updated
-- **touchosc-lua-rules.md**: Added centralized logging pattern (Rule #11)
-- Added pcall limitation documentation (Rule #16)
-- Updated testing checklist
-
-## Key Architecture Decisions
-1. **Centralized Logging**: All scripts use notify() to send logs to document script
-2. **Context Prefixes**: Each log includes context for debugging
-3. **Console Backup**: All logs also print to console for development
-4. **Version Logging**: Every script logs its version on init
-5. **Document Script Required**: Must be v2.5.9+ for log_message handler
+## Key Fix Applied
+The fader script was trying to call functions from the document script, which is impossible in TouchOSC due to script isolation. Fixed by:
+1. Removed attempt to call `documentScript.getConnectionForInstance()`
+2. Added local `getConnectionIndex()` function that reads configuration directly
+3. Now parses parent's tag and reads config text just like group script does
 
 ## Next Steps
-1. Test track group initialization with logging
-2. Verify all control scripts function correctly
-3. Test with multiple Ableton instances
-4. Collect logs showing successful operations
-5. Fix any issues found during testing
+1. User needs to reload TouchOSC with updated fader script (v2.2.0)
+2. Test fader functionality:
+   - Check version logged as v2.2.0
+   - Move fader and verify volume changes
+   - Check logs for proper operation
+   - Verify OSC sent to connection 2 only
+3. Once fader works, add and test remaining controls:
+   - Meter display
+   - Mute button
+   - Pan control
 
-## Testing Checklist
-- [x] Document script v2.5.9 handles log_message
-- [x] All control scripts use centralized logging
-- [ ] Track groups initialize properly
-- [ ] Faders control volume
-- [ ] Meters show levels
-- [ ] Mute buttons work
-- [ ] Pan controls function
-- [ ] Multi-Ableton routing verified
-- [ ] No cross-talk between instances
-- [ ] All operations logged properly
+## Configuration Reminder
+Current real-world configuration:
+```
+connection_band: 2
+connection_master: 3
+```
+
+## Testing Checklist for band_CG #
+- [x] Group initializes correctly
+- [x] Refresh maps track successfully
+- [ ] Fader controls volume (v2.2.0 needs testing)
+- [ ] Meter shows levels
+- [ ] Mute button works
+- [ ] Pan control works
+- [ ] All logs use centralized logging
+- [ ] No cross-talk with other connections
 
 ## Summary
-The centralized logging system is implemented but NOT fully tested. We need to:
-1. Test track group script functionality
-2. Verify all control scripts work correctly
-3. Test with multiple Ableton instances
-4. Collect comprehensive logs showing everything works
+We've identified and fixed the script isolation issue. The fader script now properly reads the configuration directly instead of trying to call functions from other scripts. Ready to continue testing once the user reloads with the updated script.
