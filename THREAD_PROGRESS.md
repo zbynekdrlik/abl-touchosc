@@ -6,6 +6,7 @@
 - [x] Meter fully working with calibration preserved (v2.2.2)
 - [x] Group script fixed - no visual corruption (v1.9.6)
 - [x] Track label working correctly (shows "CG" or "???")
+- [x] Mute button script updated to v1.2.0 with all fixes
 - [ ] Currently: Ready to test mute button
 - [ ] Waiting for: User to add mute control to band_CG # group
 - [ ] Blocked by: None
@@ -51,8 +52,17 @@
 - ✅ Shows "???" when track not found
 - ✅ Updates correctly on refresh
 
+### Mute Button (Updated v1.2.0)
+- ✅ Script verified and updated to v1.2.0
+- ✅ Fixed script isolation violations (removed documentScript calls)
+- ✅ Self-contained configuration reading
+- ✅ Removed all color changes (preserves visual design)
+- ✅ Proper connection routing implemented
+- ✅ Touch detection to prevent feedback loops
+- ✅ Centralized logging pattern
+- ⏳ Ready to test
+
 ### Remaining Controls to Test
-- ⏳ Mute button - Ready to add
 - ⏳ Pan control - Not tested
 
 ## Mute Button Setup Instructions
@@ -60,7 +70,7 @@
 1. Add a **Button** control to band_CG # group
 2. Name it exactly: **mute**
 3. Set OSC receive pattern to: `/live/track/get/mute`
-4. Attach script: mute_button.lua (v1.1.0)
+4. Attach script: scripts/track/mute_button.lua (v1.2.0)
 
 ## Critical Issues Fixed in This Thread
 
@@ -94,13 +104,18 @@
 **Solution**: Fixed runtime error with pairs() on children userdata
 **Fixed in**: group v1.9.6
 
+### 7. Mute Button Script Issues
+**Problem**: Original script had multiple issues - script isolation violations, color changes, old logging pattern
+**Solution**: Complete rewrite following all learnings from other scripts
+**Fixed in**: mute_button v1.2.0
+
 ## Script Versions
 - **document_script.lua**: v2.5.9 ✅ (centralized logging working)
 - **group_init.lua**: v1.9.6 ✅ (fixed runtime errors, label working)
 - **global_refresh_button.lua**: v1.4.0 ✅ (tested and working)
 - **fader_script.lua**: v2.3.4 ✅ (FULLY TESTED AND WORKING)
 - **meter_script.lua**: v2.2.2 ✅ (FULLY TESTED AND WORKING)
-- **mute_button.lua**: v1.1.0 ❌ (not tested)
+- **mute_button.lua**: v1.2.0 ✅ (UPDATED - ready to test)
 - **pan_control.lua**: v1.1.0 ❌ (not tested)
 
 ## Key Learnings
@@ -136,6 +151,12 @@ Scripts that need connection info must:
 - Must access children directly by name
 - Use safe access patterns to avoid runtime errors
 
+### Mute Button Specific
+- Button state: x=0 when muted/pressed, x=1 when unmuted
+- Text changes: "MUTE" when unmuted, "MUTED" when muted
+- Don't change colors - only text
+- Track touch state to prevent feedback loops
+
 ## Next Steps
 1. Add mute button to band_CG # group
 2. Test mute functionality with multi-connection routing
@@ -165,4 +186,12 @@ connection_master: 3
 - [x] No cross-talk with other connections
 
 ## Summary
-Major progress! Fader, meter, and track label all working perfectly with multi-connection routing. Visual design preserved. Ready to test mute button and complete the band group functionality.
+Mute button script has been thoroughly verified and updated to v1.2.0. All issues from the original script have been fixed:
+- Removed script isolation violations
+- Implemented self-contained configuration reading
+- Removed all color changes to preserve visual design
+- Added proper connection routing
+- Implemented centralized logging pattern
+- Added touch detection to prevent loops
+
+Ready for testing!
