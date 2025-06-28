@@ -1,10 +1,9 @@
 -- TouchOSC Pan Control Script
--- Version: 1.0.0
--- Phase: 01 (Connection-aware) - Checks parent group mapping and routes to correct connection
+-- Version: 1.1.0
+-- Added: Centralized logging through document script
 
--- CRITICAL VERSION LOGGING - DO NOT REMOVE
-local VERSION = "1.0.0"
-print("[" .. os.date("%H:%M:%S") .. "] Pan Control Script v" .. VERSION .. " loaded")
+-- Version constant
+local VERSION = "1.1.0"
 
 -- ===========================
 -- CONFIGURATION SECTION
@@ -35,6 +34,34 @@ local hasMoved = false             -- Has user moved control since touching?
 
 -- Reference to document script for connection routing
 local documentScript = nil
+
+-- ===========================
+-- LOGGING
+-- ===========================
+
+-- Centralized logging through document script
+local function log(message)
+    -- Get parent name for context
+    local context = "PAN"
+    if self.parent and self.parent.name then
+        context = "PAN(" .. self.parent.name .. ")"
+    end
+    
+    -- Send to document script for logger text update
+    root:notify("log_message", context .. ": " .. message)
+    
+    -- Also print to console for development/debugging
+    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
+end
+
+-- Debug logging (only if DEBUG_MODE is true)
+local function debugLog(...)
+    if DEBUG_MODE then
+        local args = {...}
+        local msg = table.concat(args, " ")
+        log("[DEBUG] " .. msg)
+    end
+end
 
 -- ===========================
 -- UTILITY FUNCTIONS
@@ -119,16 +146,6 @@ local function isTrackMapped()
     -- Check for instance:trackNumber format
     local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
     return instance ~= nil and trackNum ~= nil
-end
-
--- ===========================
--- DEBUG LOGGING
--- ===========================
-
-local function debugLog(...)
-    if DEBUG_MODE then
-        print("[PanControl]", ...)
-    end
 end
 
 -- ===========================
@@ -396,14 +413,18 @@ end
 -- ===========================
 
 function init()
+    -- Log version
+    log("Script v" .. VERSION .. " loaded")
+    
     -- Ensure we're starting at center
     self.values.x = 0.5
     displayValue = 0.5
     targetValue = 0.5
     
-    -- Log initialization with version
-    print("[" .. os.date("%H:%M:%S") .. "] Pan control initialized for parent: " .. 
-        (self.parent and self.parent.name or "unknown") .. " (v" .. VERSION .. ")")
+    -- Log parent info
+    if self.parent and self.parent.name then
+        log("Initialized for parent: " .. self.parent.name)
+    end
     
     -- Set initial interactive state based on track mapping
     if not isTrackMapped() then
