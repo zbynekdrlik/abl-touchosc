@@ -1,126 +1,110 @@
 -- mute_button.lua
--- Version: 1.3.1
--- Fixed: root access timing issue
+-- Version: 1.4.0
+-- Simplified to match working fader pattern
 
-local scriptVersion = "1.3.1"
+local VERSION = "1.4.0"
 local debugMode = false
-
--- Logging helper with safety checks
-local function log(control, message, isDebug)
-    if isDebug and not debugMode then return end
-    
-    -- Safety check for root
-    if not control or not control.root then
-        print("[mute_button] " .. message)
-        return
-    end
-    
-    local logControl = control.root:findByName("log_display", true)
-    if logControl then
-        notify(logControl, "log", "[mute_button] " .. message)
-    else
-        print("[mute_button] " .. message)
-    end
-end
-
--- Initialize function (called when control is ready)
-function init()
-    -- Delay initialization slightly to ensure hierarchy is ready
-    if not self.root then
-        print("[mute_button] Waiting for root...")
-        return
-    end
-    
-    log(self, "Script version " .. scriptVersion .. " loaded")
-    
-    -- Log parent group info
-    if self.parent and self.parent.tag then
-        log(self, "Parent tag: " .. tostring(self.parent.tag))
-    end
-end
-
--- Helper to read configuration
-local function getConfiguration(control)
-    if not control or not control.root then return nil end
-    
-    local configControl = control.root:findByName("configuration", true)
-    if not configControl then
-        log(control, "Configuration control not found", false)
-        return nil
-    end
-    
-    local configText = configControl.values.text
-    if not configText or configText == "" then
-        log(control, "Configuration text is empty", false)
-        return nil
-    end
-    
-    local config = {}
-    for line in configText:gmatch("[^\r\n]+") do
-        local key, value = line:match("^(%w+):%s*(.+)$")
-        if key and value then
-            config[key] = value
-        end
-    end
-    
-    return config
-end
-
--- Helper to extract track number and instance from tag
-local function extractTrackInfo(tag)
-    if not tag then return nil, nil end
-    
-    -- Handle new format "instance:track" (e.g., "band:39")
-    local instance, track = tag:match("^(%w+):(%d+)$")
-    if track then
-        return tonumber(track), instance
-    end
-    
-    -- Handle old format (just number)
-    local trackNum = tonumber(tag)
-    if trackNum then
-        return trackNum, nil
-    end
-    
-    return nil, nil
-end
-
--- Helper to get connection index for instance
-local function getConnectionForInstance(control, instance)
-    local config = getConfiguration(control)
-    if not config then return nil end
-    
-    local connectionKey = "connection_" .. (instance or "band")
-    return tonumber(config[connectionKey])
-end
-
--- Helper to send OSC with connection routing
-local function sendOSCRouted(control, path, ...)
-    local trackNumber, instance = extractTrackInfo(control.parent.tag)
-    if not trackNumber then
-        log(control, "Cannot send OSC: no track number", false)
-        return
-    end
-    
-    local connectionNumber = getConnectionForInstance(control, instance)
-    if not connectionNumber then
-        log(control, "Cannot send OSC: connection not found for " .. (instance or "band"), false)
-        return
-    end
-    
-    -- Create connection table
-    local connectionTable = {}
-    connectionTable[connectionNumber] = true
-    
-    log(control, "Sending " .. path .. " on connection " .. connectionNumber, true)
-    sendOSC(path, {...}, connectionTable)
-end
 
 -- State tracking
 local currentMuteState = false
 local lastPressTime = 0
 local DEBOUNCE_TIME = 50  -- ms
-local initialized = false
+
+-- Logging (copied from working fader)
+local function log(message)
+    -- Get parent name for context
+    local context = "MUTE"
+    if self.parent and self.parent.name then
+        context = "MUTE(" .. self.parent.name .. ")"
+    end
+    
+    -- Send to document script for logger text update
+    root:notify("log_message", context .. ": " .. message)
+    
+    -- Also print to console for development/debugging
+    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
+end
+
+-- Debug logging
+local function debugLog(message)
+    if debugMode then
+        log("[DEBUG] " .. message)
+    end
+end
+
+-- Get connection configuration (copied from fader)
+local function getConnectionIndex()
+    -- Check if parent has tag with instance:trackNumber format
+    if self.parent and self.parent.tag then
+        local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
+        if instance then
+            -- Find configuration object
+            local configObj = root:findByName("configuration", true)
+            if not configObj or not configObj.values or not configObj.values.text then
+                debugLog("Warning: No configuration found, using default connection 1")
+                return 1
+            end
+            
+            local configText = configObj.values.text
+            local searchKey = "connection_" .. instance .. ":"
+            
+            -- Parse configuration text
+            for line in configText:gmatch("[^\r\n]+") do
+                line = line:match("^%s*(.-)%s*$")  -- Trim whitespace
+                if line:sub(1, #searchKey) == searchKey then
+                    local value = line:sub(#searchKey + 1):match("^%s*(.-)%s*$")
+                    return tonumber(value) or 1
+                end
+            end
+            
+            debugLog("Warning: No config for " .. instance .. " - using default (1)")
+            return 1
+        end
+    end
+    
+    -- Fallback to default
+    return 1
+end
+
+-- Build connection table for OSC routing
+local function buildConnectionTable(index)
+    local connections = {}
+    for i = 1, 10 do
+        connections[i] = (i == index)
+    end
+    return connections
+end
+
+-- Get track number from parent group
+local function getTrackNumber()
+    -- Parent stores combined tag like "band:39"
+    if self.parent and self.parent.tag then
+        local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
+        if trackNum then
+            return tonumber(trackNum)
+        end
+    end
+    return nil
+end
+
+-- Check if track is properly mapped
+local function isTrackMapped()
+    -- If parent doesn't have proper tag format, it's not mapped
+    if not self.parent or not self.parent.tag then
+        return false
+    end
+    
+    -- Check for instance:trackNumber format
+    local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
+    return instance ~= nil and trackNum ~= nil
+end
+
+-- Send OSC with connection routing
+local function sendOSCRouted(path, track, value)
+    local connectionIndex = getConnectionIndex()
+    local connections = buildConnectionTable(connectionIndex)
+    sendOSC(path, track, value, connections)
+end
 
 -- Handle OSC messages
 function onReceiveOSC(message, connections)
@@ -128,20 +112,16 @@ function onReceiveOSC(message, connections)
     local arguments = message[2]
     
     if path == '/live/track/get/mute' then
-        -- Extract track info from parent tag
-        local trackNumber, instance = extractTrackInfo(self.parent.tag)
-        if not trackNumber then
-            log(self, "No track number in parent tag", true)
-            return
+        local myTrackNumber = getTrackNumber()
+        if not myTrackNumber then
+            return false
         end
         
         -- Check if this message is for our track
-        if arguments[1] and arguments[1].value == trackNumber then
-            -- Get expected connection
-            local expectedConnection = getConnectionForInstance(self, instance)
-            
+        if arguments[1] and arguments[1].value == myTrackNumber then
             -- Check if message came from expected connection
-            if expectedConnection and connections[expectedConnection] then
+            local expectedConnection = getConnectionIndex()
+            if connections[expectedConnection] then
                 -- Update button state
                 local isMuted = arguments[2] and arguments[2].value == 1
                 currentMuteState = isMuted
@@ -149,18 +129,25 @@ function onReceiveOSC(message, connections)
                 -- Update visual state (x=0 when muted/pressed, x=1 when unmuted)
                 self.values.x = isMuted and 0 or 1
                 
-                log(self, "Track " .. trackNumber .. " mute state: " .. 
-                    (isMuted and "MUTED" or "UNMUTED"), true)
+                debugLog("Track " .. myTrackNumber .. " mute state: " .. 
+                    (isMuted and "MUTED" or "UNMUTED"))
             else
-                log(self, "Ignoring mute for track " .. trackNumber .. 
-                    " from wrong connection", true)
+                debugLog("Ignoring mute for track " .. myTrackNumber .. 
+                    " from wrong connection")
             end
         end
     end
+    
+    return false
 end
 
 -- Handle button press
 function onValueChanged(key)
+    -- Safety check: only process if track is mapped
+    if not isTrackMapped() then
+        return
+    end
+    
     if key == "touch" and self.values.touch then
         -- Debounce check
         local now = getMillis()
@@ -169,16 +156,16 @@ function onValueChanged(key)
         end
         lastPressTime = now
         
-        local trackNumber, instance = extractTrackInfo(self.parent.tag)
+        local trackNumber = getTrackNumber()
         if trackNumber then
             -- Toggle mute state
             local newMuteState = not currentMuteState
             local muteValue = newMuteState and 1 or 0
             
-            log(self, "Sending mute " .. (newMuteState and "ON" or "OFF") .. 
-                " for track " .. trackNumber, false)
+            log("Sending mute " .. (newMuteState and "ON" or "OFF") .. 
+                " for track " .. trackNumber)
             
-            sendOSCRouted(self, "/live/track/set/mute", trackNumber, muteValue)
+            sendOSCRouted("/live/track/set/mute", trackNumber, muteValue)
         end
     end
 end
@@ -189,17 +176,23 @@ function onReceiveNotify(key, value)
         -- Reset state when track changes
         currentMuteState = false
         self.values.x = 1
-        log(self, "Track changed - reset mute button", true)
+        debugLog("Track changed - reset mute button")
     elseif key == "track_unmapped" then
-        -- Button will be disabled by parent, just log
-        log(self, "Track unmapped - mute button disabled", true)
+        -- Button will be disabled by parent
+        debugLog("Track unmapped - mute button disabled")
     end
 end
 
--- Update function to handle delayed initialization
-function update()
-    if not initialized and self.root then
-        initialized = true
-        init()
+-- Initialize
+function init()
+    -- Log version
+    log("Script v" .. VERSION .. " loaded")
+    
+    -- Log parent info
+    if self.parent and self.parent.name then
+        log("Initialized for parent: " .. self.parent.name)
     end
 end
+
+-- Call init directly (like fader does)
+init()
