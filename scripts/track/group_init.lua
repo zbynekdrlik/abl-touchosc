@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.9.5
--- Fixed: Ensure track_label updates even when refresh returns early
+-- Version: 1.9.6
+-- Fixed: Runtime error with pairs() on children userdata
 
 -- Version constant
-local SCRIPT_VERSION = "1.9.5"
+local SCRIPT_VERSION = "1.9.6"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -139,6 +139,19 @@ local function clearListeners()
     end
 end
 
+-- Notify specific children about events
+local function notifyChildren(event, value)
+    -- Notify specific children we know about
+    local childrenToNotify = {"fader", "mute", "pan", "meter"}
+    
+    for _, name in ipairs(childrenToNotify) do
+        local child = getChild(self, name)
+        if child and child.notify then
+            child:notify(event, value)
+        end
+    end
+end
+
 function init()
     -- Set tag programmatically
     self.tag = "trackGroup"
@@ -156,28 +169,6 @@ function init()
     
     -- Set initial status
     updateStatus("error")
-    
-    -- Debug: Check if track_label exists
-    if self.children then
-        if self.children["track_label"] then
-            log("track_label found in init")
-            if self.children["track_label"].values and self.children["track_label"].values.text ~= nil then
-                log("track_label has values.text property")
-            else
-                log("WARNING: track_label missing values.text property")
-            end
-        else
-            log("WARNING: track_label not found in children")
-            -- List all children for debugging
-            local childList = {}
-            for name, _ in pairs(self.children) do
-                table.insert(childList, name)
-            end
-            log("Available children: " .. table.concat(childList, ", "))
-        end
-    else
-        log("WARNING: No children found")
-    end
     
     log("Ready - waiting for refresh")
 end
@@ -231,15 +222,6 @@ function onReceiveOSC(message, connections)
             
             local trackFound = false
             
-            -- Debug: Log all track names received
-            log("Searching for track: '" .. trackName .. "'")
-            log("Available tracks:")
-            for i = 1, #arguments do
-                if arguments[i] and arguments[i].value then
-                    log("  Track " .. (i-1) .. ": '" .. arguments[i].value .. "'")
-                end
-            end
-            
             for i = 1, #arguments do
                 if arguments[i] and arguments[i].value then
                     local trackNameValue = arguments[i].value
@@ -260,14 +242,8 @@ function onReceiveOSC(message, connections)
                         -- Store combined info in tag
                         self.tag = instance .. ":" .. trackNumber
                         
-                        -- Notify all child controls that track is mapped
-                        if self.children then
-                            for name, child in pairs(self.children) do
-                                if child and child.notify then
-                                    child:notify("track_changed", trackNumber)
-                                end
-                            end
-                        end
+                        -- Notify children using safe method
+                        notifyChildren("track_changed", trackNumber)
                         
                         -- Build connection table for our specific connection
                         local targetConnections = buildConnectionTable(connectionIndex)
@@ -283,14 +259,10 @@ function onReceiveOSC(message, connections)
                             -- Use pattern match that captures only word characters like original
                             local displayName = trackName:match("(%w+)")
                             if displayName then
-                                log("Setting track_label to: '" .. displayName .. "'")
                                 self.children["track_label"].values.text = displayName
                             else
-                                log("Setting track_label to full name: '" .. trackName .. "'")
                                 self.children["track_label"].values.text = trackName
                             end
-                        else
-                            log("WARNING: Cannot update track_label - not found")
                         end
                         break
                     end
@@ -304,30 +276,13 @@ function onReceiveOSC(message, connections)
                 setGroupEnabled(false)  -- Keep disabled for safety
                 trackNumber = nil  -- Clear any old track number
                 
-                -- Notify children about unmapping
-                if self.children then
-                    for name, child in pairs(self.children) do
-                        if child and child.notify then
-                            child:notify("track_unmapped")
-                        end
-                    end
-                end
+                -- Notify children using safe method
+                notifyChildren("track_unmapped", nil)
                 
                 -- Update label to show error using direct access
-                log("Attempting to set track_label to '???' (track not found)")
-                if self.children then
-                    if self.children["track_label"] then
-                        if self.children["track_label"].values and self.children["track_label"].values.text ~= nil then
-                            self.children["track_label"].values.text = "???"
-                            log("track_label set to '???' successfully")
-                        else
-                            log("ERROR: track_label exists but has no values.text property")
-                        end
-                    else
-                        log("ERROR: track_label not found in children")
-                    end
-                else
-                    log("ERROR: No children found on group")
+                if self.children and self.children["track_label"] then
+                    self.children["track_label"].values.text = "???"
+                    log("track_label set to '???' (track not found)")
                 end
             end
             
