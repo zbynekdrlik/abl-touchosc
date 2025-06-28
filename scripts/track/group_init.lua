@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.5.5
--- Fixed: Delay initial logging to ensure logger is ready
+-- Version: 1.5.6
+-- Fixed: Don't touch control values, only visual state. Fix child names.
 
 -- Version constant
-local SCRIPT_VERSION = "1.5.5"
+local SCRIPT_VERSION = "1.5.6"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -109,26 +109,21 @@ local function setGroupEnabled(enabled, silent)
     while self.children[i] do
         local child = self.children[i]
         
-        -- Skip status indicators and labels
-        if child.name ~= "status_indicator" and child.name ~= "track_label" then
+        -- Process all controls except status indicators
+        if child.name ~= "status_indicator" and child.name ~= "status" then
             -- Disable interaction
             child.interactive = enabled
             
-            -- Visual feedback - dim when disabled
-            if child.color then
-                if enabled then
-                    -- Restore normal appearance
-                    child.color = Color(1, 1, 1, 1)
-                else
-                    -- Dim to show disabled
-                    child.color = Color(0.3, 0.3, 0.3, 0.5)
-                end
+            -- Visual feedback - adjust opacity
+            if enabled then
+                -- Restore normal appearance
+                child.alpha = 1.0
+            else
+                -- Dim to show disabled (but don't change values!)
+                child.alpha = 0.3
             end
             
-            -- For faders specifically, reset to 0 when disabled
-            if not enabled and child.values and child.values.x then
-                child.values.x = 0
-            end
+            -- DON'T TOUCH THE VALUES! No resetting faders or anything
             
             childCount = childCount + 1
         end
@@ -144,13 +139,22 @@ end
 
 -- Update visual status (minimal - just LED if present)
 local function updateStatus(status)
-    if self.children and self.children.status_indicator then
+    -- Try different common names for status indicator
+    local indicator = nil
+    if self.children then
+        indicator = self.children.status_indicator or 
+                   self.children.status or 
+                   self.children.led or
+                   self.children.indicator
+    end
+    
+    if indicator then
         if status == "ok" then
-            self.children.status_indicator.color = Color(0, 1, 0, 1)  -- Green
+            indicator.color = Color(0, 1, 0, 1)  -- Green
         elseif status == "error" then
-            self.children.status_indicator.color = Color(1, 0, 0, 1)  -- Red
+            indicator.color = Color(1, 0, 0, 1)  -- Red
         elseif status == "stale" then
-            self.children.status_indicator.color = Color(1, 0.5, 0, 1)  -- Orange
+            indicator.color = Color(1, 0.5, 0, 1)  -- Orange
         end
     end
 end
@@ -271,11 +275,19 @@ function onReceiveOSC(message, connections)
                         sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
                         sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
                         
-                        -- Update label if it exists
-                        if self.children and self.children.track_label then
+                        -- Update label if it exists - try common names
+                        local label = nil
+                        if self.children then
+                            label = self.children.label or 
+                                   self.children.track_label or
+                                   self.children.name or
+                                   self.children.text
+                        end
+                        
+                        if label and label.values and label.values.text ~= nil then
                             local displayName = trackName:match("([^#]+)") or trackName
                             displayName = displayName:gsub("^%s*(.-)%s*$", "%1")  -- Trim whitespace
-                            self.children.track_label.values.text = displayName
+                            label.values.text = displayName
                         end
                         break
                     end
@@ -288,8 +300,17 @@ function onReceiveOSC(message, connections)
                 setGroupEnabled(false)  -- Keep disabled for safety
                 trackNumber = nil  -- Clear any old track number
                 
-                if self.children and self.children.track_label then
-                    self.children.track_label.values.text = "???"
+                -- Update label to show error
+                local label = nil
+                if self.children then
+                    label = self.children.label or 
+                           self.children.track_label or
+                           self.children.name or
+                           self.children.text
+                end
+                
+                if label and label.values and label.values.text ~= nil then
+                    label.values.text = "???"
                 end
             end
             
