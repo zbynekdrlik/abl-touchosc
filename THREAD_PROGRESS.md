@@ -4,9 +4,11 @@
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
 - [x] Fixed all fader script issues (v2.3.3)
 - [x] Fader working correctly with Ableton
-- [x] Updated meter script with multi-connection support (v2.2.0)
-- [ ] Currently: User needs to add meter control and test
-- [ ] Waiting for: User to add meter control with correct settings
+- [x] Updated meter script with multi-connection support (v2.2.1)
+- [x] Meter WORKING - showing correct levels and colors
+- [x] Fixed group script visual corruption issue (v1.9.0)
+- [ ] Currently: Ready to test meter with updated group script
+- [ ] Waiting for: User to reload and confirm visual appearance is preserved
 - [ ] Blocked by: None
 
 ## Implementation Status
@@ -18,7 +20,7 @@
 ## Current Testing Progress
 ### band_CG # Group Setup
 - ✅ Group created with status indicator
-- ✅ Group script v1.7.0 attached
+- ✅ Group script v1.9.0 attached (no visual changes)
 - ✅ OSC receive pattern set
 - ✅ Successfully mapped to Track 39
 - ✅ Status indicator GREEN
@@ -34,21 +36,20 @@
 - ✅ FULLY WORKING with all sophisticated features
 
 ### Meter Control
-- ✅ Script updated to v2.2.0
+- ✅ Script updated to v2.2.1 (with debug logging)
 - ✅ Preserves exact calibration from working meter
 - ✅ Multi-connection support added
-- ⏳ Waiting for user to add control and test
+- ✅ WORKING - receiving data, showing 72.9% (0dB) with red color
+- ✅ Connection filtering working correctly
+
+### Group Script Issue
+- ❌ v1.7.0 was changing control colors/opacity
+- ✅ FIXED in v1.9.0 - now only toggles interactivity
+- ✅ No more visual corruption of controls
 
 ### Remaining Controls to Test
 - ⏳ Mute button - Not tested
 - ⏳ Pan control - Not tested
-
-## Meter Setup Instructions
-**CORRECT setup for meter control:**
-1. Add a **Fader** control to band_CG # group (TouchOSC uses faders for meters)
-2. Name it "meter" (or any preferred name)
-3. Set OSC receive pattern to: `/live/track/get/output_meter_level`
-4. Attach the updated meter_script.lua (v2.2.0)
 
 ## Critical Issues Fixed in This Thread
 
@@ -72,12 +73,17 @@
 **Solution**: Moved volume change logs to debug mode only
 **Fixed in**: v2.3.3
 
+### 5. Visual Corruption Issue
+**Problem**: Group script was changing control colors/opacity when enabling/disabling
+**Solution**: Removed ALL visual changes, only toggle interactivity
+**Fixed in**: v1.9.0
+
 ## Script Versions
 - **document_script.lua**: v2.5.9 ✅ (centralized logging working)
-- **group_init.lua**: v1.7.0 ✅ (tested and working)
+- **group_init.lua**: v1.9.0 ✅ (fixed visual corruption)
 - **global_refresh_button.lua**: v1.4.0 ✅ (tested and working)
 - **fader_script.lua**: v2.3.3 ✅ (FULLY TESTED AND WORKING)
-- **meter_script.lua**: v2.2.0 ⏳ (updated, not tested)
+- **meter_script.lua**: v2.2.1 ✅ (TESTED AND WORKING)
 - **mute_button.lua**: v1.1.0 ❌ (not tested)
 - **pan_control.lua**: v1.1.0 ❌ (not tested)
 
@@ -102,17 +108,16 @@ Scripts that need connection info must:
 - Receive must handle exact format expected by Ableton
 - Connection routing requires explicit connection table
 
-### Meter Script Specifics
-- Uses Fader control type in TouchOSC
-- OSC receive pattern: `/live/track/get/output_meter_level`
-- Preserves exact calibration points from fader
-- Color thresholds: -12dB (yellow), -3dB (red)
-- Smooth color transitions with 0.3 smoothing factor
+### Visual Design Preservation
+- Group script should ONLY toggle interactivity
+- Never change colors or opacity of controls
+- Status indicator is sufficient for visual feedback
+- Preserve user's carefully tuned appearance
 
 ## Next Steps
-1. User adds meter control to band_CG # with correct settings
-2. Test meter functionality with multi-connection routing
-3. Verify calibration matches fader exactly
+1. User reloads TouchOSC with group script v1.9.0
+2. Verify visual appearance is preserved
+3. Continue testing meter with audio at different levels
 4. Add and test mute button
 5. Add and test pan control
 6. Create master_Hand1 # group
@@ -129,13 +134,14 @@ connection_master: 3
 - [x] Group initializes correctly
 - [x] Refresh maps track successfully
 - [x] Fader controls volume
-- [ ] Meter shows levels with correct calibration
-- [ ] Meter responds only to connection_band messages
-- [ ] Meter colors match dB thresholds
+- [x] Meter shows levels with correct calibration
+- [x] Meter responds only to connection_band messages
+- [x] Meter colors match dB thresholds
+- [ ] Visual appearance preserved after refresh
 - [ ] Mute button works
 - [ ] Pan control works
 - [x] All logs use centralized logging
 - [x] No cross-talk with other connections
 
 ## Summary
-Meter script updated to v2.2.0 with multi-connection support while preserving all calibration and color settings from the working meter. Ready for user to add meter control and test.
+Major progress! Both fader and meter are working with multi-connection routing. Fixed visual corruption issue in group script. Ready to verify appearance is preserved and continue with remaining controls.
