@@ -1,11 +1,14 @@
 -- TouchOSC Global Refresh Button Script
--- Version: 1.2.1
+-- Version: 1.2.2
 -- Notifies document script to perform refresh
+-- Fixed: Visual feedback now visible with delayed color reset
 
-local SCRIPT_VERSION = "1.2.1"
+local SCRIPT_VERSION = "1.2.2"
 
 -- Store last tap time to prevent double triggers
 local lastTapTime = 0
+local colorResetTime = 0
+local needsColorReset = false
 
 function onValueChanged(valueName)
     -- Handle both button-style (touch) and label-style (x) touches
@@ -17,14 +20,23 @@ function onValueChanged(valueName)
         end
         lastTapTime = currentTime
         
-        -- Visual feedback
+        -- Visual feedback - bright yellow
         self.color = Color(1, 1, 0, 1)  -- Yellow while refreshing
+        
+        -- Schedule color reset for later
+        colorResetTime = currentTime + 0.3  -- Hold yellow for 300ms
+        needsColorReset = true
         
         -- Notify document script to refresh all groups
         root:notify("refresh_all_groups")
-        
-        -- Reset color after a short delay
+    end
+end
+
+function update()
+    -- Check if we need to reset color
+    if needsColorReset and os.clock() >= colorResetTime then
         self.color = Color(0.5, 0.5, 0.5, 1)  -- Back to gray
+        needsColorReset = false
     end
 end
 
@@ -35,4 +47,7 @@ function init()
     if self.values and type(self.values) == "table" and self.values.text ~= nil then
         self.values.text = "REFRESH ALL"
     end
+    
+    -- Set initial color
+    self.color = Color(0.5, 0.5, 0.5, 1)  -- Gray
 end
