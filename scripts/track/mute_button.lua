@@ -1,8 +1,8 @@
 -- mute_button.lua
--- Version: 1.6.0
--- Step 1: Simple receive-only version
+-- Version: 1.6.1
+-- Step 1: Simple receive-only version (no x initialization)
 
-local VERSION = "1.6.0"
+local VERSION = "1.6.1"
 
 -- Logging
 local function log(message)
@@ -54,4 +54,3 @@ end
 
 -- Initialize
 log("Script v" .. VERSION .. " loaded (receive-only)")
-self.values.x = 1  -- Start unmuted
