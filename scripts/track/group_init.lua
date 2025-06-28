@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.6.3
--- Fixed: Only process controls that exist, no warnings
+-- Version: 1.6.4
+-- Fixed: Check control existence before accessing, simplified approach
 
 -- Version constant
-local SCRIPT_VERSION = "1.6.3"
+local SCRIPT_VERSION = "1.6.4"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -61,6 +61,17 @@ local function parseGroupName(name)
     end
 end
 
+-- Safe child access helper
+local function getChild(parent, name)
+    if parent and parent.children then
+        local success, child = pcall(function() return parent.children[name] end)
+        if success then
+            return child
+        end
+    end
+    return nil
+end
+
 -- Enable/disable all controls in the group
 local function setGroupEnabled(enabled, silent)
     -- Skip if state hasn't changed to prevent spam
@@ -77,32 +88,28 @@ local function setGroupEnabled(enabled, silent)
     
     local childCount = 0
     
-    -- Process ALL children except status_indicator
-    -- This avoids hardcoding names and warnings about missing controls
-    if type(self.children) == "userdata" then
-        -- TouchOSC children collection - we'll check specific known names
-        local knownControls = {"fader", "mute", "pan", "meter", "solo", "label", "track_label"}
-        
-        for _, name in ipairs(knownControls) do
-            local child = self.children[name]
-            if child and name ~= "status_indicator" then
-                -- Disable interaction
-                child.interactive = enabled
-                
-                -- Visual feedback - use color with transparency
-                if child.color then
-                    local r, g, b = child.color.r, child.color.g, child.color.b
-                    if enabled then
-                        -- Restore full opacity
-                        child.color = Color(r, g, b, 1.0)
-                    else
-                        -- Dim with transparency (but don't change values!)
-                        child.color = Color(r, g, b, 0.3)
-                    end
+    -- Only check for controls we know exist
+    local controlsToCheck = {"fader", "mute", "pan", "meter", "track_label"}
+    
+    for _, name in ipairs(controlsToCheck) do
+        local child = getChild(self, name)
+        if child and name ~= "status_indicator" then
+            -- Disable interaction
+            child.interactive = enabled
+            
+            -- Visual feedback - use color with transparency
+            if child.color then
+                local r, g, b = child.color.r, child.color.g, child.color.b
+                if enabled then
+                    -- Restore full opacity
+                    child.color = Color(r, g, b, 1.0)
+                else
+                    -- Dim with transparency (but don't change values!)
+                    child.color = Color(r, g, b, 0.3)
                 end
-                
-                childCount = childCount + 1
             end
+            
+            childCount = childCount + 1
         end
     end
     
@@ -114,13 +121,14 @@ end
 
 -- Update visual status (minimal - just LED if present)
 local function updateStatus(status)
-    if self.children and self.children.status_indicator then
+    local indicator = getChild(self, "status_indicator")
+    if indicator then
         if status == "ok" then
-            self.children.status_indicator.color = Color(0, 1, 0, 1)  -- Green
+            indicator.color = Color(0, 1, 0, 1)  -- Green
         elseif status == "error" then
-            self.children.status_indicator.color = Color(1, 0, 0, 1)  -- Red
+            indicator.color = Color(1, 0, 0, 1)  -- Red
         elseif status == "stale" then
-            self.children.status_indicator.color = Color(1, 0.5, 0, 1)  -- Orange
+            indicator.color = Color(1, 0.5, 0, 1)  -- Orange
         end
     end
 end
@@ -231,11 +239,12 @@ function onReceiveOSC(message, connections)
                         sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
                         sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
                         
-                        -- Update label if it exists - EXACT name only
-                        if self.children and self.children.track_label then
+                        -- Update label if it exists
+                        local label = getChild(self, "track_label")
+                        if label then
                             local displayName = trackName:match("([^#]+)") or trackName
                             displayName = displayName:gsub("^%s*(.-)%s*$", "%1")  -- Trim whitespace
-                            self.children.track_label.values.text = displayName
+                            label.values.text = displayName
                         end
                         break
                     end
@@ -248,8 +257,9 @@ function onReceiveOSC(message, connections)
                 setGroupEnabled(false)  -- Keep disabled for safety
                 trackNumber = nil  -- Clear any old track number
                 
-                if self.children and self.children.track_label then
-                    self.children.track_label.values.text = "???"
+                local label = getChild(self, "track_label")
+                if label then
+                    label.values.text = "???"
                 end
             end
             
