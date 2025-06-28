@@ -1,10 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.5.1
--- Phase: 01 - Added safety: disable controls when not mapped correctly
--- Prevents sending commands to wrong tracks
+-- Version: 1.5.2
+-- Fixed: Move all logging inside functions to ensure proper initialization
 
--- Version logging
-local SCRIPT_VERSION = "1.5.1"
+-- Version constant
+local SCRIPT_VERSION = "1.5.2"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -29,7 +28,7 @@ local function log(...)
     print(message)
     
     -- Update logger if exists
-    local loggerObj = root:findByName("logger")
+    local loggerObj = root:findByName("logger", true)  -- recursive search
     if loggerObj and loggerObj.values then
         local currentText = loggerObj.values.text or ""
         local lines = {}
@@ -37,8 +36,8 @@ local function log(...)
             table.insert(lines, line)
         end
         table.insert(lines, message)
-        -- Keep last 20 lines
-        while #lines > 20 do
+        -- Keep last 60 lines to match document script
+        while #lines > 60 do
             table.remove(lines, 1)
         end
         loggerObj.values.text = table.concat(lines, "\n")
@@ -47,7 +46,7 @@ end
 
 -- Get connection configuration
 local function getConnectionIndex(inst)
-    local configObj = root:findByName("configuration")
+    local configObj = root:findByName("configuration", true)
     if not configObj or not configObj.values or not configObj.values.text then
         log("Warning: No configuration found, using default connection 1")
         return 1
@@ -91,7 +90,7 @@ local function setGroupEnabled(enabled)
     -- Disable/enable all child controls
     for _, child in ipairs(self.children) do
         -- Skip status indicators and labels
-        if child.name ~= "status_indicator" and child.name ~= "fdr_label" then
+        if child.name ~= "status_indicator" and child.name ~= "track_label" then
             -- Disable interaction
             child.interactive = enabled
             
@@ -107,10 +106,8 @@ local function setGroupEnabled(enabled)
             end
             
             -- For faders specifically, reset to 0 when disabled
-            if not enabled and child.type == ControlType.FADER then
-                if child.values and child.values.x then
-                    child.values.x = 0
-                end
+            if not enabled and child.values and child.values.x then
+                child.values.x = 0
             end
         end
     end
@@ -146,9 +143,9 @@ local function clearListeners()
     end
 end
 
-log("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
-
 function init()
+    -- Version logging moved here
+    log("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
     log("Initializing group: " .. self.name)
     
     -- Set tag programmatically
@@ -241,10 +238,10 @@ function onReceiveOSC(message, connections)
                         sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
                         
                         -- Update label if it exists
-                        if self.children.fdr_label then
+                        if self.children.track_label then
                             local displayName = trackName:match("([^#]+)") or trackName
                             displayName = displayName:gsub("^%s*(.-)%s*$", "%1")  -- Trim whitespace
-                            self.children.fdr_label.values.text = displayName
+                            self.children.track_label.values.text = displayName
                         end
                         break
                     end
@@ -257,8 +254,8 @@ function onReceiveOSC(message, connections)
                 setGroupEnabled(false)  -- Keep disabled for safety
                 trackNumber = nil  -- Clear any old track number
                 
-                if self.children.fdr_label then
-                    self.children.fdr_label.values.text = "???"
+                if self.children.track_label then
+                    self.children.track_label.values.text = "???"
                 end
             end
             
@@ -270,8 +267,12 @@ function onReceiveOSC(message, connections)
 end
 
 function onReceiveNotify(action)
-    if action == "refresh" then
+    if action == "refresh" or action == "refresh_tracks" then
         refreshTrackMapping()
+    elseif action == "clear_mapping" then
+        clearListeners()
+        trackMapped = false
+        trackNumber = nil
     end
 end
 
@@ -289,6 +290,3 @@ function update()
         end
     end
 end
-
-log("Group ready - controls DISABLED until mapping confirmed")
-log("Script version " .. SCRIPT_VERSION .. " loaded")
