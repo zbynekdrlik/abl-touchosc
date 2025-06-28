@@ -1,9 +1,9 @@
 -- TouchOSC Global Refresh Button Script
--- Version: 1.1.1
+-- Version: 1.1.2
 -- Phase: 01 - Global refresh for all track groups
--- Fixed: Works with Label controls using 'x' value instead of 'touch'
+-- Fixed: More robust handling of control types
 
-local SCRIPT_VERSION = "1.1.1"
+local SCRIPT_VERSION = "1.1.2"
 
 -- Local logger function
 local function log(...)
@@ -37,9 +37,19 @@ end
 
 log("Global Refresh Button v" .. SCRIPT_VERSION .. " loaded")
 
+-- Store last tap time to prevent double triggers
+local lastTapTime = 0
+
 function onValueChanged(valueName)
-    -- Labels use 'x' value when touched, not 'touch'
-    if valueName == "x" then
+    -- Handle both button-style (touch) and label-style (x) touches
+    if valueName == "touch" or valueName == "x" then
+        -- Prevent double triggers
+        local currentTime = os.clock()
+        if currentTime - lastTapTime < 0.5 then
+            return
+        end
+        lastTapTime = currentTime
+        
         log("=== GLOBAL REFRESH INITIATED ===")
         
         -- Visual feedback
@@ -47,7 +57,7 @@ function onValueChanged(valueName)
         
         -- Find and update global status if exists
         local statusLabel = root:findByName("global_status")
-        if statusLabel then
+        if statusLabel and statusLabel.values then
             statusLabel.values.text = "Refreshing all tracks..."
         end
         
@@ -63,7 +73,7 @@ function onValueChanged(valueName)
         log("Sent refresh to " .. count .. " track groups")
         
         -- Update status
-        if statusLabel then
+        if statusLabel and statusLabel.values then
             statusLabel.values.text = "Refreshed " .. count .. " groups at " .. os.date("%H:%M:%S")
         end
         
@@ -76,11 +86,18 @@ end
 
 function init()
     log("Global Refresh Button initialized")
-    self.values.text = "REFRESH ALL"
     
-    -- Debug: Show what values are available
-    print("Available values on this control:")
-    for k, v in pairs(self.values) do
-        print("  " .. k .. " = " .. tostring(v))
+    -- Safely try to set text
+    if self.values and type(self.values) == "table" then
+        self.values.text = "REFRESH ALL"
+    else
+        -- If values isn't what we expect, try direct property
+        if self.text then
+            self.text = "REFRESH ALL"
+        end
     end
+    
+    -- Debug info about the control
+    log("Control type: " .. tostring(self.type))
+    log("Control name: " .. tostring(self.name))
 end
