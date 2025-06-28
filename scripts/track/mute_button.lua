@@ -1,8 +1,8 @@
 -- mute_button.lua
--- Version: 1.4.1
--- Fixed: Send boolean instead of float for mute state
+-- Version: 1.4.2
+-- Fixed: Track string/float mismatch and toggle logic
 
-local VERSION = "1.4.1"
+local VERSION = "1.4.2"
 local debugMode = false
 
 -- State tracking
@@ -118,18 +118,28 @@ function onReceiveOSC(message, connections)
         end
         
         -- Check if this message is for our track
-        if arguments[1] and arguments[1].value == myTrackNumber then
+        -- Handle both FLOAT and STRING track numbers from Ableton
+        local msgTrackNumber = nil
+        if arguments[1] then
+            if type(arguments[1].value) == "number" then
+                msgTrackNumber = arguments[1].value
+            elseif type(arguments[1].value) == "string" then
+                msgTrackNumber = tonumber(arguments[1].value)
+            end
+        end
+        
+        if msgTrackNumber == myTrackNumber then
             -- Check if message came from expected connection
             local expectedConnection = getConnectionIndex()
             if connections[expectedConnection] then
-                -- Update button state
-                local isMuted = arguments[2] and arguments[2].value == 1
+                -- Update button state from Ableton's response
+                local isMuted = arguments[2] and arguments[2].value
                 currentMuteState = isMuted
                 
                 -- Update visual state (x=0 when muted/pressed, x=1 when unmuted)
                 self.values.x = isMuted and 0 or 1
                 
-                debugLog("Track " .. myTrackNumber .. " mute state: " .. 
+                log("Received mute state for track " .. myTrackNumber .. ": " .. 
                     (isMuted and "MUTED" or "UNMUTED"))
             else
                 debugLog("Ignoring mute for track " .. myTrackNumber .. 
@@ -160,13 +170,16 @@ function onValueChanged(key)
         if trackNumber then
             -- Toggle mute state
             local newMuteState = not currentMuteState
+            currentMuteState = newMuteState  -- Update state immediately
             
-            -- CRITICAL FIX: Send boolean value, not float!
             log("Sending mute " .. (newMuteState and "ON" or "OFF") .. 
                 " for track " .. trackNumber)
             
-            -- Send as boolean (true/false) not number (1/0)
+            -- Send as boolean
             sendOSCRouted("/live/track/set/mute", trackNumber, newMuteState)
+            
+            -- Update visual state optimistically
+            self.values.x = newMuteState and 0 or 1
         end
     end
 end
@@ -193,6 +206,9 @@ function init()
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
     end
+    
+    -- Set initial visual state
+    self.values.x = 1  -- Start unmuted
 end
 
 -- Call init directly (like fader does)
