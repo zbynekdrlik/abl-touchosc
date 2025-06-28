@@ -1,8 +1,8 @@
 -- mute_button.lua
--- Version: 1.4.3
--- Fixed: Ensure track number is sent as integer/float
+-- Version: 1.4.4
+-- Fixed: Inverted button state to match Ableton's mute logic
 
-local VERSION = "1.4.3"
+local VERSION = "1.4.4"
 local debugMode = false
 
 -- State tracking
@@ -137,8 +137,14 @@ function onReceiveOSC(message, connections)
                 local isMuted = arguments[2] and arguments[2].value
                 currentMuteState = isMuted
                 
-                -- Update visual state (x=0 when muted/pressed, x=1 when unmuted)
-                self.values.x = isMuted and 0 or 1
+                -- FIXED: Correct visual state mapping
+                -- When muted (true) → button pressed (x=0)
+                -- When unmuted (false) → button released (x=1)
+                if isMuted then
+                    self.values.x = 0
+                else
+                    self.values.x = 1
+                end
                 
                 log("Received mute state for track " .. myTrackNumber .. ": " .. 
                     (isMuted and "MUTED" or "UNMUTED"))
@@ -179,8 +185,12 @@ function onValueChanged(key)
             -- Send as boolean with track as number
             sendOSCRouted("/live/track/set/mute", trackNumber, newMuteState)
             
-            -- Update visual state optimistically
-            self.values.x = newMuteState and 0 or 1
+            -- FIXED: Update visual state with correct mapping
+            if newMuteState then
+                self.values.x = 0  -- Muted = pressed
+            else
+                self.values.x = 1  -- Unmuted = released
+            end
         end
     end
 end
@@ -190,7 +200,7 @@ function onReceiveNotify(key, value)
     if key == "track_changed" then
         -- Reset state when track changes
         currentMuteState = false
-        self.values.x = 1
+        self.values.x = 1  -- Start unmuted (button released)
         debugLog("Track changed - reset mute button")
     elseif key == "track_unmapped" then
         -- Button will be disabled by parent
@@ -209,7 +219,7 @@ function init()
     end
     
     -- Set initial visual state
-    self.values.x = 1  -- Start unmuted
+    self.values.x = 1  -- Start unmuted (button released)
 end
 
 -- Call init directly (like fader does)
