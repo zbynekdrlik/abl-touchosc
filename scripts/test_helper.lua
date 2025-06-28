@@ -1,13 +1,23 @@
 -- test_helper.lua
--- Version: 1.0.0
+-- Version: 1.1.0
 -- Simple test helper for Phase 3 script functionality testing
 -- Attach this to root for testing utilities
+-- Updated: Use centralized logging
 
-local VERSION = "1.0.0"
+local VERSION = "1.1.0"
+
+-- Centralized logging through document script
+local function log(message)
+    -- Send to document script for logger text update
+    root:notify("log_message", "TEST HELPER: " .. message)
+    
+    -- Also print to console for development/debugging
+    print("[" .. os.date("%H:%M:%S") .. "] TEST HELPER: " .. message)
+end
 
 function init()
-    print("Test Helper v" .. VERSION .. " loaded at " .. os.date("%X"))
-    print("=== PHASE 3 TESTING MODE ===")
+    log("Script v" .. VERSION .. " loaded")
+    log("=== PHASE 3 TESTING MODE ===")
     
     -- Initial test status
     performStartupChecks()
@@ -15,35 +25,34 @@ end
 
 -- Perform startup checks
 function performStartupChecks()
-    print("\n--- Startup Checks ---")
+    log("--- Startup Checks ---")
     
     -- Check for configuration
     local config = root:findByName("configuration", false)
     if config then
-        print("✓ Configuration object found")
+        log("✓ Configuration object found")
     else
-        print("✗ Configuration object missing!")
+        log("✗ Configuration object missing!")
     end
     
     -- Check for logger
     local logger = root:findByName("logger", false)
     if logger then
-        print("✓ Logger object found")
+        log("✓ Logger object found")
     else
-        print("✗ Logger object missing!")
+        log("✗ Logger object missing!")
     end
     
-    -- Check for helper script
-    local helper = root:findByName("helper", false)
-    if helper then
-        print("✓ Helper script found")
+    -- Check for document script
+    if root.onReceiveNotify then
+        log("✓ Document script attached to root")
     else
-        print("✗ Helper script not found!")
+        log("✗ Document script not found on root!")
     end
     
     -- Count groups
     local groups = root:findAllByProperty("tag", "trackGroup", true)
-    print("Found " .. #groups .. " track groups:")
+    log("Found " .. #groups .. " track groups:")
     
     local bandCount = 0
     local masterCount = 0
@@ -52,44 +61,43 @@ function performStartupChecks()
         local name = group.name or "unnamed"
         if name:match("^band_") then
             bandCount = bandCount + 1
-            print("  - " .. name .. " (band)")
+            log("  - " .. name .. " (band)")
         elseif name:match("^master_") then
             masterCount = masterCount + 1
-            print("  - " .. name .. " (master)")
+            log("  - " .. name .. " (master)")
         else
-            print("  - " .. name .. " (no prefix!)")
+            log("  - " .. name .. " (no prefix!)")
         end
     end
     
-    print("\nSummary:")
-    print("  Band groups: " .. bandCount)
-    print("  Master groups: " .. masterCount)
+    log("Summary:")
+    log("  Band groups: " .. bandCount)
+    log("  Master groups: " .. masterCount)
 end
 
 -- Test all controls in a group
 function testGroupControls(groupName)
-    print("\n--- Testing Group: " .. groupName .. " ---")
+    log("--- Testing Group: " .. groupName .. " ---")
     
     local group = root:findByName(groupName, true)
     if not group then
-        print("✗ Group not found: " .. groupName)
+        log("✗ Group not found: " .. groupName)
         return
     end
     
     -- Check group properties
-    print("Group tag: " .. (group.tag or "not set"))
-    print("Track number: " .. (group.trackNumber or "not set"))
+    log("Group tag: " .. (group.tag or "not set"))
     
     -- Check for status indicator
-    local status = group:findByName("status_indicator", true)
+    local status = group.children and group.children.status_indicator
     if status then
-        print("✓ Status indicator found")
+        log("✓ Status indicator found")
         local color = status.color
         if color then
-            print("  Color: R=" .. color[1] .. " G=" .. color[2] .. " B=" .. color[3])
+            log("  Color: R=" .. color.r .. " G=" .. color.g .. " B=" .. color.b)
         end
     else
-        print("✗ Status indicator missing!")
+        log("✗ Status indicator missing!")
     end
     
     -- Check for controls
@@ -97,15 +105,20 @@ function testGroupControls(groupName)
         {name = "fader", type = "Fader"},
         {name = "meter", type = "Group"},
         {name = "mute", type = "Button"},
-        {name = "pan", type = "Encoder/Radial"}
+        {name = "pan", type = "Encoder/Radial"},
+        {name = "track_label", type = "Label"}
     }
     
     for _, ctrl in ipairs(controls) do
-        local found = group:findByName(ctrl.name, true)
+        local found = group.children and group.children[ctrl.name]
         if found then
-            print("✓ " .. ctrl.name .. " found")
+            log("✓ " .. ctrl.name .. " found")
+            -- Check if it's interactive
+            if found.interactive ~= nil then
+                log("  Interactive: " .. tostring(found.interactive))
+            end
         else
-            print("✗ " .. ctrl.name .. " missing!")
+            log("✗ " .. ctrl.name .. " missing!")
         end
     end
 end
@@ -117,39 +130,53 @@ function logOSCMessage(path, ...)
     for i, arg in ipairs(args) do
         msg = msg .. " [" .. tostring(arg) .. "]"
     end
-    print(msg)
+    log(msg)
 end
 
 -- Test connection routing
 function testConnectionRouting()
-    print("\n--- Testing Connection Routing ---")
+    log("--- Testing Connection Routing ---")
     
-    -- Get configuration
-    local config = getConfiguration()
-    if not config then
-        print("✗ Cannot get configuration!")
+    -- Try to get configuration text
+    local configObj = root:findByName("configuration", true)
+    if not configObj or not configObj.values or not configObj.values.text then
+        log("✗ Cannot get configuration text!")
         return
     end
     
-    print("Band connection: " .. (config.connections.band or "not set"))
-    print("Master connection: " .. (config.connections.master or "not set"))
+    local configText = configObj.values.text
+    log("Configuration text found, parsing...")
     
-    -- Test creating connection table
-    local bandTable = createConnectionTable(config.connections.band)
-    local masterTable = createConnectionTable(config.connections.master)
-    
-    print("\nBand connection table:")
-    for i = 1, 10 do
-        if bandTable[i] then
-            print("  Connection " .. i .. ": enabled")
+    -- Parse connections
+    local connections = {}
+    for line in configText:gmatch("[^\r\n]+") do
+        local key, value = line:match("^%s*connection_(%w+):%s*(%d+)%s*$")
+        if key and value then
+            connections[key] = tonumber(value)
+            log("  " .. key .. " -> connection " .. value)
         end
     end
     
-    print("\nMaster connection table:")
-    for i = 1, 10 do
-        if masterTable[i] then
-            print("  Connection " .. i .. ": enabled")
-        end
+    if next(connections) == nil then
+        log("✗ No connections found in configuration!")
+    else
+        log("✓ Found " .. #connections .. " connection mappings")
+    end
+end
+
+-- Test refresh functionality
+function testRefresh()
+    log("--- Testing Refresh ---")
+    
+    -- Find refresh button
+    local refreshBtn = root:findByName("global_refresh", true)
+    if refreshBtn then
+        log("✓ Global refresh button found")
+        -- Trigger refresh
+        root:notify("refresh_all_groups")
+        log("Refresh triggered via notify")
+    else
+        log("✗ Global refresh button not found!")
     end
 end
 
@@ -161,14 +188,19 @@ function onReceiveNotify(action, value)
         testConnectionRouting()
     elseif action == "test_startup" then
         performStartupChecks()
+    elseif action == "test_refresh" then
+        testRefresh()
+    elseif action == "test_all" then
+        testAll()
     end
 end
 
--- Provide some global test functions
+-- Run all tests
 function testAll()
-    print("\n=== RUNNING ALL TESTS ===")
+    log("=== RUNNING ALL TESTS ===")
     performStartupChecks()
     testConnectionRouting()
+    testRefresh()
     
     -- Test each group
     local groups = root:findAllByProperty("tag", "trackGroup", true)
@@ -176,19 +208,13 @@ function testAll()
         testGroupControls(group.name)
     end
     
-    print("\n=== TESTS COMPLETE ===")
+    log("=== TESTS COMPLETE ===")
 end
 
--- Make test functions available globally
-_G.testHelper = {
-    testAll = testAll,
-    testGroup = testGroupControls,
-    testConnections = testConnectionRouting,
-    testStartup = performStartupChecks
-}
-
-print("\nTest functions available:")
-print("  testHelper.testAll() - Run all tests")
-print("  testHelper.testGroup('name') - Test specific group")
-print("  testHelper.testConnections() - Test connection setup")
-print("  testHelper.testStartup() - Re-run startup checks")
+-- Make test functions available
+log("Test Helper Ready - Use notify to trigger tests:")
+log("  notify('test_all') - Run all tests")
+log("  notify('test_group', 'groupname') - Test specific group")
+log("  notify('test_connections') - Test connection setup")
+log("  notify('test_startup') - Re-run startup checks")
+log("  notify('test_refresh') - Test refresh functionality")
