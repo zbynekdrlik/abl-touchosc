@@ -95,6 +95,7 @@ local ctrl = root:findByName("myControl", true)  -- true = recursive
 local groups = root:findAllByProperty("tag", "trackGroup", true)
 
 -- ⚠️ No findAllByName() method exists!
+-- ⚠️ Controls can be in pagers - always use recursive search (true)
 ```
 
 ## 8. OSC Receive Patterns Must Be Set in UI
@@ -125,6 +126,118 @@ function getConnectionForInstance(instance)
 end
 ```
 
+## 11. Centralized Logging Pattern
+```lua
+-- ❌ WRONG - Each script implementing its own logger
+local function log(msg)
+    local logger = root:findByName("logger", true)
+    -- Duplicated code everywhere
+end
+
+-- ✅ CORRECT - Document script handles all logging
+-- In document script:
+local function log(message)
+    local logMessage = os.date("%H:%M:%S") .. " " .. message
+    print(logMessage)  -- Always print to console
+    
+    -- Store in buffer
+    table.insert(logLines, logMessage)
+    if #logLines > maxLogLines then
+        table.remove(logLines, 1)
+    end
+    
+    -- Update logger control if found
+    if logger and logger.values then
+        logger.values.text = table.concat(logLines, "\n")
+    end
+end
+
+-- Other scripts use print() or notify document script
+```
+
+## 12. Control Type Differences
+```lua
+-- Buttons use 'touch' value
+function onValueChanged(valueName)
+    if valueName == "touch" and self.values.touch == 1 then
+        -- Button pressed
+    end
+end
+
+-- Labels use 'x' value when interactive
+function onValueChanged(valueName)
+    if valueName == "x" then
+        -- Label tapped
+    end
+end
+
+-- Handle both for flexibility
+if valueName == "touch" or valueName == "x" then
+    -- Works for both control types
+end
+```
+
+## 13. Visual Feedback Timing
+```lua
+-- ❌ WRONG - Too fast to see
+self.color = Color(1, 1, 0, 1)  -- Yellow
+self.color = Color(0.5, 0.5, 0.5, 1)  -- Gray immediately
+
+-- ✅ CORRECT - Use update() for delayed reset
+local colorResetTime = 0
+local needsColorReset = false
+
+function onValueChanged(valueName)
+    self.color = Color(1, 1, 0, 1)  -- Yellow
+    colorResetTime = os.clock() + 0.3  -- 300ms delay
+    needsColorReset = true
+end
+
+function update()
+    if needsColorReset and os.clock() >= colorResetTime then
+        self.color = Color(0.5, 0.5, 0.5, 1)  -- Gray
+        needsColorReset = false
+    end
+end
+```
+
+## 14. self.values Structure Varies
+```lua
+-- ❌ WRONG - Assuming structure
+for k, v in pairs(self.values) do  -- May error!
+
+-- ✅ CORRECT - Check type first
+if self.values and type(self.values) == "table" then
+    self.values.text = "Hello"
+end
+```
+
+## 15. Document Script Pattern
+Create a main "document script" that handles:
+- Configuration parsing
+- Centralized logging
+- Helper functions (exposed via globals)
+- Coordination between scripts
+- Buffering messages before logger is available
+
+```lua
+-- Document script pattern
+local VERSION = "2.5.8"
+local logLines = {}  -- Buffer messages
+local logger = nil   -- Found later
+
+function init()
+    log("Document Script v" .. VERSION .. " loaded")
+    -- Initialize system
+end
+
+function onReceiveNotify(action, value)
+    if action == "refresh_all_groups" then
+        refreshAllGroups()
+    end
+end
+```
+
 ## Key Gotchas
 
 1. **No global variables** between scripts - use notify()
@@ -134,6 +247,9 @@ end
 5. **Scripts load asynchronously** - can't assume order
 6. **update() runs 60fps** - keep it light
 7. **Messages have structure** - `message[2][1].value`
+8. **Control types differ** - buttons vs labels have different values
+9. **Visual changes need delays** - use update() for timing
+10. **Logger might not exist yet** - buffer messages
 
 ## Testing Checklist
 - [ ] Test with missing controls
@@ -141,3 +257,6 @@ end
 - [ ] Test with wrong connection numbers
 - [ ] Verify all notify() handlers
 - [ ] Check version logging
+- [ ] Test visual feedback visibility
+- [ ] Verify logger updates properly
+- [ ] Test with controls in pagers
