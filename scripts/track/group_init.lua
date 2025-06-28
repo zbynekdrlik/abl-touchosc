@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.9.4
--- Added: Debug logging for track_label updates
+-- Version: 1.9.5
+-- Fixed: Ensure track_label updates even when refresh returns early
 
 -- Version constant
-local SCRIPT_VERSION = "1.9.4"
+local SCRIPT_VERSION = "1.9.5"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -211,16 +211,34 @@ function onReceiveOSC(message, connections)
         end
         
         if needsRefresh then
+            needsRefresh = false  -- Clear flag immediately to prevent re-processing
+            
             local arguments = message[2]
             
             if not arguments then
                 log("ERROR: No track names in response")
                 updateStatus("error")
                 setGroupEnabled(false)  -- Keep disabled
+                
+                -- Update label to show error even when no arguments
+                if self.children and self.children["track_label"] then
+                    self.children["track_label"].values.text = "???"
+                    log("track_label set to '???' (no track names)")
+                end
+                
                 return true
             end
             
             local trackFound = false
+            
+            -- Debug: Log all track names received
+            log("Searching for track: '" .. trackName .. "'")
+            log("Available tracks:")
+            for i = 1, #arguments do
+                if arguments[i] and arguments[i].value then
+                    log("  Track " .. (i-1) .. ": '" .. arguments[i].value .. "'")
+                end
+            end
             
             for i = 1, #arguments do
                 if arguments[i] and arguments[i].value then
@@ -231,7 +249,6 @@ function onReceiveOSC(message, connections)
                         -- Found our track
                         trackNumber = i - 1
                         lastVerified = getMillis()
-                        needsRefresh = false
                         trackFound = true
                         trackMapped = true
                         
@@ -280,6 +297,7 @@ function onReceiveOSC(message, connections)
                 end
             end
             
+            -- Handle track not found
             if not trackFound then
                 log("ERROR: Track not found: '" .. trackName .. "'")
                 updateStatus("error")
