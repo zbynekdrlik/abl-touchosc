@@ -1,8 +1,8 @@
 -- mute_button.lua
--- Version: 1.4.0
--- Simplified to match working fader pattern
+-- Version: 1.4.1
+-- Fixed: Send boolean instead of float for mute state
 
-local VERSION = "1.4.0"
+local VERSION = "1.4.1"
 local debugMode = false
 
 -- State tracking
@@ -160,12 +160,13 @@ function onValueChanged(key)
         if trackNumber then
             -- Toggle mute state
             local newMuteState = not currentMuteState
-            local muteValue = newMuteState and 1 or 0
             
+            -- CRITICAL FIX: Send boolean value, not float!
             log("Sending mute " .. (newMuteState and "ON" or "OFF") .. 
                 " for track " .. trackNumber)
             
-            sendOSCRouted("/live/track/set/mute", trackNumber, muteValue)
+            -- Send as boolean (true/false) not number (1/0)
+            sendOSCRouted("/live/track/set/mute", trackNumber, newMuteState)
         end
     end
 end
