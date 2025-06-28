@@ -1,11 +1,11 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.3.1
--- Fixed: OSC receive now properly handles instance:track format
+-- Version: 2.3.2
+-- Fixed: OSC send now includes both track and volume (was missing volume parameter)
 -- Added: Centralized logging and multi-connection routing
 -- Preserved: ALL original fader functionality
 
 -- Version constant
-local VERSION = "2.3.1"
+local VERSION = "2.3.2"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -522,11 +522,12 @@ function onReceiveOSC(message, connections)
   return false  -- Don't block other receivers
 end
 
--- Send OSC with connection routing
-local function sendOSCRouted(path, ...)
+-- Send OSC with connection routing - FIXED TO INCLUDE ALL PARAMETERS
+local function sendOSCRouted(path, track, volume)
   local connectionIndex = getConnectionIndex()
   local connections = buildConnectionTable(connectionIndex)
-  sendOSC(path, ..., connections)
+  -- CRITICAL FIX: Must send track AND volume as separate parameters
+  sendOSC(path, track, volume, connections)
 end
 
 function update()
@@ -722,7 +723,7 @@ function onValueChanged()
   end
   last_logged_position = scaled_fader_position
   
-  -- Send OSC with routing
+  -- Send OSC with routing - FIXED TO SEND BOTH TRACK AND VOLUME
   local trackNumber = getTrackNumber()
   if trackNumber then
     sendOSCRouted('/live/track/set/volume', trackNumber, audio_value)
