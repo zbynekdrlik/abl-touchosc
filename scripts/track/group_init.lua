@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.6.5
--- Fixed: Removed pcall (not available in TouchOSC), use direct access with checks
+-- Version: 1.7.0
+-- Added: Centralized logging through document script via notify
 
 -- Version constant
-local SCRIPT_VERSION = "1.6.5"
+local SCRIPT_VERSION = "1.7.0"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -15,9 +15,16 @@ local trackNumber = nil
 local trackMapped = false
 local lastEnabledState = nil  -- Track last state to prevent spam
 
--- Simple logging - just use print like the working scripts
+-- Centralized logging through document script
 local function log(message)
-    print("[" .. os.date("%H:%M:%S") .. "] " .. message)
+    -- Add context to identify which control sent the log
+    local fullMessage = "CONTROL(" .. self.name .. ") " .. message
+    
+    -- Send to document script for proper logging
+    root:notify("log_message", fullMessage)
+    
+    -- Also print to console for immediate feedback during development
+    print("[" .. os.date("%H:%M:%S") .. "] " .. fullMessage)
 end
 
 -- Get connection configuration
@@ -112,7 +119,7 @@ local function setGroupEnabled(enabled, silent)
     
     -- Only log if not silent
     if not silent then
-        log(self.name .. " controls " .. (enabled and "ENABLED" or "DISABLED") .. " (" .. childCount .. " controls)")
+        log("controls " .. (enabled and "ENABLED" or "DISABLED") .. " (" .. childCount .. " controls)")
     end
 end
 
@@ -154,8 +161,8 @@ function init()
     connectionIndex = getConnectionIndex(instance)
     
     -- Log initialization
-    log("Group init v" .. SCRIPT_VERSION .. " for " .. self.name)
-    log("Group config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
+    log("Group init v" .. SCRIPT_VERSION .. " loaded")
+    log("Config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
     
     -- SAFETY: Disable all controls until properly mapped
     setGroupEnabled(false, true)  -- Silent
@@ -163,11 +170,11 @@ function init()
     -- Set initial status
     updateStatus("error")
     
-    log("Group ready - waiting for refresh")
+    log("Ready - waiting for refresh")
 end
 
 function refreshTrackMapping()
-    log("Refreshing " .. self.name)
+    log("Refreshing track mapping")
     
     -- SAFETY: Clear any existing listeners and disable controls
     clearListeners()
@@ -198,7 +205,7 @@ function onReceiveOSC(message, connections)
             local arguments = message[2]
             
             if not arguments then
-                log("ERROR: No track names in response for " .. self.name)
+                log("ERROR: No track names in response")
                 updateStatus("error")
                 setGroupEnabled(false)  -- Keep disabled
                 return true
@@ -219,7 +226,7 @@ function onReceiveOSC(message, connections)
                         trackFound = true
                         trackMapped = true
                         
-                        log("Mapped " .. self.name .. " -> Track " .. trackNumber)
+                        log("Mapped to Track " .. trackNumber)
                         
                         updateStatus("ok")
                         setGroupEnabled(true)  -- ENABLE controls now that mapping is correct
@@ -249,7 +256,7 @@ function onReceiveOSC(message, connections)
             end
             
             if not trackFound then
-                log("ERROR: Track not found: '" .. trackName .. "' for " .. self.name)
+                log("ERROR: Track not found: '" .. trackName .. "'")
                 updateStatus("error")
                 setGroupEnabled(false)  -- Keep disabled for safety
                 trackNumber = nil  -- Clear any old track number
