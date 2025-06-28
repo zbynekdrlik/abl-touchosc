@@ -1,13 +1,14 @@
 -- mute_button.lua
--- Version: 1.5.1
--- Fixed: Proper button handling for TouchOSC
+-- Version: 1.5.2
+-- Fixed: Prevent double-toggle with proper state management
 
-local VERSION = "1.5.1"
+local VERSION = "1.5.2"
 local debugMode = false
 
 -- State tracking
 local currentMuteState = false
-local wasPressed = false  -- Track previous button state
+local buttonPressedByUser = false
+local ignoreStateChange = false
 
 -- Logging
 local function log(message)
@@ -92,6 +93,9 @@ function onReceiveOSC(message, connections)
                 -- Update state
                 currentMuteState = arguments[2] and arguments[2].value == true
                 
+                -- Set flag to ignore this change
+                ignoreStateChange = true
+                
                 -- Update visual
                 if currentMuteState then
                     self.values.x = 0  -- Muted = pressed
@@ -107,25 +111,33 @@ function onReceiveOSC(message, connections)
     return false
 end
 
--- Update function to detect button state changes
-function update()
-    local trackNumber = getTrackNumber()
-    if not trackNumber then
-        return
+-- Handle value changes
+function onValueChanged(key)
+    if key == "x" then
+        -- Check if this is from OSC update
+        if ignoreStateChange then
+            ignoreStateChange = false
+            return
+        end
+        
+        -- Check if user is touching the button
+        if self.values.touch then
+            buttonPressedByUser = true
+        end
+    elseif key == "touch" then
+        -- User pressed the button
+        if self.values.touch and buttonPressedByUser then
+            buttonPressedByUser = false
+            
+            local trackNumber = getTrackNumber()
+            if trackNumber then
+                -- Toggle mute state
+                local newMuteState = not currentMuteState
+                currentMuteState = newMuteState
+                sendMute(trackNumber, newMuteState)
+            end
+        end
     end
-    
-    -- Check if button state changed (user pressed/released)
-    local isPressed = (self.values.x == 0)
-    
-    -- Detect press event (transition from not pressed to pressed)
-    if isPressed and not wasPressed then
-        -- Button was just pressed - toggle mute
-        local newMuteState = not currentMuteState
-        currentMuteState = newMuteState
-        sendMute(trackNumber, newMuteState)
-    end
-    
-    wasPressed = isPressed
 end
 
 -- Initialize
@@ -138,7 +150,6 @@ function init()
     
     -- Set initial state
     self.values.x = 1  -- Start unmuted
-    wasPressed = false
 end
 
 init()
