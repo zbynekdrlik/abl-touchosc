@@ -1,12 +1,11 @@
 -- TouchOSC Meter Script with Multi-Connection Support
--- Version: 2.2.0
--- Preserves exact calibration from working meter
--- Added: Multi-connection routing without documentScript calls
+-- Version: 2.2.1
+-- Added: Debug logging for connection troubleshooting
 
-local VERSION = "2.2.0"
+local VERSION = "2.2.1"
 
 -- DEBUG MODE
-local DEBUG = 0  -- Set to 1 to see meter values and conversions in console
+local DEBUG = 1  -- Set to 1 to see meter values and conversions in console
 
 -- COLOR THRESHOLDS (in dB) - PRESERVED FROM ORIGINAL
 local COLOR_THRESHOLD_YELLOW = -12    -- Above this = yellow (caution)
@@ -220,13 +219,33 @@ end
 -- ===========================
 
 function onReceiveOSC(message, connections)
+  -- Debug: Log all incoming messages
+  debugPrint("=== OSC RECEIVED ===")
+  debugPrint("Message path:", message[1])
+  
   -- Check if this is a meter message
   if message[1] ~= '/live/track/get/output_meter_level' then
     return false
   end
   
-  -- Check if this message is from our connection
+  -- Debug: Check connections parameter
+  if connections then
+    local connStr = "Connections: "
+    for i = 1, 10 do
+      if connections[i] then
+        connStr = connStr .. i .. " "
+      end
+    end
+    debugPrint(connStr)
+  else
+    debugPrint("No connections parameter provided")
+  end
+  
+  -- Get our connection index
   local myConnection = getConnectionIndex()
+  debugPrint("My connection index:", myConnection)
+  
+  -- Check if this message is from our connection
   if connections and not connections[myConnection] then
     debugPrint("Message not from our connection", myConnection)
     return false
@@ -234,12 +253,15 @@ function onReceiveOSC(message, connections)
   
   local arguments = message[2]
   if not arguments or #arguments < 2 then
+    debugPrint("Not enough arguments")
     return false
   end
   
   -- Check if this message is for our track
   local msgTrackNumber = arguments[1].value
   local myTrackNumber = getTrackNumber()
+  
+  debugPrint("Message track:", msgTrackNumber, "My track:", myTrackNumber)
   
   if not myTrackNumber or msgTrackNumber ~= myTrackNumber then
     return false
@@ -318,30 +340,7 @@ function init()
   log("=== METER SCRIPT WITH MULTI-CONNECTION ===")
   log("Using hardcoded calibration points from your tests")
   log("Multi-connection routing enabled")
-  
-  if DEBUG == 1 then
-    log("")
-    log("Calibration points:")
-    for i, point in ipairs(CALIBRATION_POINTS) do
-      local ableton_val = point[1]
-      local fader_pos = point[2]
-      
-      if ableton_val == 0.3945 then
-        log(string.format("  %.4f → %.1f%% (-40dB) EXACT MATCH", ableton_val, fader_pos * 100))
-      elseif ableton_val == 0.6839 then
-        log(string.format("  %.4f → %.1f%% (-18dB) EXACT MATCH", ableton_val, fader_pos * 100))
-      elseif ableton_val == 0.7629 then
-        log(string.format("  %.4f → %.1f%% (-12dB) EXACT MATCH", ableton_val, fader_pos * 100))
-      elseif ableton_val == 0.8399 then
-        log(string.format("  %.4f → %.1f%% (-6dB) ✓", ableton_val, fader_pos * 100))
-      elseif ableton_val == 0.9200 then
-        log(string.format("  %.4f → %.1f%% (0dB) ✓", ableton_val, fader_pos * 100))
-      else
-        log(string.format("  %.4f → %.1f%%", ableton_val, fader_pos * 100))
-      end
-    end
-    log("")
-  end
+  log("DEBUG MODE ENABLED - Check console for details")
   
   -- Log parent info
   if self.parent then
@@ -350,8 +349,14 @@ function init()
     end
     if self.parent.tag then
       log("Parent tag: " .. tostring(self.parent.tag))
+      local myTrack = getTrackNumber()
+      log("My track number: " .. tostring(myTrack))
     end
   end
+  
+  -- Log connection info
+  local myConnection = getConnectionIndex()
+  log("My connection index: " .. myConnection)
 end
 
 init()
