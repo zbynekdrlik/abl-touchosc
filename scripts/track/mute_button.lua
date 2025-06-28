@@ -1,11 +1,11 @@
 -- mute_button.lua
--- Version: 1.2.0
--- Fixed: Script isolation, configuration reading, visual preservation
+-- Version: 1.3.0
+-- Fixed: Removed text updates (buttons don't have text in TouchOSC)
 
-local scriptVersion = "1.2.0"
+local scriptVersion = "1.3.0"
 local debugMode = false
 
--- Logging helper (matches our newer pattern)
+-- Logging helper
 local function log(control, message, isDebug)
     if isDebug and not debugMode then return end
     
@@ -26,11 +26,10 @@ function init()
         log(self, "Parent tag: " .. tostring(self.parent.tag))
     end
     
-    -- Set initial text (preserve colors, only change text)
-    self.values.text = "MUTE"
+    -- Buttons don't have text - only visual state matters
 end
 
--- Helper to read configuration (self-contained, no external dependencies)
+-- Helper to read configuration
 local function getConfiguration(control)
     local configControl = control.root:findByName("configuration", true)
     if not configControl then
@@ -130,15 +129,12 @@ function onReceiveOSC(message, connections)
             
             -- Check if message came from expected connection
             if expectedConnection and connections[expectedConnection] then
-                -- Update button state and text
+                -- Update button state
                 local isMuted = arguments[2] and arguments[2].value == 1
                 currentMuteState = isMuted
                 
                 -- Update visual state (x=0 when muted/pressed, x=1 when unmuted)
                 self.values.x = isMuted and 0 or 1
-                
-                -- Update text only (preserve colors)
-                self.values.text = isMuted and "MUTED" or "MUTE"
                 
                 log(self, "Track " .. trackNumber .. " mute state: " .. 
                     (isMuted and "MUTED" or "UNMUTED"), true)
@@ -170,9 +166,6 @@ function onValueChanged(key)
                 " for track " .. trackNumber, false)
             
             sendOSCRouted(self, "/live/track/set/mute", trackNumber, muteValue)
-            
-            -- Optimistically update text (will be confirmed by OSC response)
-            self.values.text = newMuteState and "MUTED" or "MUTE"
         end
     end
 end
@@ -183,12 +176,10 @@ function onReceiveNotify(key, value)
         -- Reset state when track changes
         currentMuteState = false
         self.values.x = 1
-        self.values.text = "MUTE"
         log(self, "Track changed - reset mute button", true)
     elseif key == "track_unmapped" then
-        -- Show disabled state when unmapped
-        self.values.text = "---"
-        log(self, "Track unmapped - disabled mute button", true)
+        -- Button will be disabled by parent, just log
+        log(self, "Track unmapped - mute button disabled", true)
     end
 end
 
