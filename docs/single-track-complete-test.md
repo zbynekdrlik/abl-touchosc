@@ -7,7 +7,7 @@ Create ONE complete track group with all control scripts to verify everything wo
 We'll use **"band_CG #"** as our test track since:
 - It's the actual track name in your band project
 - It tests special characters in track names
-- It uses Connection 1 (band connection)
+- The group name automatically determines it uses Connection 1
 
 ## Complete Track Group Setup
 
@@ -29,11 +29,17 @@ We'll use **"band_CG #"** as our test track since:
    - Select the group
    - Go to OSC tab
    - Set receive pattern: `/live/song/get/track_names`
-   - Enable ONLY Connection 1 (band connection)
+   - **Enable ALL connections** (the script will filter based on group name!)
 
 4. **Attach Group Script**
    - Select the group
    - Add script: `group_init.lua` (v1.5.1)
+
+### IMPORTANT: How Connection Routing Works
+The entire system is designed so that the **group name determines the connection automatically**:
+- Groups named `band_*` use the connection configured for "band" (default: 1)
+- Groups named `master_*` use the connection configured for "master" (default: 2)
+- The script handles ALL filtering - you don't need to set connections in the UI!
 
 ### 2. Add Track Label
 - Type: Label
@@ -69,7 +75,7 @@ We'll use **"band_CG #"** as our test track since:
    - Select the meter group
    - Go to OSC tab
    - Set receive pattern: `/live/track/get/send/meter`
-   - Enable ONLY Connection 1
+   - **Enable ALL connections** (script filters automatically)
 
 4. **Attach Script**
    - Select the meter group
@@ -131,6 +137,7 @@ We'll use **"band_CG #"** as our test track since:
   ```
   Document Script v2.5.8 loaded
   Group init v1.5.1 for band_CG #
+  Group config - Instance: band, Track: CG #, Connection: 1
   Fader Script v2.0.0 loaded for band_CG #
   Meter Script v2.0.0 loaded for band_CG #
   Mute Button v1.0.0 loaded for band_CG #
@@ -141,7 +148,7 @@ We'll use **"band_CG #"** as our test track since:
 
 ### 2. Ableton Setup
 - Open Ableton with band project
-- Ensure Connection 1 is connected
+- Ensure Connection 1 is connected to band project
 - Verify track named "CG #" exists
 - Add some audio to the track for meter testing
 
@@ -152,20 +159,24 @@ We'll use **"band_CG #"** as our test track since:
    === GLOBAL REFRESH ===
    Refreshing group: band_CG #
    Requesting track names for band_CG #
-   Received track names from connection 1
-   Found track 'CG #' at index X
-   Mapped band_CG # -> Track X
-   Refreshed 1 groups
    ```
-3. Status indicator should turn GREEN
-4. All controls should become enabled
+3. The script will:
+   - Send request ONLY to connection 1 (determined by "band_" prefix)
+   - Ignore any responses from connection 2
+   - Find track "CG #" and map it
+4. Expected result:
+   ```
+   Mapped band_CG # -> Track X
+   ```
+5. Status indicator should turn GREEN
+6. All controls should become enabled
 
 ### 4. Control Tests
 
 #### Fader Test
 - [ ] Fader is enabled (not dimmed)
 - [ ] Moving fader sends OSC: `/live/track/set/volume X [value]`
-- [ ] OSC only goes to Connection 1
+- [ ] OSC only goes to Connection 1 (automatic from group name)
 - [ ] Smooth movement without jumps
 - [ ] Logger shows volume changes
 
@@ -173,61 +184,63 @@ We'll use **"band_CG #"** as our test track since:
 - [ ] Meter responds to audio level
 - [ ] Colors change: green → yellow → red
 - [ ] Only responds to track X on connection 1
+- [ ] Ignores meter data from connection 2
 - [ ] Smooth decay animation
-- [ ] No response to other tracks
 
 #### Mute Button Test
 - [ ] Button is enabled
 - [ ] Press toggles between gray (unmuted) and red (muted)
 - [ ] Sends OSC: `/live/track/set/mute X [0/1]`
+- [ ] OSC only goes to Connection 1
 - [ ] Ableton track mutes/unmutes
-- [ ] State persists correctly
 
 #### Pan Control Test
 - [ ] Knob is enabled
 - [ ] Center position = 0.5
 - [ ] Sends OSC: `/live/track/set/panning X [value]`
+- [ ] OSC only goes to Connection 1
 - [ ] Full range -1 to 1 mapped correctly
-- [ ] Syncs with Ableton after release
 
-### 5. Integration Test
-- [ ] All controls work simultaneously
-- [ ] No interference between controls
-- [ ] Logger doesn't overflow
-- [ ] Performance is smooth
+### 5. Connection Isolation Test
+To verify the automatic connection routing:
+1. Create a track named "CG #" in your master project (connection 2)
+2. The band_CG # group should NOT respond to it
+3. Only tracks from connection 1 should be recognized
 
 ## Success Criteria
 Before moving to multiple groups, this single group must:
 1. ✅ Initialize without errors
 2. ✅ Show correct version messages
-3. ✅ Refresh and find track successfully
-4. ✅ Enable/disable based on mapping
-5. ✅ Route OSC to correct connection only
-6. ✅ All controls function properly
-7. ✅ Visual feedback is clear
-8. ✅ No performance issues
+3. ✅ Automatically use correct connection based on name
+4. ✅ Refresh and find track successfully
+5. ✅ Enable/disable based on mapping
+6. ✅ Route OSC to correct connection only
+7. ✅ All controls function properly
+8. ✅ Visual feedback is clear
+9. ✅ No performance issues
 
 ## Troubleshooting
 
 ### Controls don't enable after refresh
 - Check track name matches exactly ("CG #")
-- Verify Connection 1 is active
+- Verify Connection 1 is active and connected to band project
 - Check status LED is green
 - Look for errors in logger
+
+### Group responds to wrong connection
+- This should NOT happen with correct scripts
+- Check group name starts with "band_" for connection 1
+- Verify configuration has `connection_band: 1`
+- Check script version is 1.5.1 or higher
 
 ### No OSC output
 - Ensure group is mapped (green status)
 - Check OSC monitor in TouchOSC
-- Verify connection settings
-
-### Meter not responding
-- Check OSC receive pattern is set
-- Ensure Ableton is sending meter data
-- Verify only Connection 1 is enabled
+- Verify controls are sending to connection 1
 
 ## Next Steps
 Only after this single group works perfectly:
-1. Create additional test groups for edge cases
+1. Create a `master_*` group to test connection 2 routing
 2. Test wrong connection scenarios
 3. Test non-existent tracks
 4. Scale up to full production layout
