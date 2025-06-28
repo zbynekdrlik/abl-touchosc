@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.6.4
--- Fixed: Check control existence before accessing, simplified approach
+-- Version: 1.6.5
+-- Fixed: Removed pcall (not available in TouchOSC), use direct access with checks
 
 -- Version constant
-local SCRIPT_VERSION = "1.6.4"
+local SCRIPT_VERSION = "1.6.5"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -61,13 +61,10 @@ local function parseGroupName(name)
     end
 end
 
--- Safe child access helper
+-- Safe child access helper - no pcall, just direct checks
 local function getChild(parent, name)
-    if parent and parent.children then
-        local success, child = pcall(function() return parent.children[name] end)
-        if success then
-            return child
-        end
+    if parent and parent.children and parent.children[name] then
+        return parent.children[name]
     end
     return nil
 end
