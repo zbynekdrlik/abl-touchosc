@@ -1,9 +1,9 @@
 -- TouchOSC Pan Control Script
--- Version: 1.3.0
+-- Version: 1.3.1
 -- Simple pan control with multi-connection support and logging
 
 -- Version constant
-local VERSION = "1.3.0"
+local VERSION = "1.3.1"
 
 -- Double-tap configuration
 local delay = 300 -- the maximum elapsed time between taps
@@ -198,8 +198,7 @@ function init()
     -- Log version
     log("Script v" .. VERSION .. " loaded")
     
-    -- Ensure we're starting at center
-    self.values.x = 0.5
+    -- DO NOT touch self.values.x - preserve current state!
     
     -- Log parent info
     if self.parent and self.parent.name then
