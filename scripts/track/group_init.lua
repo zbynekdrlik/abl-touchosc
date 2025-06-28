@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.5.6
--- Fixed: Don't touch control values, only visual state. Fix child names.
+-- Version: 1.5.7
+-- Fixed: Use exact child names, no guessing
 
 -- Version constant
-local SCRIPT_VERSION = "1.5.6"
+local SCRIPT_VERSION = "1.5.7"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -109,8 +109,8 @@ local function setGroupEnabled(enabled, silent)
     while self.children[i] do
         local child = self.children[i]
         
-        -- Process all controls except status indicators
-        if child.name ~= "status_indicator" and child.name ~= "status" then
+        -- Process all controls except status_indicator
+        if child.name ~= "status_indicator" then
             -- Disable interaction
             child.interactive = enabled
             
@@ -139,22 +139,13 @@ end
 
 -- Update visual status (minimal - just LED if present)
 local function updateStatus(status)
-    -- Try different common names for status indicator
-    local indicator = nil
-    if self.children then
-        indicator = self.children.status_indicator or 
-                   self.children.status or 
-                   self.children.led or
-                   self.children.indicator
-    end
-    
-    if indicator then
+    if self.children and self.children.status_indicator then
         if status == "ok" then
-            indicator.color = Color(0, 1, 0, 1)  -- Green
+            self.children.status_indicator.color = Color(0, 1, 0, 1)  -- Green
         elseif status == "error" then
-            indicator.color = Color(1, 0, 0, 1)  -- Red
+            self.children.status_indicator.color = Color(1, 0, 0, 1)  -- Red
         elseif status == "stale" then
-            indicator.color = Color(1, 0.5, 0, 1)  -- Orange
+            self.children.status_indicator.color = Color(1, 0.5, 0, 1)  -- Orange
         end
     end
 end
@@ -275,19 +266,11 @@ function onReceiveOSC(message, connections)
                         sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
                         sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
                         
-                        -- Update label if it exists - try common names
-                        local label = nil
-                        if self.children then
-                            label = self.children.label or 
-                                   self.children.track_label or
-                                   self.children.name or
-                                   self.children.text
-                        end
-                        
-                        if label and label.values and label.values.text ~= nil then
+                        -- Update label if it exists - EXACT name only
+                        if self.children and self.children.track_label then
                             local displayName = trackName:match("([^#]+)") or trackName
                             displayName = displayName:gsub("^%s*(.-)%s*$", "%1")  -- Trim whitespace
-                            label.values.text = displayName
+                            self.children.track_label.values.text = displayName
                         end
                         break
                     end
@@ -300,17 +283,8 @@ function onReceiveOSC(message, connections)
                 setGroupEnabled(false)  -- Keep disabled for safety
                 trackNumber = nil  -- Clear any old track number
                 
-                -- Update label to show error
-                local label = nil
-                if self.children then
-                    label = self.children.label or 
-                           self.children.track_label or
-                           self.children.name or
-                           self.children.text
-                end
-                
-                if label and label.values and label.values.text ~= nil then
-                    label.values.text = "???"
+                if self.children and self.children.track_label then
+                    self.children.track_label.values.text = "???"
                 end
             end
             
