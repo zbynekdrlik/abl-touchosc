@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.5.2
--- Fixed: Move all logging inside functions to ensure proper initialization
+-- Version: 1.5.3
+-- Fixed: Safe iteration over children, proper error handling
 
 -- Version constant
-local SCRIPT_VERSION = "1.5.2"
+local SCRIPT_VERSION = "1.5.3"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -87,8 +87,19 @@ end
 
 -- Enable/disable all controls in the group
 local function setGroupEnabled(enabled)
-    -- Disable/enable all child controls
-    for _, child in ipairs(self.children) do
+    -- Check if we have children
+    if not self.children then
+        return
+    end
+    
+    -- Safe iteration - handle both array-like and object-like structures
+    local childCount = 0
+    
+    -- Try numeric indices first
+    local i = 1
+    while self.children[i] do
+        local child = self.children[i]
+        
         -- Skip status indicators and labels
         if child.name ~= "status_indicator" and child.name ~= "track_label" then
             -- Disable interaction
@@ -109,15 +120,19 @@ local function setGroupEnabled(enabled)
             if not enabled and child.values and child.values.x then
                 child.values.x = 0
             end
+            
+            childCount = childCount + 1
         end
+        
+        i = i + 1
     end
     
-    log(self.name .. " controls " .. (enabled and "ENABLED" or "DISABLED"))
+    log(self.name .. " controls " .. (enabled and "ENABLED" or "DISABLED") .. " (" .. childCount .. " controls)")
 end
 
 -- Update visual status (minimal - just LED if present)
 local function updateStatus(status)
-    if self.children.status_indicator then
+    if self.children and self.children.status_indicator then
         if status == "ok" then
             self.children.status_indicator.color = Color(0, 1, 0, 1)  -- Green
         elseif status == "error" then
@@ -163,8 +178,8 @@ function init()
     -- Note: OSC routing must be configured in TouchOSC editor
     log("NOTE: Ensure group has OSC receive pattern: /live/song/get/track_names")
     
-    -- Initial track discovery
-    refreshTrackMapping()
+    -- Don't do initial refresh - wait for global refresh or manual trigger
+    log("Group ready - waiting for refresh")
 end
 
 function refreshTrackMapping()
@@ -238,7 +253,7 @@ function onReceiveOSC(message, connections)
                         sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
                         
                         -- Update label if it exists
-                        if self.children.track_label then
+                        if self.children and self.children.track_label then
                             local displayName = trackName:match("([^#]+)") or trackName
                             displayName = displayName:gsub("^%s*(.-)%s*$", "%1")  -- Trim whitespace
                             self.children.track_label.values.text = displayName
@@ -254,7 +269,7 @@ function onReceiveOSC(message, connections)
                 setGroupEnabled(false)  -- Keep disabled for safety
                 trackNumber = nil  -- Clear any old track number
                 
-                if self.children.track_label then
+                if self.children and self.children.track_label then
                     self.children.track_label.values.text = "???"
                 end
             end
