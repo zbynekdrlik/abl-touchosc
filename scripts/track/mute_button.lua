@@ -1,73 +1,53 @@
 -- mute_button.lua
--- Version: 1.4.7
--- Fixed: Use x value changes like original script, with proper state tracking
+-- Version: 1.5.1
+-- Fixed: Proper button handling for TouchOSC
 
-local VERSION = "1.4.7"
+local VERSION = "1.5.1"
 local debugMode = false
 
 -- State tracking
 local currentMuteState = false
-local lastPressTime = 0
-local DEBOUNCE_TIME = 50  -- ms
-local ignoreNextChange = false  -- Flag to ignore OSC-triggered changes
+local wasPressed = false  -- Track previous button state
 
--- Logging (copied from working fader)
+-- Logging
 local function log(message)
-    -- Get parent name for context
     local context = "MUTE"
     if self.parent and self.parent.name then
         context = "MUTE(" .. self.parent.name .. ")"
     end
     
-    -- Send to document script for logger text update
     root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
--- Debug logging
-local function debugLog(message)
-    if debugMode then
-        log("[DEBUG] " .. message)
-    end
-end
-
--- Get connection configuration (copied from fader)
+-- Get connection configuration
 local function getConnectionIndex()
-    -- Check if parent has tag with instance:trackNumber format
     if self.parent and self.parent.tag then
         local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
         if instance then
-            -- Find configuration object
             local configObj = root:findByName("configuration", true)
             if not configObj or not configObj.values or not configObj.values.text then
-                debugLog("Warning: No configuration found, using default connection 1")
                 return 1
             end
             
             local configText = configObj.values.text
             local searchKey = "connection_" .. instance .. ":"
             
-            -- Parse configuration text
             for line in configText:gmatch("[^\r\n]+") do
-                line = line:match("^%s*(.-)%s*$")  -- Trim whitespace
+                line = line:match("^%s*(.-)%s*$")
                 if line:sub(1, #searchKey) == searchKey then
                     local value = line:sub(#searchKey + 1):match("^%s*(.-)%s*$")
                     return tonumber(value) or 1
                 end
             end
             
-            debugLog("Warning: No config for " .. instance .. " - using default (1)")
             return 1
         end
     end
-    
-    -- Fallback to default
     return 1
 end
 
--- Build connection table for OSC routing
+-- Build connection table
 local function buildConnectionTable(index)
     local connections = {}
     for i = 1, 10 do
@@ -76,9 +56,8 @@ local function buildConnectionTable(index)
     return connections
 end
 
--- Get track number from parent group
+-- Get track number
 local function getTrackNumber()
-    -- Parent stores combined tag like "band:39"
     if self.parent and self.parent.tag then
         local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
         if trackNum then
@@ -88,73 +67,39 @@ local function getTrackNumber()
     return nil
 end
 
--- Check if track is properly mapped
-local function isTrackMapped()
-    -- If parent doesn't have proper tag format, it's not mapped
-    if not self.parent or not self.parent.tag then
-        return false
-    end
-    
-    -- Check for instance:trackNumber format
-    local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
-    return instance ~= nil and trackNum ~= nil
-end
-
--- Send OSC with connection routing
-local function sendOSCRouted(path, track, value)
+-- Send OSC with routing
+local function sendMute(trackNumber, muteState)
     local connectionIndex = getConnectionIndex()
     local connections = buildConnectionTable(connectionIndex)
-    -- CRITICAL: Ensure track is sent as number (integer/float in OSC)
-    sendOSC(path, tonumber(track), value, connections)
+    sendOSC("/live/track/set/mute", trackNumber, muteState, connections)
+    log("Sent mute " .. (muteState and "ON" or "OFF") .. " for track " .. trackNumber)
 end
 
 -- Handle OSC messages
 function onReceiveOSC(message, connections)
-    local path = message[1]
     local arguments = message[2]
     
-    if path == '/live/track/get/mute' then
+    if message[1] == '/live/track/get/mute' then
         local myTrackNumber = getTrackNumber()
         if not myTrackNumber then
             return false
         end
         
-        -- Check if this message is for our track
-        -- Handle both FLOAT and STRING track numbers from Ableton
-        local msgTrackNumber = nil
-        if arguments[1] then
-            if type(arguments[1].value) == "number" then
-                msgTrackNumber = arguments[1].value
-            elseif type(arguments[1].value) == "string" then
-                msgTrackNumber = tonumber(arguments[1].value)
-            end
-        end
-        
-        if msgTrackNumber == myTrackNumber then
-            -- Check if message came from expected connection
+        if arguments[1] and arguments[1].value == myTrackNumber then
+            -- Get expected connection
             local expectedConnection = getConnectionIndex()
             if connections[expectedConnection] then
-                -- Update button state from Ableton's response
-                local isMuted = arguments[2] and arguments[2].value
-                currentMuteState = isMuted
+                -- Update state
+                currentMuteState = arguments[2] and arguments[2].value == true
                 
-                -- Set flag to ignore the next value change
-                ignoreNextChange = true
-                
-                -- FIXED: Correct visual state mapping
-                -- When muted (true) → button pressed (x=0)
-                -- When unmuted (false) → button released (x=1)
-                if isMuted then
-                    self.values.x = 0
+                -- Update visual
+                if currentMuteState then
+                    self.values.x = 0  -- Muted = pressed
                 else
-                    self.values.x = 1
+                    self.values.x = 1  -- Unmuted = released
                 end
                 
-                log("Received mute state for track " .. myTrackNumber .. ": " .. 
-                    (isMuted and "MUTED" or "UNMUTED"))
-            else
-                debugLog("Ignoring mute for track " .. myTrackNumber .. 
-                    " from wrong connection")
+                log("Received mute state: " .. (currentMuteState and "MUTED" or "UNMUTED"))
             end
         end
     end
@@ -162,78 +107,38 @@ function onReceiveOSC(message, connections)
     return false
 end
 
--- Handle button press (using x value like original)
-function onValueChanged(key)
-    -- Only process x value changes
-    if key ~= "x" then
+-- Update function to detect button state changes
+function update()
+    local trackNumber = getTrackNumber()
+    if not trackNumber then
         return
     end
     
-    -- Check if we should ignore this change (from OSC update)
-    if ignoreNextChange then
-        ignoreNextChange = false
-        debugLog("Ignoring value change from OSC update")
-        return
+    -- Check if button state changed (user pressed/released)
+    local isPressed = (self.values.x == 0)
+    
+    -- Detect press event (transition from not pressed to pressed)
+    if isPressed and not wasPressed then
+        -- Button was just pressed - toggle mute
+        local newMuteState = not currentMuteState
+        currentMuteState = newMuteState
+        sendMute(trackNumber, newMuteState)
     end
     
-    -- Safety check: only process if track is mapped
-    if not isTrackMapped() then
-        return
-    end
-    
-    -- Only process if this is a user action (touch is active)
-    if self.values.touch then
-        -- Debounce check
-        local now = getMillis()
-        if now - lastPressTime < DEBOUNCE_TIME then
-            debugLog("Debounce - ignoring press")
-            return
-        end
-        lastPressTime = now
-        
-        local trackNumber = getTrackNumber()
-        if trackNumber then
-            -- Toggle mute state based on button press
-            -- When user presses (x goes to 0), we want to toggle
-            local newMuteState = not currentMuteState
-            currentMuteState = newMuteState  -- Update state immediately
-            
-            log("Sending mute " .. (newMuteState and "ON" or "OFF") .. 
-                " for track " .. trackNumber)
-            
-            -- Send as boolean with track as number
-            sendOSCRouted("/live/track/set/mute", trackNumber, newMuteState)
-        end
-    end
-end
-
--- Handle notifications from parent
-function onReceiveNotify(key, value)
-    if key == "track_changed" then
-        -- Reset state when track changes
-        currentMuteState = false
-        ignoreNextChange = true
-        self.values.x = 1  -- Start unmuted (button released)
-        debugLog("Track changed - reset mute button")
-    elseif key == "track_unmapped" then
-        -- Button will be disabled by parent
-        debugLog("Track unmapped - mute button disabled")
-    end
+    wasPressed = isPressed
 end
 
 -- Initialize
 function init()
-    -- Log version
     log("Script v" .. VERSION .. " loaded")
     
-    -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
     end
     
-    -- Set initial visual state
-    self.values.x = 1  -- Start unmuted (button released)
+    -- Set initial state
+    self.values.x = 1  -- Start unmuted
+    wasPressed = false
 end
 
--- Call init directly (like fader does)
 init()
