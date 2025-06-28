@@ -1,129 +1,179 @@
-# Selective Connection Routing for TouchOSC
+# ABL TouchOSC - Multi-Instance Ableton Control System
 
 ## Overview
-This system enables TouchOSC to route different controls to different Ableton Live instances, allowing complex multi-instance setups where some controls go to a "band" instance and others to a "master" instance.
+A sophisticated TouchOSC template system that enables control of multiple Ableton Live instances simultaneously, with automatic connection routing based on track groups. Controls can target different Ableton instances (e.g., "band" vs "master") automatically.
 
-## Current Status: Phase 3 - Testing ✅
+## Current Status: Phase 3 - Control Testing 🚧
 
-### System Architecture
-- **document_script.lua** (v2.5.7) - Main document script handling configuration, logging, and coordination
-- **Notify System** - Inter-script communication via notify() calls
-- **Recursive Search** - Objects can be placed anywhere (even in pagers)
-- **Connection Routing** - Controls route OSC to specific Ableton instances
+### ✅ What's Working
+- **Configuration System** - Text-based configuration for connection mapping
+- **Centralized Logging** - Visual logger with 60-line buffer
+- **Group Routing** - Automatic connection selection based on group names
+- **Track Discovery** - Automatic track mapping with exact name matching
+- **Global Refresh** - Single button to refresh all track mappings
+- **Safety Features** - Controls auto-disable when tracks not found
+- **Fader Control** - Fully working with advanced features (v2.3.3)
 
-### What's Working
-- ✅ Configuration system via text object (can be placed anywhere)
-- ✅ Visual logger for debugging (60-line capacity)
-- ✅ Group-based connection routing with safety features
-- ✅ Automatic track discovery with exact name matching
-- ✅ Global refresh system (single button for all groups)
-- ✅ Controls automatically disable when track not found
-- ✅ Clear visual status indicators
-- ✅ All control scripts now connection-aware (v2.0.0)
+### 🚧 In Testing
+- Meter display
+- Mute buttons
+- Pan controls
+- Multi-instance isolation
 
-### Key Scripts
-1. **document_script.lua** (v2.5.7) - Main coordinator script
-2. **group_init.lua** (v1.5.1) - Group initialization with safety
-3. **global_refresh_button.lua** (v1.1.0) - Single refresh button
-4. **Control Scripts** (all v2.0.0) - Fader, meter, mute, pan
+## Key Features
 
-## Quick Start
+### 1. Automatic Connection Routing
+Groups named with prefixes automatically route to specific Ableton instances:
+- `band_*` → Band Ableton instance
+- `master_*` → Master Ableton instance
 
-### 1. Setup Configuration
-Create a text object named "configuration" (can be anywhere in document):
+### 2. Advanced Fader Features
+The fader control includes sophisticated functionality:
+- Movement smoothing with gradual scaling
+- Immediate 0.1dB minimum response
+- Emergency movement detection
+- Double-tap to jump to 0dB
+- Logarithmic curve (-6dB at 50% position)
+- Sync with 1-second delay after release
+
+### 3. Script Architecture
+- **Complete Isolation** - Each script is self-contained
+- **Notify System** - Inter-script communication via notifications
+- **Centralized Logging** - All scripts log through document script
+- **Configuration Reading** - Each script reads config independently
+
+## Quick Start Guide
+
+### 1. Configuration Setup
+Create a text object named `configuration`:
 ```
 # TouchOSC Connection Configuration
-connection_band: 1
-connection_master: 2
+connection_band: 2
+connection_master: 3
 
-# Optional: Auto-unfold groups
+# Optional: Auto-unfold groups in Ableton
 unfold_band: "Drums"
 unfold_master: "Vocals"
 ```
 
-### 2. Add Document Script
-Add `document_script.lua` to document root
+### 2. Core Components
+1. **Document Script** - Attach `document_script.lua` (v2.5.9) to root
+2. **Logger** - Create text object named `logger` for debug output
+3. **Refresh Button** - Add button with `global_refresh_button.lua`
 
-### 3. Create Logger (Optional)
-Add text object named "logger" for visual debugging (can be in a pager)
+### 3. Track Group Setup
+For each track you want to control:
+1. Create a group named `band_TrackName` or `master_TrackName`
+2. Add LED named `status_indicator` inside
+3. Set OSC Receive: `/live/song/get/track_names`
+4. Enable ALL connections (1-10)
+5. Attach `group_init.lua` (v1.7.0)
 
-### 4. Create Global Refresh
-Add a button with `global_refresh_button.lua`
+### 4. Add Controls
+Inside each track group, add:
+- **Fader** - Volume control with `fader_script.lua` (v2.3.3)
+- **Meter** - Level display with `meter_script.lua` (v2.1.0)
+- **Mute** - Mute button with `mute_button.lua` (v1.1.0)
+- **Pan** - Pan knob with `pan_control.lua` (v1.1.0)
 
-### 5. Setup Groups
-- Rename groups with prefix: "band_" or "master_"
-- Add status indicator LED named "status_indicator"
-- Configure OSC receive: `/live/song/get/track_names`
-- Add `group_init.lua` script
+### 5. Usage
+1. Press the global refresh button
+2. Green LED = Track found and mapped
+3. Red LED = Track not found (controls disabled)
 
-### 6. Add Controls
-Each control type has connection-aware scripts:
-- **fader_script.lua** - Volume control
-- **meter_script.lua** - Level display
-- **mute_button.lua** - Mute toggle
-- **pan_control.lua** - Pan adjustment
+## Script Versions
 
-### 7. Test
-- Press global refresh button
-- Green = mapped correctly
-- Red = track not found (controls disabled)
-
-## Key Features
-
-### Flexible Object Placement
-- Configuration and logger can be anywhere in the document
-- Document script uses recursive `findByName()` search
-- Objects can be organized in pagers for clean layouts
-
-### Safety Features
-- Controls automatically disable when track not found
-- Exact name matching prevents wrong track control
-- Visual feedback shows connection status
-- Track mappings cleared before refresh
-
-### Communication System
-- Scripts communicate via notify() system
-- No global variables between scripts
-- Parent-child property access for data sharing
+| Script | Version | Status | Purpose |
+|--------|---------|---------|----------|
+| document_script.lua | 2.5.9 | ✅ Stable | Configuration & logging |
+| group_init.lua | 1.7.0 | ✅ Stable | Track mapping & routing |
+| global_refresh_button.lua | 1.4.0 | ✅ Stable | Refresh all groups |
+| fader_script.lua | 2.3.3 | ✅ Stable | Volume control |
+| meter_script.lua | 2.1.0 | 🚧 Testing | Level display |
+| mute_button.lua | 1.1.0 | 🚧 Testing | Mute toggle |
+| pan_control.lua | 1.1.0 | 🚧 Testing | Pan adjustment |
 
 ## Documentation
-- [Phase 3 Testing Plan](docs/phase-3-script-testing.md) - Current testing procedures
-- [Phase 1&2 Guide](docs/01-selective-connection-routing-phase.md) - Complete implementation
-- [TouchOSC Lua Rules](rules/touchosc-lua-rules.md) - Critical development guidelines
-- [Implementation Progress](docs/implementation-progress.md) - Status tracking
 
-## Technical Details
+### Essential Reading
+- [TouchOSC Lua Rules](rules/touchosc-lua-rules.md) - Critical rules and patterns
+- [Script Template](docs/touchosc-script-template.md) - Template for new controls
+- [Phase 3 Testing](docs/phase-3-script-testing.md) - Current testing procedures
 
-### OSC Routing
+### Guides
+- [Phase 1&2 Implementation](docs/01-selective-connection-routing-phase.md)
+- [Production Migration](docs/production-migration-guide.md)
+- [Verification Checklist](docs/verification-checklist.md)
+
+## Technical Architecture
+
+### Script Isolation
+TouchOSC scripts are completely isolated:
+- No shared variables or functions
+- Each script must be self-contained
+- Communication only via `notify()` system
+- Configuration read independently by each script
+
+### Connection Routing
 ```lua
--- Connection-specific routing
-local connections = createConnectionTable(connectionIndex)
+-- Each control determines its target connection
+local connectionIndex = getConnectionIndex()  -- Reads config
+local connections = buildConnectionTable(connectionIndex)
 sendOSC('/live/track/set/volume', track, value, connections)
 ```
 
-### Script Isolation
-- Each script runs in its own Lua context
-- No shared variables or state
-- Communication only via notify() and properties
+### Tag Format
+Groups use `instance:track` format for internal tracking:
+- Example: `band:39` means band instance, track 39
+- Scripts parse this to extract track number and instance
 
-### Version Requirements
-- TouchOSC 1.2.0 or later
-- AbletonOSC on both Ableton instances
-- Unique receive ports for each connection
+## Known Issues & Solutions
+
+### Issue: Scripts Can't Share Functions
+**Solution**: Each script reads configuration directly
+```lua
+local configObj = root:findByName("configuration", true)
+```
+
+### Issue: OSC Parameter Order
+**Solution**: Use explicit parameters instead of varargs
+```lua
+sendOSC(path, param1, param2, connections)  -- ✅ Good
+sendOSC(path, ..., connections)             -- ❌ Bad
+```
+
+### Issue: Logger Verbosity
+**Solution**: Use debug mode for detailed logs
+```lua
+local DEBUG = 0  -- Set to 1 for verbose logging
+```
+
+## Requirements
+
+- TouchOSC 1.2.0+
+- AbletonOSC installed on each Ableton instance
+- Unique OSC ports for each connection
+- Exact track names matching between TouchOSC and Ableton
 
 ## Troubleshooting
 
-### Common Issues
-1. **Objects not found** - Check names are exact (case-sensitive)
-2. **No track mapping** - Verify exact track names in Ableton
-3. **Wrong connection** - Check configuration text
-4. **Controls not disabling** - Update to latest script versions
+1. **Check the logger** - Most issues are logged
+2. **Verify track names** - Must match exactly (including spaces/symbols)
+3. **Check configuration** - Ensure connection numbers are correct
+4. **Enable debug mode** - Set DEBUG = 1 in scripts for detailed logs
+5. **Test single track** - Start with one `band_*` group before scaling
 
-### Debug Steps
-1. Check logger for error messages
-2. Verify configuration parsed correctly
-3. Use test_helper.lua for diagnostics
-4. Check OSC monitor in TouchOSC
+## Contributing
+
+When adding new controls:
+1. Use the [script template](docs/touchosc-script-template.md)
+2. Follow [TouchOSC rules](rules/touchosc-lua-rules.md)
+3. Test with both instances
+4. Update documentation
+5. Increment version numbers
 
 ## Support
-See documentation folder for detailed guides and troubleshooting.
+
+- Check `/docs` folder for detailed guides
+- Review `/rules` for TouchOSC-specific patterns
+- See `THREAD_PROGRESS.md` for latest updates
