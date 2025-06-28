@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.9.1
--- Added: Debug logging for track_label issues
+-- Version: 1.9.2
+-- Fixed: Use correct label name "fdr_label" from original script
 
 -- Version constant
-local SCRIPT_VERSION = "1.9.1"
+local SCRIPT_VERSION = "1.9.2"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -93,7 +93,7 @@ local function setGroupEnabled(enabled, silent)
     local childCount = 0
     
     -- Only check for controls we know exist
-    local controlsToCheck = {"fader", "mute", "pan", "meter", "track_label"}
+    local controlsToCheck = {"fader", "mute", "pan", "meter", "fdr_label"}  -- Changed from track_label
     
     for _, name in ipairs(controlsToCheck) do
         local child = getChild(self, name)
@@ -156,20 +156,6 @@ function init()
     
     -- Set initial status
     updateStatus("error")
-    
-    -- Check if track_label exists
-    local label = getChild(self, "track_label")
-    if label then
-        log("track_label found - setting initial text")
-        if label.values and label.values.text ~= nil then
-            label.values.text = "..."
-            log("track_label text set to '...'")
-        else
-            log("WARNING: track_label doesn't have values.text property!")
-        end
-    else
-        log("No track_label control found")
-    end
     
     log("Ready - waiting for refresh")
 end
@@ -253,20 +239,15 @@ function onReceiveOSC(message, connections)
                         sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
                         sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
                         
-                        -- Update label if it exists
-                        local label = getChild(self, "track_label")
-                        if label then
-                            local displayName = trackName:match("([^#]+)") or trackName
-                            displayName = displayName:gsub("^%s*(.-)%s*$", "%1")  -- Trim whitespace
-                            log("Updating track_label to: '" .. displayName .. "'")
-                            if label.values and label.values.text ~= nil then
-                                label.values.text = displayName
-                                log("track_label updated successfully")
+                        -- Update label if it exists - using ORIGINAL method
+                        if self.children and self.children["fdr_label"] then
+                            -- Use original pattern match that captures only word characters
+                            local displayName = trackName:match("(%w+)")
+                            if displayName then
+                                self.children["fdr_label"].values.text = displayName
                             else
-                                log("ERROR: track_label doesn't have values.text!")
+                                self.children["fdr_label"].values.text = trackName
                             end
-                        else
-                            log("No track_label found to update")
                         end
                         break
                     end
@@ -288,18 +269,9 @@ function onReceiveOSC(message, connections)
                     end
                 end
                 
-                -- Update label to show error
-                local label = getChild(self, "track_label")
-                if label then
-                    log("Setting track_label to '???' (track not found)")
-                    if label.values and label.values.text ~= nil then
-                        label.values.text = "???"
-                        log("track_label set to '???'")
-                    else
-                        log("ERROR: track_label doesn't have values.text!")
-                    end
-                else
-                    log("No track_label found to update")
+                -- Update label to show error - using ORIGINAL method
+                if self.children and self.children["fdr_label"] then
+                    self.children["fdr_label"].values.text = "???"
                 end
             end
             
