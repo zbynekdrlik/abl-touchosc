@@ -4,39 +4,41 @@
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
 - [x] Phase 3 COMPLETE - All controls tested and working
 - [x] Added dB value label script v1.0.1
+- [x] Documentation reorganized to GitHub best practices
 - [ ] Currently: Phase 4 - Production Scaling
-- [ ] Waiting for: User to add label to TouchOSC and test
+- [ ] Waiting for: User to test dB label and provide group names
 - [ ] Next: Create additional track groups
 
 ## Implementation Status
 - Phase: 4 - Production Scaling
-- Step: Adding dB label control
-- Status: IMPLEMENTING
+- Step: Documentation cleanup complete, ready for scaling
+- Status: WAITING FOR USER INPUT
 - Date: 2025-06-29
 
 ## Phase 4 Progress
 
-### ✅ Just Updated:
-**dB Label Script v1.0.1**
-- Now shows dash "-" when track unmapped (not empty string)
-- All other features working as before
+### ✅ Just Completed:
+**Documentation Reorganization**
+- README.md now feature-focused (not phase-focused)
+- Added CONTRIBUTING.md with development guidelines
+- Added TECHNICAL.md with comprehensive technical docs
+- Added docs/README.md as documentation index
+- Ready to archive old phase documentation
 
-### ✅ Added:
-**dB Label Script v1.0.0** - Shows fader value in dB
-- Follows established multi-connection routing pattern
-- Reads configuration directly
-- Converts linear to dB using exact same formula as fader
-- Shows "-inf" for minimum values
-- Unified logging integration
+### ✅ dB Label Added:
+**dB Label Script v1.0.1**
+- Shows fader value in dB format
+- Shows "-" when track unmapped
+- Follows all established patterns
+- User confirmed working in logs
 
 ### 🔄 User Action Required:
-1. Add a Label control to `band_CG #` group
-2. Set its OSC receive to `/live/track/get/volume`
-3. Attach the `db_label.lua` script
-4. Test that it shows dB values when fader moves
-5. Confirm it shows "-" when track is unmapped
+1. Confirm dB label working in TouchOSC
+2. Provide naming scheme for groups:
+   - Band groups (8 total): band_CG #, band_??? #, etc.
+   - Master groups (8 total): master_??? #, etc.
 
-## Script Versions - Updated
+## Script Versions - Current
 | Script | Version | Purpose |
 |--------|---------|---------|
 | document_script.lua | 2.7.1 | Central management + auto refresh |
@@ -45,39 +47,46 @@
 | meter_script.lua | 2.2.2 | Calibrated level metering |
 | mute_button.lua | 1.8.0 | Mute state management |
 | pan_control.lua | 1.3.2 | Pan with visual feedback |
-| **db_label.lua** | **1.0.1** | **dB value display (NEW)** |
+| db_label.lua | 1.0.1 | dB value display |
 | global_refresh_button.lua | 1.4.0 | Manual refresh trigger |
 
-## Phase 3 Completion Summary
+## Documentation Updates
 
-### ✅ All Controls Tested and Working:
-1. **Fader v2.3.5** - Professional movement scaling, double-tap to 0dB
-2. **Meter v2.2.2** - Exact calibration, color thresholds
-3. **Mute Button v1.8.0** - State tracking, unified logging
-4. **Pan Control v1.3.2** - Double-tap to center, visual feedback
-5. **Group Script v1.9.6** - No visual corruption, dynamic labels
+### New Files Created:
+- **docs/CONTRIBUTING.md** - Development guidelines
+- **docs/TECHNICAL.md** - Comprehensive technical documentation
+- **docs/README.md** - Documentation index/navigation
 
-### ✅ Architecture Features:
-- Multi-connection routing (Band: 2, Master: 3)
-- Complete script isolation
-- State preservation
-- Unified logging system
-- Automatic startup refresh
+### Updated Files:
+- **README.md** - Now feature-focused, professional presentation
+- Removed development phase focus
+- Added clear user guide sections
+
+### To Archive (old phase docs):
+- docs/01-selective-connection-routing-phase.md
+- docs/phase-3-production-testing.md
+- docs/phase-3-script-testing.md
+- docs/single-track-complete-test.md
+- docs/test-group-setup.md
+- docs/implementation-progress.md
+- docs/verification-checklist.md
 
 ## Next Phase 4 Steps: Production Scaling
 
-### Track Group Naming:
-Need user input on group names:
-- **Band groups (connection 2)**: band_CG #, band_DR #, etc?
-- **Master groups (connection 3)**: master_Hand1 # through master_Hand8 #?
+### Waiting for User Input:
+1. **Band group names** (connection 2)
+   - Current: band_CG #
+   - Need 7 more names
+   
+2. **Master group names** (connection 3)
+   - Need 8 names total
 
 ### Implementation Plan:
 1. ✅ Add dB label to existing controls
-2. ⏳ Test dB label functionality
-3. ⏳ Duplicate band_CG # group 7 times
-4. ⏳ Create 8 master groups on connection 3
-5. ⏳ Test cross-connection isolation
-6. ⏳ Performance test with 100+ tracks
+2. ✅ Reorganize documentation
+3. ⏳ Create additional track groups (waiting for names)
+4. ⏳ Test cross-connection isolation
+5. ⏳ Performance test with 100+ tracks
 
 ## Configuration
 ```
@@ -88,12 +97,13 @@ unfold_master: 'Master'
 ```
 
 ## Documentation Status
-- ✅ README.md - Complete overview
+- ✅ README.md - Feature-focused overview
 - ✅ CHANGELOG.md - All versions documented
-- ✅ development-phases.md - Phase planning complete
-- ✅ project-summary.md - Quick reference
-- ✅ touchosc-lua-rules.md - Critical knowledge captured
+- ✅ docs/CONTRIBUTING.md - Development guidelines
+- ✅ docs/TECHNICAL.md - Technical documentation
+- ✅ docs/README.md - Documentation index
+- ✅ rules/touchosc-lua-rules.md - Critical TouchOSC knowledge
 
 ---
 
-**Currently in Phase 4 - dB label v1.0.1 ready, waiting for testing**
+**Currently waiting for user to provide track group naming scheme for production scaling**
