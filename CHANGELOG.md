@@ -9,13 +9,17 @@ All notable changes to the ABL TouchOSC project are documented here.
 
 ## Phase 4 Started - 2025-06-29
 
+### dB Label [1.0.1]
+- Changed to show dash "-" when track unmapped
+- Previously showed empty string
+
 ### dB Label [1.0.0] - NEW
 - Shows fader value in dB format
 - Multi-connection routing support
 - Uses exact same dB conversion as fader
 - Shows "-inf" for minimum values
 - Unified logging integration
-- Clears display when track unmapped
+- Shows dash when track unmapped
 
 ## Phase 3 Complete - 2025-06-29
 
