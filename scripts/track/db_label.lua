@@ -1,10 +1,11 @@
 -- TouchOSC dB Value Label Display
--- Version: 1.0.0
+-- Version: 1.0.1
 -- Shows the current fader value in dB
 -- Multi-connection routing support
+-- Changed: Shows "-" when track unmapped
 
 -- Version constant
-local VERSION = "1.0.0"
+local VERSION = "1.0.1"
 
 -- ===========================
 -- CENTRALIZED LOGGING
@@ -132,10 +133,10 @@ function onReceiveNotify(key, value)
         self.lastDB = -math.huge
         log("Track changed - display reset")
     elseif key == "track_unmapped" then
-        -- Clear display when unmapped
-        self.values.text = ""
+        -- Show dash when unmapped
+        self.values.text = "-"
         self.lastDB = nil
-        log("Track unmapped - display cleared")
+        log("Track unmapped - display shows dash")
     elseif key == "control_enabled" then
         -- Show/hide based on track mapping status
         self.values.visible = value
@@ -154,7 +155,7 @@ function init()
     if isTrackMapped() then
         self.values.text = "-inf"
     else
-        self.values.text = ""
+        self.values.text = "-"
     end
     
     -- Initialize last dB tracking
