@@ -1,9 +1,9 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.5.9
+-- Version: 2.6.0
 -- Purpose: Main document script with configuration, logging, and track management
--- Added: Handle log_message notifications from other scripts
+-- Changed: Removed print statement from log function to avoid duplicate console output
 
-local VERSION = "2.5.9"
+local VERSION = "2.6.0"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -22,8 +22,7 @@ local maxLogLines = 60  -- Increased from 20 to 60 for full-height logger
 local function log(message)
     local logMessage = os.date("%H:%M:%S") .. " " .. message
     
-    -- Always print to console
-    print(logMessage)
+    -- REMOVED print to console - scripts will handle their own console output
     
     -- Store messages
     table.insert(logLines, logMessage)
