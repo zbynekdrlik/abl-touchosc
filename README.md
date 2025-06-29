@@ -1,179 +1,173 @@
-# ABL TouchOSC - Multi-Instance Ableton Control System
+# ABL TouchOSC Control Surface
 
-## Overview
-A sophisticated TouchOSC template system that enables control of multiple Ableton Live instances simultaneously, with automatic connection routing based on track groups. Controls can target different Ableton instances (e.g., "band" vs "master") automatically.
+A professional TouchOSC control surface for Ableton Live with advanced multi-instance routing capabilities. This project enables sophisticated control of multiple Ableton Live instances through a single TouchOSC interface with intelligent connection management.
 
-## Current Status: Phase 3 - Control Testing 🚧
+## Features
 
-### ✅ What's Working
-- **Configuration System** - Text-based configuration for connection mapping
-- **Centralized Logging** - Visual logger with 60-line buffer
-- **Group Routing** - Automatic connection selection based on group names
-- **Track Discovery** - Automatic track mapping with exact name matching
-- **Global Refresh** - Single button to refresh all track mappings
-- **Safety Features** - Controls auto-disable when tracks not found
-- **Fader Control** - Fully working with advanced features (v2.3.3)
+### ✅ Implemented
+- **Multi-Connection Routing**: Control multiple Ableton instances (band/master) from one interface
+- **Dynamic Track Mapping**: Automatic track discovery and mapping with visual feedback
+- **Professional Fader Control**: 
+  - Sophisticated movement scaling for precise control
+  - Double-tap to 0dB functionality
+  - Exact dB curve matching Ableton's faders
+- **Accurate Level Metering**: 
+  - Calibrated to match Ableton's meter response
+  - Color-coded levels (green/yellow/red)
+  - Per-connection routing
+- **Smart Mute Buttons**: State tracking with feedback loop prevention
+- **Pan Controls**: Double-tap to center with visual feedback
+- **Automatic Group Unfolding**: Configure which track groups to auto-unfold per connection
+- **Visual Design Preservation**: Scripts never alter your carefully designed interface
 
-### 🚧 In Testing
-- Meter display
-- Mute buttons
-- Pan controls
-- Multi-instance isolation
+### 🚧 In Development
+- Full production scaling (8 band + 8 master groups)
+- Solo and record arm controls
+- Send level controls
+- Device parameter mapping
+- Track color synchronization
 
-## Key Features
+## Architecture
 
-### 1. Automatic Connection Routing
-Groups named with prefixes automatically route to specific Ableton instances:
-- `band_*` → Band Ableton instance
-- `master_*` → Master Ableton instance
-
-### 2. Advanced Fader Features
-The fader control includes sophisticated functionality:
-- Movement smoothing with gradual scaling
-- Immediate 0.1dB minimum response
-- Emergency movement detection
-- Double-tap to jump to 0dB
-- Logarithmic curve (-6dB at 50% position)
-- Sync with 1-second delay after release
-
-### 3. Script Architecture
-- **Complete Isolation** - Each script is self-contained
-- **Notify System** - Inter-script communication via notifications
-- **Centralized Logging** - All scripts log through document script
-- **Configuration Reading** - Each script reads config independently
-
-## Quick Start Guide
-
-### 1. Configuration Setup
-Create a text object named `configuration`:
+### Connection Model
 ```
-# TouchOSC Connection Configuration
-connection_band: 2
-connection_master: 3
-
-# Optional: Auto-unfold groups in Ableton
-unfold_band: "Drums"
-unfold_master: "Vocals"
+TouchOSC Interface
+    ├── Band Controls (Connection 2)
+    │   └── Controls Ableton Instance 1 (Band)
+    └── Master Controls (Connection 3)
+        └── Controls Ableton Instance 2 (Master)
 ```
 
-### 2. Core Components
-1. **Document Script** - Attach `document_script.lua` (v2.5.9) to root
-2. **Logger** - Create text object named `logger` for debug output
-3. **Refresh Button** - Add button with `global_refresh_button.lua`
+### Script Architecture
+- **Document Script**: Central configuration and logging management
+- **Group Scripts**: Track discovery and control management
+- **Control Scripts**: Individual fader, meter, mute, pan functionality
+- **Complete Script Isolation**: Each script is self-contained with direct config reading
 
-### 3. Track Group Setup
-For each track you want to control:
-1. Create a group named `band_TrackName` or `master_TrackName`
-2. Add LED named `status_indicator` inside
-3. Set OSC Receive: `/live/song/get/track_names`
-4. Enable ALL connections (1-10)
-5. Attach `group_init.lua` (v1.7.0)
+## Installation
 
-### 4. Add Controls
-Inside each track group, add:
-- **Fader** - Volume control with `fader_script.lua` (v2.3.3)
-- **Meter** - Level display with `meter_script.lua` (v2.1.0)
-- **Mute** - Mute button with `mute_button.lua` (v1.1.0)
-- **Pan** - Pan knob with `pan_control.lua` (v1.1.0)
+1. **Prerequisites**
+   - TouchOSC (latest version)
+   - Ableton Live with AbletonOSC installed
+   - Multiple network connections configured
 
-### 5. Usage
-1. Press the global refresh button
-2. Green LED = Track found and mapped
-3. Red LED = Track not found (controls disabled)
+2. **Setup**
+   - Load the TouchOSC file
+   - Configure connections in the configuration text:
+     ```
+     connection_band: 2
+     connection_master: 3
+     ```
+   - Set unfold groups per connection:
+     ```
+     unfold_band: 'Band'
+     unfold_master: 'Master'
+     ```
 
-## Script Versions
+3. **Usage**
+   - Press Refresh to discover tracks
+   - Groups automatically map to their configured tracks
+   - Controls route to the correct Ableton instance
 
-| Script | Version | Status | Purpose |
-|--------|---------|---------|----------|
-| document_script.lua | 2.5.9 | ✅ Stable | Configuration & logging |
-| group_init.lua | 1.7.0 | ✅ Stable | Track mapping & routing |
-| global_refresh_button.lua | 1.4.0 | ✅ Stable | Refresh all groups |
-| fader_script.lua | 2.3.3 | ✅ Stable | Volume control |
-| meter_script.lua | 2.1.0 | 🚧 Testing | Level display |
-| mute_button.lua | 1.1.0 | 🚧 Testing | Mute toggle |
-| pan_control.lua | 1.1.0 | 🚧 Testing | Pan adjustment |
+## Technical Details
 
-## Documentation
+### Version Management
+All scripts follow semantic versioning:
+- PATCH: Bug fixes and minor improvements
+- MINOR: New features or completing development phases
+- MAJOR: Breaking changes or architectural updates
 
-### Essential Reading
-- [TouchOSC Lua Rules](rules/touchosc-lua-rules.md) - Critical rules and patterns
-- [Script Template](docs/touchosc-script-template.md) - Template for new controls
-- [Phase 3 Testing](docs/phase-3-script-testing.md) - Current testing procedures
+### State Management
+- Controls preserve their state between sessions
+- No assumptions about default positions
+- State changes only from user action or Ableton updates
 
-### Guides
-- [Phase 1&2 Implementation](docs/01-selective-connection-routing-phase.md)
-- [Production Migration](docs/production-migration-guide.md)
-- [Verification Checklist](docs/verification-checklist.md)
+### Logging System
+- Centralized logging through document script
+- All scripts report to unified logger
+- Debug mode available for troubleshooting
 
-## Technical Architecture
+## Development Phases
 
-### Script Isolation
-TouchOSC scripts are completely isolated:
-- No shared variables or functions
-- Each script must be self-contained
-- Communication only via `notify()` system
-- Configuration read independently by each script
+### ✅ Phase 1: Foundation (Complete)
+- Basic OSC communication
+- Configuration system
+- Track discovery
 
-### Connection Routing
-```lua
--- Each control determines its target connection
-local connectionIndex = getConnectionIndex()  -- Reads config
-local connections = buildConnectionTable(connectionIndex)
-sendOSC('/live/track/set/volume', track, value, connections)
+### ✅ Phase 2: Multi-Connection (Complete)
+- Connection routing architecture
+- Per-instance track management
+- Instance-specific unfolding
+
+### ✅ Phase 3: Control Implementation (Complete)
+- Fader with sophisticated scaling
+- Calibrated meters
+- Mute buttons with state tracking
+- Pan controls with visual feedback
+
+### 🚧 Phase 4: Production Scaling
+- Multiple track groups
+- Performance optimization
+- Full project testing
+
+### 📋 Phase 5: Logging Optimization (Planned)
+- Debug level implementation
+- Concise production logging
+- Performance monitoring
+
+### 📋 Phase 6: Advanced Features (Planned)
+- Additional control types
+- Device control
+- Advanced routing options
+
+## Configuration Reference
+
+### Connection Configuration
+```
+# Map instances to OSC connections
+connection_band: 2      # Band controls use connection 2
+connection_master: 3    # Master controls use connection 3
 ```
 
-### Tag Format
-Groups use `instance:track` format for internal tracking:
-- Example: `band:39` means band instance, track 39
-- Scripts parse this to extract track number and instance
-
-## Known Issues & Solutions
-
-### Issue: Scripts Can't Share Functions
-**Solution**: Each script reads configuration directly
-```lua
-local configObj = root:findByName("configuration", true)
+### Unfold Configuration
+```
+# Auto-unfold track groups
+unfold_band: 'Band'     # Unfold 'Band' group on band connection
+unfold_master: 'Master' # Unfold 'Master' group on master connection
+unfold: 'Drums'         # Unfold on all connections (legacy)
 ```
 
-### Issue: OSC Parameter Order
-**Solution**: Use explicit parameters instead of varargs
-```lua
-sendOSC(path, param1, param2, connections)  -- ✅ Good
-sendOSC(path, ..., connections)             -- ❌ Bad
-```
+## Script Reference
 
-### Issue: Logger Verbosity
-**Solution**: Use debug mode for detailed logs
-```lua
-local DEBUG = 0  -- Set to 1 for verbose logging
-```
-
-## Requirements
-
-- TouchOSC 1.2.0+
-- AbletonOSC installed on each Ableton instance
-- Unique OSC ports for each connection
-- Exact track names matching between TouchOSC and Ableton
-
-## Troubleshooting
-
-1. **Check the logger** - Most issues are logged
-2. **Verify track names** - Must match exactly (including spaces/symbols)
-3. **Check configuration** - Ensure connection numbers are correct
-4. **Enable debug mode** - Set DEBUG = 1 in scripts for detailed logs
-5. **Test single track** - Start with one `band_*` group before scaling
+| Script | Version | Purpose |
+|--------|---------|---------|
+| document_script.lua | 2.6.0 | Central configuration and logging |
+| group_init.lua | 1.9.6 | Track group management |
+| fader_script.lua | 2.3.5 | Professional fader control |
+| meter_script.lua | 2.2.2 | Calibrated level metering |
+| mute_button.lua | 1.8.0 | Mute state management |
+| pan_control.lua | 1.3.2 | Pan with visual feedback |
+| global_refresh_button.lua | 1.4.0 | Track discovery trigger |
 
 ## Contributing
 
-When adding new controls:
-1. Use the [script template](docs/touchosc-script-template.md)
-2. Follow [TouchOSC rules](rules/touchosc-lua-rules.md)
-3. Test with both instances
-4. Update documentation
-5. Increment version numbers
+This project follows strict development practices:
+- All changes in feature branches
+- Comprehensive testing with logs
+- Documentation updates with code changes
+- Version increment for every change
+
+## License
+
+[License information to be added]
 
 ## Support
 
-- Check `/docs` folder for detailed guides
-- Review `/rules` for TouchOSC-specific patterns
-- See `THREAD_PROGRESS.md` for latest updates
+For issues or questions:
+- Check the logs in TouchOSC
+- Enable debug mode for detailed information
+- Refer to the rules documentation for TouchOSC specifics
+
+---
+
+*Built with precision for professional audio workflows*
