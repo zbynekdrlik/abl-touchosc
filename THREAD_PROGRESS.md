@@ -3,7 +3,7 @@
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
 - [x] Phase 3 COMPLETE - All controls tested and working
-- [x] Added dB value label script v1.0.0
+- [x] Added dB value label script v1.0.1
 - [ ] Currently: Phase 4 - Production Scaling
 - [ ] Waiting for: User to add label to TouchOSC and test
 - [ ] Next: Create additional track groups
@@ -16,7 +16,12 @@
 
 ## Phase 4 Progress
 
-### ✅ Just Added:
+### ✅ Just Updated:
+**dB Label Script v1.0.1**
+- Now shows dash "-" when track unmapped (not empty string)
+- All other features working as before
+
+### ✅ Added:
 **dB Label Script v1.0.0** - Shows fader value in dB
 - Follows established multi-connection routing pattern
 - Reads configuration directly
@@ -29,7 +34,7 @@
 2. Set its OSC receive to `/live/track/get/volume`
 3. Attach the `db_label.lua` script
 4. Test that it shows dB values when fader moves
-5. Confirm it shows "-inf" at minimum
+5. Confirm it shows "-" when track is unmapped
 
 ## Script Versions - Updated
 | Script | Version | Purpose |
@@ -40,7 +45,7 @@
 | meter_script.lua | 2.2.2 | Calibrated level metering |
 | mute_button.lua | 1.8.0 | Mute state management |
 | pan_control.lua | 1.3.2 | Pan with visual feedback |
-| **db_label.lua** | **1.0.0** | **dB value display (NEW)** |
+| **db_label.lua** | **1.0.1** | **dB value display (NEW)** |
 | global_refresh_button.lua | 1.4.0 | Manual refresh trigger |
 
 ## Phase 3 Completion Summary
@@ -91,4 +96,4 @@ unfold_master: 'Master'
 
 ---
 
-**Currently in Phase 4 - Added dB label, waiting for testing**
+**Currently in Phase 4 - dB label v1.0.1 ready, waiting for testing**
