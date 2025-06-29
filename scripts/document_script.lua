@@ -1,9 +1,9 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.6.0
+-- Version: 2.7.0
 -- Purpose: Main document script with configuration, logging, and track management
--- Changed: Removed print statement from log function to avoid duplicate console output
+-- Added: Automatic refresh on startup
 
-local VERSION = "2.6.0"
+local VERSION = "2.7.0"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -17,6 +17,9 @@ local logger = nil
 local configText = nil
 local logLines = {}
 local maxLogLines = 60  -- Increased from 20 to 60 for full-height logger
+
+-- Startup flag
+local hasPerformedStartupRefresh = false
 
 -- === LOGGING FUNCTIONS ===
 local function log(message)
@@ -105,6 +108,21 @@ local function parseConfiguration()
     return true
 end
 
+-- === AUTOMATIC STARTUP REFRESH ===
+local function performStartupRefresh()
+    if not hasPerformedStartupRefresh then
+        hasPerformedStartupRefresh = true
+        
+        -- Small delay to ensure all controls are loaded
+        -- We'll use the update() function to trigger this after a brief delay
+        log("Scheduling automatic refresh...")
+        
+        -- Set a timer for automatic refresh
+        -- TouchOSC doesn't have built-in timers, so we'll use update() with time tracking
+        startupRefreshTime = os.clock() + 0.5  -- 500ms delay
+    end
+end
+
 -- === NOTIFY HANDLER ===
 function onReceiveNotify(action, value)
     if action == "register_logger" then
@@ -147,7 +165,7 @@ function getConnectionForInstance(instance)
 end
 
 function refreshAllGroups()
-    log("=== GLOBAL REFRESH ===")
+    log("=== REFRESH ALL GROUPS ===")
     
     -- Update status
     local status = root:findByName("global_status")
@@ -186,6 +204,19 @@ function createConnectionTable(connectionIndex)
     return connections
 end
 
+-- === UPDATE FUNCTION FOR STARTUP REFRESH ===
+local startupRefreshTime = nil
+
+function update()
+    -- Check if we need to perform startup refresh
+    if startupRefreshTime and os.clock() >= startupRefreshTime then
+        startupRefreshTime = nil  -- Clear the timer
+        
+        log("=== AUTOMATIC STARTUP REFRESH ===")
+        refreshAllGroups()
+    end
+end
+
 -- === INITIALIZATION ===
 function init()
     -- Add visual separator for new run
@@ -207,6 +238,9 @@ function init()
     sendOSC('/live/song/start_listen/is_playing')
     
     log("Ready")
+    
+    -- Schedule automatic refresh
+    performStartupRefresh()
 end
 
 -- === OSC RECEIVE HANDLER ===
