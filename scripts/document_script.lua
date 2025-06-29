@@ -1,9 +1,9 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.7.0
+-- Version: 2.7.1
 -- Purpose: Main document script with configuration, logging, and track management
--- Added: Automatic refresh on startup
+-- Fixed: Automatic refresh on startup with proper timing
 
-local VERSION = "2.7.0"
+local VERSION = "2.7.1"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -18,8 +18,10 @@ local configText = nil
 local logLines = {}
 local maxLogLines = 60  -- Increased from 20 to 60 for full-height logger
 
--- Startup flag
-local hasPerformedStartupRefresh = false
+-- Startup tracking
+local startupRefreshTime = nil
+local frameCount = 0
+local STARTUP_DELAY_FRAMES = 60  -- Wait 1 second (60 frames at 60fps)
 
 -- === LOGGING FUNCTIONS ===
 local function log(message)
@@ -108,21 +110,6 @@ local function parseConfiguration()
     return true
 end
 
--- === AUTOMATIC STARTUP REFRESH ===
-local function performStartupRefresh()
-    if not hasPerformedStartupRefresh then
-        hasPerformedStartupRefresh = true
-        
-        -- Small delay to ensure all controls are loaded
-        -- We'll use the update() function to trigger this after a brief delay
-        log("Scheduling automatic refresh...")
-        
-        -- Set a timer for automatic refresh
-        -- TouchOSC doesn't have built-in timers, so we'll use update() with time tracking
-        startupRefreshTime = os.clock() + 0.5  -- 500ms delay
-    end
-end
-
 -- === NOTIFY HANDLER ===
 function onReceiveNotify(action, value)
     if action == "register_logger" then
@@ -205,15 +192,16 @@ function createConnectionTable(connectionIndex)
 end
 
 -- === UPDATE FUNCTION FOR STARTUP REFRESH ===
-local startupRefreshTime = nil
-
 function update()
-    -- Check if we need to perform startup refresh
-    if startupRefreshTime and os.clock() >= startupRefreshTime then
-        startupRefreshTime = nil  -- Clear the timer
+    -- Count frames since startup
+    if frameCount < STARTUP_DELAY_FRAMES + 10 then
+        frameCount = frameCount + 1
         
-        log("=== AUTOMATIC STARTUP REFRESH ===")
-        refreshAllGroups()
+        -- Perform refresh at the specified frame count
+        if frameCount == STARTUP_DELAY_FRAMES then
+            log("=== AUTOMATIC STARTUP REFRESH ===")
+            refreshAllGroups()
+        end
     end
 end
 
@@ -238,9 +226,10 @@ function init()
     sendOSC('/live/song/start_listen/is_playing')
     
     log("Ready")
+    log("Automatic refresh scheduled...")
     
-    -- Schedule automatic refresh
-    performStartupRefresh()
+    -- Reset frame counter for startup refresh
+    frameCount = 0
 end
 
 -- === OSC RECEIVE HANDLER ===
