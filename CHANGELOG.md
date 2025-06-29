@@ -7,6 +7,16 @@ All notable changes to the ABL TouchOSC project are documented here.
 - Phase 5: Logging optimization with debug levels
 - Phase 6: Advanced controls (solo, sends, devices)
 
+## Phase 4 Started - 2025-06-29
+
+### dB Label [1.0.0] - NEW
+- Shows fader value in dB format
+- Multi-connection routing support
+- Uses exact same dB conversion as fader
+- Shows "-inf" for minimum values
+- Unified logging integration
+- Clears display when track unmapped
+
 ## Phase 3 Complete - 2025-06-29
 
 ### Document Script [2.7.1]
