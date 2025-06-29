@@ -9,6 +9,16 @@ All notable changes to the ABL TouchOSC project are documented here.
 
 ## Phase 3 Complete - 2025-06-29
 
+### Document Script [2.7.1]
+- Fixed automatic refresh with frame counting method
+- More reliable than clock-based timing
+
+### Document Script [2.7.0]
+- Added automatic refresh on startup
+- Triggers refresh 1 second after TouchOSC starts
+- No manual refresh needed when opening project
+- Shows "=== AUTOMATIC STARTUP REFRESH ===" in logger
+
 ### Document Script [2.6.0]
 - Removed print statement from log function
 - Now only appends to logger text (no console output)
@@ -115,6 +125,9 @@ All notable changes to the ABL TouchOSC project are documented here.
 - v1.9.0 → v2.0.0: Major refactor
 
 ## Key Milestones
+
+### Automatic Startup Refresh
+Implemented automatic track discovery on TouchOSC startup, eliminating manual refresh requirement.
 
 ### Script Isolation Discovery
 Learned that TouchOSC scripts are completely isolated and cannot share variables or functions. This led to major refactoring of all scripts.
