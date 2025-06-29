@@ -2,6 +2,13 @@
 
 All notable changes to the ABL TouchOSC project are documented here.
 
+## [1.0.1] - 2025-06-29
+### Hotfix Release
+
+#### dB Label [1.0.2]
+- Fixed error "No such property or function: 'lastDB'"
+- Changed from `self.lastDB` to local variable (TouchOSC doesn't support custom properties on self)
+
 ## [1.0.0] - 2025-06-29
 ### Production Release 🚀
 
@@ -29,7 +36,7 @@ This is the first production release of ABL TouchOSC with complete multi-instanc
 | meter_script.lua | 2.2.2 | Calibrated level metering |
 | mute_button.lua | 1.8.0 | Mute state management |
 | pan_control.lua | 1.3.2 | Pan with visual feedback |
-| db_label.lua | 1.0.1 | dB value display |
+| db_label.lua | 1.0.2 | dB value display |
 | global_refresh_button.lua | 1.4.0 | Manual refresh trigger |
 
 ### Testing Confirmed
