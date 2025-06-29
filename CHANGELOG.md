@@ -9,6 +9,13 @@ All notable changes to the ABL TouchOSC project are documented here.
 
 ## Phase 4 Started - 2025-06-29
 
+### Documentation Reorganization
+- README.md updated to be feature-focused rather than phase-focused
+- Added docs/CONTRIBUTING.md with development guidelines
+- Added docs/TECHNICAL.md with comprehensive technical documentation
+- Added docs/README.md as documentation index
+- Follows GitHub best practices for project documentation
+
 ### dB Label [1.0.1]
 - Changed to show dash "-" when track unmapped
 - Previously showed empty string
@@ -19,7 +26,6 @@ All notable changes to the ABL TouchOSC project are documented here.
 - Uses exact same dB conversion as fader
 - Shows "-inf" for minimum values
 - Unified logging integration
-- Shows dash when track unmapped
 
 ## Phase 3 Complete - 2025-06-29
 
@@ -139,6 +145,9 @@ All notable changes to the ABL TouchOSC project are documented here.
 - v1.9.0 → v2.0.0: Major refactor
 
 ## Key Milestones
+
+### Documentation Reorganization
+Restructured all documentation to follow GitHub best practices, moving from phase-based to feature-based documentation.
 
 ### Automatic Startup Refresh
 Implemented automatic track discovery on TouchOSC startup, eliminating manual refresh requirement.
