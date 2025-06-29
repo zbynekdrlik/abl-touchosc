@@ -2,8 +2,15 @@
 
 All notable changes to the ABL TouchOSC project are documented here.
 
-## [1.0.1] - 2025-06-29
-### Hotfix Release
+## [1.1.0] - 2025-06-29
+### Enhancement Release
+
+#### Group Script [1.10.0]
+- Status indicator now works as opacity replacement (visible only when mapped)
+- Track labels preserved - no more "???" when unmapped
+- Added connection label support - shows "band" or "master"
+- Removed 5-minute stale status check
+- Added db_label to notification list
 
 #### dB Label [1.0.2]
 - Fixed error "No such property or function: 'lastDB'"
@@ -31,7 +38,7 @@ This is the first production release of ABL TouchOSC with complete multi-instanc
 | Script | Version | Purpose |
 |--------|---------|---------|
 | document_script.lua | 2.7.1 | Central management + auto refresh |
-| group_init.lua | 1.9.6 | Track group management |
+| group_init.lua | 1.10.0 | Track group management |
 | fader_script.lua | 2.3.5 | Professional fader control |
 | meter_script.lua | 2.2.2 | Calibrated level metering |
 | mute_button.lua | 1.8.0 | Mute state management |
