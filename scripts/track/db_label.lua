@@ -1,11 +1,14 @@
 -- TouchOSC dB Value Label Display
--- Version: 1.0.1
+-- Version: 1.0.2
 -- Shows the current fader value in dB
 -- Multi-connection routing support
--- Changed: Shows "-" when track unmapped
+-- Fixed: Use local variable instead of self.property
 
 -- Version constant
-local VERSION = "1.0.1"
+local VERSION = "1.0.2"
+
+-- State variable (must be local, not on self)
+local lastDB = -math.huge
 
 -- ===========================
 -- CENTRALIZED LOGGING
@@ -112,9 +115,9 @@ function onReceiveOSC(message, connections)
         self.values.text = formatDB(db_value)
         
         -- Only log significant changes to reduce spam
-        if not self.lastDB or math.abs(db_value - self.lastDB) > 0.5 then
+        if not lastDB or math.abs(db_value - lastDB) > 0.5 then
             log(string.format("Track %d: %s dB", myTrackNumber, formatDB(db_value)))
-            self.lastDB = db_value
+            lastDB = db_value
         end
     end
     
@@ -130,12 +133,12 @@ function onReceiveNotify(key, value)
     if key == "track_changed" then
         -- Clear the display when track changes
         self.values.text = "-inf"
-        self.lastDB = -math.huge
+        lastDB = -math.huge
         log("Track changed - display reset")
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
         self.values.text = "-"
-        self.lastDB = nil
+        lastDB = nil
         log("Track unmapped - display shows dash")
     elseif key == "control_enabled" then
         -- Show/hide based on track mapping status
@@ -157,9 +160,6 @@ function init()
     else
         self.values.text = "-"
     end
-    
-    -- Initialize last dB tracking
-    self.lastDB = -math.huge
     
     -- Log parent info
     if self.parent and self.parent.name then
