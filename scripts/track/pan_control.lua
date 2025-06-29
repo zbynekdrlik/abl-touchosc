@@ -1,9 +1,9 @@
 -- TouchOSC Pan Control Script
--- Version: 1.3.1
--- Simple pan control with multi-connection support and logging
+-- Version: 1.3.2
+-- Fixed: Added logger output using root:notify like other scripts
 
 -- Version constant
-local VERSION = "1.3.1"
+local VERSION = "1.3.2"
 
 -- Double-tap configuration
 local delay = 300 -- the maximum elapsed time between taps
@@ -18,12 +18,17 @@ local COLOR_OFF_CENTER = Color(0.20, 0.76, 0.86, 1.0) -- #34C1DC when out of cen
 -- LOGGING
 -- ===========================
 
--- Local logging pattern (following mute button v1.7.1 pattern)
+-- Logging with both logger object and console output
 local function log(message)
     local context = "PAN"
     if self.parent and self.parent.name then
         context = "PAN(" .. self.parent.name .. ")"
     end
+    
+    -- Send to document script for logger text update (like meter and fader)
+    root:notify("log_message", context .. ": " .. message)
+    
+    -- Also print to console for development/debugging
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
