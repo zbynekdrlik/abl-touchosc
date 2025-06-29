@@ -1,8 +1,8 @@
 -- mute_button.lua
--- Version: 1.7.1
--- Keep local print only (no root notify)
+-- Version: 1.8.0
+-- Use root:notify for logger output
 
-local VERSION = "1.7.1"
+local VERSION = "1.8.0"
 
 -- Logging
 local function log(message)
@@ -11,7 +11,10 @@ local function log(message)
         context = "MUTE(" .. self.parent.name .. ")"
     end
     
-    -- Direct console print only
+    -- Send to document script for logger text update
+    root:notify("log_message", context .. ": " .. message)
+    
+    -- Also print to console for development/debugging
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
