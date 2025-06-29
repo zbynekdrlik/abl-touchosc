@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.9.6
--- Fixed: Runtime error with pairs() on children userdata
+-- Version: 1.10.0
+-- Changed: Status indicator visible only when mapped, track labels preserved, connection label support
 
 -- Version constant
-local SCRIPT_VERSION = "1.9.6"
+local SCRIPT_VERSION = "1.10.0"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -93,14 +93,23 @@ local function setGroupEnabled(enabled, silent)
     local childCount = 0
     
     -- Only check for controls we know exist
-    local controlsToCheck = {"fader", "mute", "pan", "meter", "track_label"}
+    local controlsToCheck = {"fader", "mute", "pan", "meter", "track_label", "db_label"}
     
     for _, name in ipairs(controlsToCheck) do
         local child = getChild(self, name)
-        if child and name ~= "status_indicator" then
+        if child and name ~= "status_indicator" and name ~= "connection_label" then
             -- ONLY CHANGE INTERACTIVITY - NO VISUAL CHANGES!
             child.interactive = enabled
             childCount = childCount + 1
+        end
+    end
+    
+    -- Update status indicator visibility based on mapping
+    local indicator = getChild(self, "status_indicator")
+    if indicator then
+        indicator.visible = enabled  -- Show when mapped, hide when not
+        if enabled then
+            indicator.color = Color(0, 1, 0, 1)  -- Green when visible
         end
     end
     
@@ -110,17 +119,12 @@ local function setGroupEnabled(enabled, silent)
     end
 end
 
--- Update visual status (minimal - just LED if present)
-local function updateStatus(status)
-    local indicator = getChild(self, "status_indicator")
-    if indicator then
-        if status == "ok" then
-            indicator.color = Color(0, 1, 0, 1)  -- Green
-        elseif status == "error" then
-            indicator.color = Color(1, 0, 0, 1)  -- Red
-        elseif status == "stale" then
-            indicator.color = Color(1, 0.5, 0, 1)  -- Orange
-        end
+-- Update connection label if it exists
+local function updateConnectionLabel()
+    local label = getChild(self, "connection_label")
+    if label then
+        label.values.text = instance  -- Will show "band" or "master"
+        log("Connection label set to: " .. instance)
     end
 end
 
@@ -142,7 +146,7 @@ end
 -- Notify specific children about events
 local function notifyChildren(event, value)
     -- Notify specific children we know about
-    local childrenToNotify = {"fader", "mute", "pan", "meter"}
+    local childrenToNotify = {"fader", "mute", "pan", "meter", "db_label"}
     
     for _, name in ipairs(childrenToNotify) do
         local child = getChild(self, name)
@@ -167,8 +171,19 @@ function init()
     -- SAFETY: Disable all controls until properly mapped
     setGroupEnabled(false, true)  -- Silent
     
-    -- Set initial status
-    updateStatus("error")
+    -- Update connection label if it exists
+    updateConnectionLabel()
+    
+    -- Initialize track label with the expected track name (not ???)
+    if self.children and self.children["track_label"] then
+        -- Use pattern match that captures only word characters
+        local displayName = trackName:match("(%w+)")
+        if displayName then
+            self.children["track_label"].values.text = displayName
+        else
+            self.children["track_label"].values.text = trackName
+        end
+    end
     
     log("Ready - waiting for refresh")
 end
@@ -208,15 +223,8 @@ function onReceiveOSC(message, connections)
             
             if not arguments then
                 log("ERROR: No track names in response")
-                updateStatus("error")
                 setGroupEnabled(false)  -- Keep disabled
-                
-                -- Update label to show error even when no arguments
-                if self.children and self.children["track_label"] then
-                    self.children["track_label"].values.text = "???"
-                    log("track_label set to '???' (no track names)")
-                end
-                
+                -- Don't change track label - keep showing expected name
                 return true
             end
             
@@ -236,8 +244,7 @@ function onReceiveOSC(message, connections)
                         
                         log("Mapped to Track " .. trackNumber)
                         
-                        updateStatus("ok")
-                        setGroupEnabled(true)  -- ENABLE controls now that mapping is correct
+                        setGroupEnabled(true)  -- ENABLE controls and show indicator
                         
                         -- Store combined info in tag
                         self.tag = instance .. ":" .. trackNumber
@@ -254,16 +261,6 @@ function onReceiveOSC(message, connections)
                         sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
                         sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
                         
-                        -- Update label using direct children access like original
-                        if self.children and self.children["track_label"] then
-                            -- Use pattern match that captures only word characters like original
-                            local displayName = trackName:match("(%w+)")
-                            if displayName then
-                                self.children["track_label"].values.text = displayName
-                            else
-                                self.children["track_label"].values.text = trackName
-                            end
-                        end
                         break
                     end
                 end
@@ -272,18 +269,13 @@ function onReceiveOSC(message, connections)
             -- Handle track not found
             if not trackFound then
                 log("ERROR: Track not found: '" .. trackName .. "'")
-                updateStatus("error")
-                setGroupEnabled(false)  -- Keep disabled for safety
+                setGroupEnabled(false)  -- Keep disabled and hide indicator
                 trackNumber = nil  -- Clear any old track number
                 
                 -- Notify children using safe method
                 notifyChildren("track_unmapped", nil)
                 
-                -- Update label to show error using direct access
-                if self.children and self.children["track_label"] then
-                    self.children["track_label"].values.text = "???"
-                    log("track_label set to '???' (track not found)")
-                end
+                -- Don't change track label - keep showing expected name
             end
             
             return true
@@ -303,12 +295,4 @@ function onReceiveNotify(action)
     end
 end
 
-function update()
-    -- Only check stale data if mapped
-    if trackMapped and lastVerified > 0 then
-        local age = getMillis() - lastVerified
-        if age > 300000 then  -- 5 minutes
-            updateStatus("stale")
-        end
-    end
-end
+-- Removed update() function - no more stale status checking
