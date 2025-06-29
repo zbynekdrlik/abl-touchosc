@@ -6,6 +6,7 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 
 ### ✅ Implemented
 - **Multi-Connection Routing**: Control multiple Ableton instances (band/master) from one interface
+- **Automatic Startup Refresh**: Track discovery starts automatically when TouchOSC opens
 - **Dynamic Track Mapping**: Automatic track discovery and mapping with visual feedback
 - **Professional Fader Control**: 
   - Sophisticated movement scaling for precise control
@@ -65,11 +66,20 @@ TouchOSC Interface
      ```
 
 3. **Usage**
-   - Press Refresh to discover tracks
+   - Open project in TouchOSC run mode
+   - **Automatic refresh triggers after 1 second** - no manual action needed!
    - Groups automatically map to their configured tracks
    - Controls route to the correct Ableton instance
+   - Use manual refresh button anytime to re-scan tracks
 
 ## Technical Details
+
+### Automatic Startup Refresh
+The document script (v2.7.1) automatically refreshes all track groups 1 second after TouchOSC starts:
+- Uses frame counting for reliable timing
+- Shows "=== AUTOMATIC STARTUP REFRESH ===" in logger
+- Eliminates need to manually press refresh on startup
+- Manual refresh button remains available for on-demand updates
 
 ### Version Management
 All scripts follow semantic versioning:
@@ -104,6 +114,7 @@ All scripts follow semantic versioning:
 - Calibrated meters
 - Mute buttons with state tracking
 - Pan controls with visual feedback
+- Automatic startup refresh
 
 ### 🚧 Phase 4: Production Scaling
 - Multiple track groups
@@ -141,13 +152,13 @@ unfold: 'Drums'         # Unfold on all connections (legacy)
 
 | Script | Version | Purpose |
 |--------|---------|---------|
-| document_script.lua | 2.6.0 | Central configuration and logging |
+| document_script.lua | 2.7.1 | Central config, logging, auto-refresh |
 | group_init.lua | 1.9.6 | Track group management |
 | fader_script.lua | 2.3.5 | Professional fader control |
 | meter_script.lua | 2.2.2 | Calibrated level metering |
 | mute_button.lua | 1.8.0 | Mute state management |
 | pan_control.lua | 1.3.2 | Pan with visual feedback |
-| global_refresh_button.lua | 1.4.0 | Track discovery trigger |
+| global_refresh_button.lua | 1.4.0 | Manual track discovery |
 
 ## Contributing
 
