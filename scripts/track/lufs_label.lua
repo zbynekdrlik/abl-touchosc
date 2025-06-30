@@ -1,19 +1,18 @@
 -- TouchOSC LUFS Meter Display
--- Version: 1.3.0
--- Shows approximate LUFS based on track output meter level
+-- Version: 1.3.1
+-- Diagnostic version to identify calibration issues
 -- Multi-connection routing support
--- Uses exact same calibration as meter script
 
 -- Version constant
-local VERSION = "1.3.0"
+local VERSION = "1.3.1"
 
 -- State variables
 local lastLUFS = -60.0
 local lufsBuffer = {}  -- Buffer for averaging
-local bufferSize = 15  -- Reduced for faster response (~0.25 seconds at 60fps)
+local bufferSize = 5  -- Reduced to 5 samples for faster response
 
 -- Debug mode
-local DEBUG = 1  -- Set to 1 to see conversion details
+local DEBUG = 1  -- Always on for diagnostics
 
 -- ===========================
 -- CALIBRATION FROM METER SCRIPT
@@ -50,12 +49,6 @@ local function log(message)
     
     -- Also print to console for development
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
-end
-
-local function debugLog(message)
-    if DEBUG == 1 then
-        log("[DEBUG] " .. message)
-    end
 end
 
 -- ===========================
@@ -192,7 +185,7 @@ function value2db(vl)
 end
 
 -- ===========================
--- LUFS CALCULATION
+-- LUFS CALCULATION - DIAGNOSTIC VERSION
 -- ===========================
 
 -- Convert meter level to approximate LUFS
@@ -202,30 +195,20 @@ function meterToLUFS(meter_normalized)
     local audio_value = linearToLog(fader_position)
     local db_value = value2db(audio_value)
     
-    -- For sine wave: LUFS should be very close to dB
-    -- Your test shows -6.1 LUFS when meter shows -6.02 dB
-    -- So for sine wave, offset is nearly 0
-    
-    local lufs_offset = 0.0
-    
-    -- Dynamic offset based on level and content type
-    if db_value >= -3 then
-        lufs_offset = 0.0  -- Test signal/sine wave
-    elseif db_value >= -9 then
-        lufs_offset = 0.1  -- Very slight offset for louder signals
-    elseif db_value >= -15 then
-        lufs_offset = 3.0  -- Typical music with some dynamics
-    elseif db_value >= -25 then
-        lufs_offset = 6.0  -- More dynamic material
-    else
-        lufs_offset = 9.0  -- Very dynamic/quiet material
-    end
+    -- DIAGNOSTIC: Try simple offset approach
+    -- If true:level shows -22.2 LUFS when our dB shows -19.6
+    -- Then offset should be around 2.6 dB
+    local lufs_offset = 2.5  -- Fixed offset for testing
     
     local lufs = db_value - lufs_offset
     
-    -- Debug logging
-    debugLog(string.format("Meter: %.3f → Fader: %.3f → Audio: %.3f → dB: %.1f → offset: %.1f → LUFS: %.1f", 
-        meter_normalized, fader_position, audio_value, db_value, lufs_offset, lufs))
+    -- Debug logging with all intermediate values
+    log(string.format("[DIAGNOSTIC] Meter: %.3f", meter_normalized))
+    log(string.format("[DIAGNOSTIC] Fader Position: %.3f", fader_position))
+    log(string.format("[DIAGNOSTIC] Audio Value: %.3f", audio_value))
+    log(string.format("[DIAGNOSTIC] dB Value: %.1f", db_value))
+    log(string.format("[DIAGNOSTIC] LUFS Offset: %.1f", lufs_offset))
+    log(string.format("[DIAGNOSTIC] Instant LUFS: %.1f", lufs))
     
     -- Clamp to reasonable LUFS range
     if lufs < -60 then
@@ -237,12 +220,21 @@ function meterToLUFS(meter_normalized)
     return lufs
 end
 
--- Add value to buffer and return averaged LUFS
+-- SIMPLIFIED AVERAGING FOR DIAGNOSTICS
 function averageLUFS(new_lufs)
+    -- Clear buffer if it has old extreme values
+    if #lufsBuffer > 0 then
+        local lastValue = lufsBuffer[#lufsBuffer]
+        if math.abs(lastValue - new_lufs) > 20 then
+            log("[DIAGNOSTIC] Large jump detected, clearing buffer")
+            lufsBuffer = {}
+        end
+    end
+    
     -- Add to buffer
     table.insert(lufsBuffer, new_lufs)
     
-    -- Remove old values if buffer is too large
+    -- Keep only recent values
     while #lufsBuffer > bufferSize do
         table.remove(lufsBuffer, 1)
     end
@@ -252,8 +244,11 @@ function averageLUFS(new_lufs)
     for _, value in ipairs(lufsBuffer) do
         sum = sum + value
     end
+    local avg = sum / #lufsBuffer
     
-    return sum / #lufsBuffer
+    log(string.format("[DIAGNOSTIC] Buffer size: %d, Average LUFS: %.1f", #lufsBuffer, avg))
+    
+    return avg
 end
 
 -- Format LUFS value for display with unit
@@ -304,12 +299,8 @@ function onReceiveOSC(message, connections)
     -- Update display
     self.values.text = formatLUFS(averaged_lufs)
     
-    -- Only log significant changes to reduce spam
-    if not lastLUFS or math.abs(averaged_lufs - lastLUFS) > 1.0 then
-        log(string.format("Track %d: %s (meter: %.3f)", 
-            myTrackNumber, formatLUFS(averaged_lufs), meter_level))
-        lastLUFS = averaged_lufs
-    end
+    -- Always log in diagnostic mode
+    log(string.format("[DIAGNOSTIC] Final display: %s", formatLUFS(averaged_lufs)))
     
     return false  -- Don't block other receivers
 end
@@ -344,7 +335,7 @@ end
 
 function init()
     -- Log version
-    log("Script v" .. VERSION .. " loaded")
+    log("Script v" .. VERSION .. " loaded - DIAGNOSTIC MODE")
     
     -- Set initial text
     if isTrackMapped() then
@@ -359,14 +350,8 @@ function init()
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("LUFS calculated from output meter levels")
-        log("Using " .. bufferSize .. " sample averaging")
-        log("Using exact meter calibration")
-    end
-    
-    if DEBUG == 1 then
-        log("DEBUG MODE ENABLED - Full conversion chain logged")
-        log("Known calibration: 0.8399 = -6dB")
+        log("DIAGNOSTIC: Fixed 2.5dB offset, 5-sample buffer")
+        log("Expected: -22.2 LUFS when meter shows 0.630")
     end
 end
 
