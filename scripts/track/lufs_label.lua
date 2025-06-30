@@ -1,19 +1,19 @@
 -- TouchOSC LUFS Meter Display
--- Version: 1.4.0
--- Shows approximate LUFS based on track output meter level
+-- Version: 1.4.1
+-- Debug version to diagnose fader/meter relationship
 -- Multi-connection routing support
--- Calibrated to match true:level measurements
 
 -- Version constant
-local VERSION = "1.4.0"
+local VERSION = "1.4.1"
 
 -- State variables
 local lastLUFS = -60.0
+local lastMeterValue = 0
 local lufsBuffer = {}  -- Buffer for averaging
 local bufferSize = 10  -- ~0.17 seconds at 60fps for responsive but stable display
 
 -- Debug mode
-local DEBUG = 0  -- Set to 1 to see conversion details
+local DEBUG = 1  -- ALWAYS ON for diagnostics
 
 -- ===========================
 -- CALIBRATION FROM METER SCRIPT
@@ -50,12 +50,6 @@ local function log(message)
     
     -- Also print to console for development
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
-end
-
-local function debugLog(message)
-    if DEBUG == 1 then
-        log("[DEBUG] " .. message)
-    end
 end
 
 -- ===========================
@@ -224,10 +218,6 @@ function meterToLUFS(meter_normalized)
     
     local lufs = db_value - lufs_offset
     
-    -- Debug logging
-    debugLog(string.format("Meter: %.3f → dB: %.1f → offset: %.1f → LUFS: %.1f", 
-        meter_normalized, db_value, lufs_offset, lufs))
-    
     -- Clamp to reasonable LUFS range
     if lufs < -60 then
         lufs = -60
@@ -251,7 +241,7 @@ function averageLUFS(new_lufs)
         
         -- Clear if new value is very different from average
         if math.abs(avgValue - new_lufs) > 15 then
-            debugLog("Large jump detected, clearing buffer")
+            log("[DEBUG] Large jump detected, clearing buffer")
             lufsBuffer = {}
         end
     end
@@ -313,20 +303,34 @@ function onReceiveOSC(message, connections)
         return false
     end
     
-    -- Get meter level and calculate LUFS
+    -- Get meter level
     local meter_level = arguments[2].value
+    
+    -- DEBUG: Check if meter value is changing
+    local meter_changed = math.abs(meter_level - lastMeterValue) > 0.001
+    if meter_changed then
+        log(string.format("[METER CHANGE] %.3f → %.3f (delta: %.3f)", 
+            lastMeterValue, meter_level, meter_level - lastMeterValue))
+    end
+    lastMeterValue = meter_level
+    
+    -- Also check current fader position
+    local fader = self.parent and self.parent.children and self.parent.children.fader
+    if fader and fader.values then
+        log(string.format("[FADER POSITION] %.1f%% (%.3f)", 
+            fader.values.x * 100, fader.values.x))
+    end
+    
+    -- Calculate LUFS
     local instant_lufs = meterToLUFS(meter_level)
     local averaged_lufs = averageLUFS(instant_lufs)
     
     -- Update display
     self.values.text = formatLUFS(averaged_lufs)
     
-    -- Only log significant changes to reduce spam
-    if not lastLUFS or math.abs(averaged_lufs - lastLUFS) > 1.0 then
-        log(string.format("Track %d: %s (meter: %.3f)", 
-            myTrackNumber, formatLUFS(averaged_lufs), meter_level))
-        lastLUFS = averaged_lufs
-    end
+    -- Always log in debug mode
+    log(string.format("[UPDATE] Meter: %.3f → %.1f LUFS (avg: %.1f)", 
+        meter_level, instant_lufs, averaged_lufs))
     
     return false  -- Don't block other receivers
 end
@@ -342,12 +346,14 @@ function onReceiveNotify(key, value)
         self.values.text = "-60.0 LUFS"
         lastLUFS = -60.0
         lufsBuffer = {}
+        lastMeterValue = 0
         log("Track changed - display reset")
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
         self.values.text = "-"
         lastLUFS = nil
         lufsBuffer = {}
+        lastMeterValue = 0
         log("Track unmapped - display shows dash")
     elseif key == "control_enabled" then
         -- Show/hide based on track mapping status
@@ -361,7 +367,7 @@ end
 
 function init()
     -- Log version
-    log("Script v" .. VERSION .. " loaded")
+    log("Script v" .. VERSION .. " loaded - DEBUG MODE")
     
     -- Set initial text
     if isTrackMapped() then
@@ -372,16 +378,12 @@ function init()
     
     -- Initialize buffer
     lufsBuffer = {}
+    lastMeterValue = 0
     
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("LUFS from meter output (calibrated)")
-        log("Buffer: " .. bufferSize .. " samples")
-    end
-    
-    if DEBUG == 1 then
-        log("DEBUG MODE ENABLED")
+        log("DEBUG: Monitoring meter changes vs fader position")
     end
 end
 
