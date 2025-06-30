@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.13.1
--- Fixed: Runtime error with schedule method
+-- Version: 1.13.2
+-- Fixed: Correct OSC paths for meter detection
 
 -- Version constant
-local SCRIPT_VERSION = "1.13.1"
+local SCRIPT_VERSION = "1.13.2"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -281,14 +281,16 @@ function onReceiveOSC(message, connections)
     
     -- Check for meter or volume data (activity detection)
     if trackMapped and trackNumber then
-        if path == '/live/track/meter' then
-            local trackIndex = message[2] and message[2].value
+        -- Check for meter data (correct path)
+        if path == '/live/track/get/output_meter_level' then
+            local trackIndex = message[2] and message[2][1] and message[2][1].value
             if trackIndex == trackNumber then
                 lastReceiveTime = getMillis()
                 -- log("Received meter data for track " .. trackIndex)
             end
-        elseif path == '/live/track/volume' then
-            local trackIndex = message[2] and message[2].value
+        -- Check for volume data
+        elseif path == '/live/track/get/volume' then
+            local trackIndex = message[2] and message[2][1] and message[2][1].value
             if trackIndex == trackNumber then
                 lastReceiveTime = getMillis()
                 -- log("Received volume data for track " .. trackIndex)
