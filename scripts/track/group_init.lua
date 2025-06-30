@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.10.0
--- Changed: Status indicator visible only when mapped, track labels preserved, connection label support
+-- Version: 1.13.0
+-- Added: OSC receive patterns for activity detection (meter/volume data)
 
 -- Version constant
-local SCRIPT_VERSION = "1.10.0"
+local SCRIPT_VERSION = "1.13.0"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -14,6 +14,11 @@ local needsRefresh = false
 local trackNumber = nil
 local trackMapped = false
 local lastEnabledState = nil  -- Track last state to prevent spam
+
+-- Activity tracking
+local lastSendTime = 0
+local lastReceiveTime = 0
+local lastFaderValue = nil
 
 -- Centralized logging through document script
 local function log(message)
@@ -76,6 +81,71 @@ local function getChild(parent, name)
     return nil
 end
 
+-- Monitor fader for outgoing activity
+local function monitorActivity()
+    local currentTime = getMillis()
+    
+    -- Check fader for changes (outgoing data)
+    local fader = getChild(self, "fader")
+    if fader and fader.values and fader.values.x then
+        local currentValue = fader.values.x
+        if lastFaderValue and math.abs(currentValue - lastFaderValue) > 0.001 then
+            lastSendTime = currentTime
+            -- log("Fader movement detected")
+        end
+        lastFaderValue = currentValue
+    end
+    
+    -- Update status indicator
+    updateStatusIndicator()
+    
+    -- Schedule next check
+    self.parent:schedule(50, monitorActivity)
+end
+
+-- Update status indicator based on activity
+local function updateStatusIndicator()
+    local indicator = getChild(self, "status_indicator")
+    if not indicator then return end
+    
+    local currentTime = getMillis()
+    local timeSinceSend = currentTime - lastSendTime
+    local timeSinceReceive = currentTime - lastReceiveTime
+    
+    -- Check if mapped
+    if trackMapped and trackNumber then
+        indicator.visible = true
+        
+        -- Determine current state based on activity
+        if timeSinceSend < 150 then
+            -- Recently sent data - blue
+            indicator.color = Color(0, 0.5, 1, 1)
+        elseif timeSinceReceive < 150 then
+            -- Recently received data - yellow
+            indicator.color = Color(1, 1, 0, 1)
+        elseif timeSinceSend < 500 or timeSinceReceive < 500 then
+            -- Fading from active to idle
+            local fadeTime = math.min(timeSinceSend, timeSinceReceive) - 150
+            local fade = fadeTime / 350  -- 0 to 1 over 350ms
+            
+            if timeSinceSend < timeSinceReceive then
+                -- Fade from blue to green
+                indicator.color = Color(0, 0.5 * (1 - fade) + fade, 1 * (1 - fade) + fade * 0, 1)
+            else
+                -- Fade from yellow to green
+                indicator.color = Color(1 * (1 - fade), 1, 0, 1)
+            end
+        else
+            -- Idle - solid green
+            indicator.color = Color(0, 1, 0, 1)
+        end
+    else
+        -- Not mapped - red
+        indicator.visible = true
+        indicator.color = Color(1, 0, 0, 1)
+    end
+end
+
 -- Enable/disable all controls in the group - ONLY INTERACTIVITY
 local function setGroupEnabled(enabled, silent)
     -- Skip if state hasn't changed to prevent spam
@@ -104,14 +174,8 @@ local function setGroupEnabled(enabled, silent)
         end
     end
     
-    -- Update status indicator visibility based on mapping
-    local indicator = getChild(self, "status_indicator")
-    if indicator then
-        indicator.visible = enabled  -- Show when mapped, hide when not
-        if enabled then
-            indicator.color = Color(0, 1, 0, 1)  -- Green when visible
-        end
-    end
+    -- Update status indicator
+    updateStatusIndicator()
     
     -- Only log if not silent
     if not silent then
@@ -185,6 +249,9 @@ function init()
         end
     end
     
+    -- Start monitoring timer
+    self.parent:schedule(50, monitorActivity)
+    
     log("Ready - waiting for refresh")
 end
 
@@ -208,6 +275,23 @@ end
 
 function onReceiveOSC(message, connections)
     local path = message[1]
+    
+    -- Check for meter or volume data (activity detection)
+    if trackMapped and trackNumber then
+        if path == '/live/track/meter' then
+            local trackIndex = message[2] and message[2].value
+            if trackIndex == trackNumber then
+                lastReceiveTime = getMillis()
+                -- log("Received meter data for track " .. trackIndex)
+            end
+        elseif path == '/live/track/volume' then
+            local trackIndex = message[2] and message[2].value
+            if trackIndex == trackNumber then
+                lastReceiveTime = getMillis()
+                -- log("Received volume data for track " .. trackIndex)
+            end
+        end
+    end
     
     -- Check if this is track names response
     if path == '/live/song/get/track_names' then
@@ -294,5 +378,3 @@ function onReceiveNotify(action)
         trackNumber = nil
     end
 end
-
--- Removed update() function - no more stale status checking
