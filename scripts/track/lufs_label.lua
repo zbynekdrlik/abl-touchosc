@@ -1,11 +1,11 @@
 -- TouchOSC LUFS Meter Display
--- Version: 1.2.1
+-- Version: 1.3.0
 -- Shows approximate LUFS based on track output meter level
 -- Multi-connection routing support
--- Calibrated to match Ableton's dB readings
+-- Uses exact same calibration as meter script
 
 -- Version constant
-local VERSION = "1.2.1"
+local VERSION = "1.3.0"
 
 -- State variables
 local lastLUFS = -60.0
@@ -14,6 +14,25 @@ local bufferSize = 15  -- Reduced for faster response (~0.25 seconds at 60fps)
 
 -- Debug mode
 local DEBUG = 1  -- Set to 1 to see conversion details
+
+-- ===========================
+-- CALIBRATION FROM METER SCRIPT
+-- ===========================
+
+-- EXACT CALIBRATION POINTS FROM METER SCRIPT
+local CALIBRATION_POINTS = {
+  {0.0, 0.0},      -- Silent -> 0%
+  {0.3945, 0.027}, -- -40dB -> 2.7%
+  {0.6839, 0.169}, -- -18dB -> 16.9%
+  {0.7629, 0.313}, -- -12dB -> 31.3%
+  {0.8399, 0.5},   -- -6dB -> 50%
+  {0.9200, 0.729}, -- 0dB -> 72.9%
+  {1.0, 1.0}       -- Max -> 100%
+}
+
+-- CURVE SETTINGS FROM METER SCRIPT
+local use_log_curve = true
+local log_exponent = 0.515
 
 -- ===========================
 -- CENTRALIZED LOGGING
@@ -101,86 +120,112 @@ local function getConnectionIndex()
 end
 
 -- ===========================
--- CALIBRATED METER TO DB CONVERSION
+-- EXACT CONVERSION FROM METER SCRIPT
 -- ===========================
 
--- Based on your test data:
--- Meter: 0.871 should equal -6.02 dB
--- This suggests AbletonOSC uses a different scaling
-
-function meterToDB(meter_normalized)
-    if not meter_normalized or meter_normalized <= 0 then
-        return -math.huge
+-- Convert AbletonOSC normalized value to fader position
+function abletonToFaderPosition(normalized)
+  if not normalized or normalized <= 0 then
+    return 0
+  end
+  
+  if normalized >= 1.0 then
+    return 1.0
+  end
+  
+  -- Check for exact calibration matches first
+  for _, point in ipairs(CALIBRATION_POINTS) do
+    if math.abs(normalized - point[1]) < 0.01 then
+      return point[2]
     end
+  end
+  
+  -- Find the two closest points for interpolation
+  for i = 1, #CALIBRATION_POINTS - 1 do
+    local point1 = CALIBRATION_POINTS[i]
+    local point2 = CALIBRATION_POINTS[i + 1]
     
-    -- Calibration based on your measurement:
-    -- 0.871 = -6.02 dB
-    -- This suggests a different logarithmic curve
-    
-    -- Using the relationship: meter^exponent = 10^(dB/20)
-    -- 0.871^exponent = 10^(-6.02/20) = 0.501
-    -- exponent = log(0.501) / log(0.871) ≈ 2.3
-    
-    local exponent = 2.3
-    local linear = math.pow(meter_normalized, exponent)
-    local db = 20 * math.log10(linear)
-    
-    -- Alternative: direct calibration
-    -- If we know 0.871 = -6dB, we can scale accordingly
-    -- db = 20 * math.log10(meter_normalized) + correction
-    -- where correction makes 0.871 map to -6
-    
-    -- Let's use a hybrid approach with known calibration points
-    if math.abs(meter_normalized - 0.871) < 0.01 then
-        -- Close to our calibration point
-        db = -6.0
-    else
-        -- Scale based on the calibration
-        -- At 0.871, basic log gives us -1.2, but we want -6
-        -- So we need to add -4.8 correction factor
-        local basic_db = 20 * math.log10(meter_normalized)
-        local correction = -4.8
-        db = basic_db + correction
+    if normalized >= point1[1] and normalized <= point2[1] then
+      -- Linear interpolation
+      local ratio = (normalized - point1[1]) / (point2[1] - point1[1])
+      local fader_position = point1[2] + ratio * (point2[2] - point1[2])
+      return fader_position
     end
-    
-    -- Clamp to reasonable range
-    if db < -60 then
-        return -60
-    elseif db > 6 then
-        return 6
-    end
-    
-    return db
+  end
+  
+  -- Fallback
+  return normalized
 end
+
+-- Convert linear position to logarithmic (must match fader exactly)
+function linearToLog(linear_pos)
+  if not linear_pos or linear_pos <= 0 then return 0
+  elseif linear_pos >= 1 then return 1
+  else return math.pow(linear_pos, log_exponent) end
+end
+
+-- Convert audio value to dB (EXACT copy from fader script)
+function value2db(vl)
+  if not vl then return -math.huge end
+  
+  if vl <= 1 and vl >= 0.4 then
+    return 40*vl -34
+  elseif vl < 0.4 and vl >= 0.15 then
+    local alpha = 799.503788
+    local beta = 12630.61132
+    local gamma = 201.871345
+    local delta = 399.751894
+    return -((delta*vl - gamma)^2 + beta)/alpha
+  elseif vl < 0.15 then
+    local alpha = 70.
+    local beta = 118.426374
+    local gamma = 7504./5567.
+    local db_value_str = beta*(vl^(1/gamma)) - alpha
+    if db_value_str <= -70.0 then 
+      return -math.huge  -- -inf
+    else
+      return db_value_str
+    end
+  else
+    return 0
+  end
+end
+
+-- ===========================
+-- LUFS CALCULATION
+-- ===========================
 
 -- Convert meter level to approximate LUFS
 function meterToLUFS(meter_normalized)
-    -- Get calibrated dB value
-    local db_value = meterToDB(meter_normalized)
+    -- Use exact same conversion as meter script
+    local fader_position = abletonToFaderPosition(meter_normalized)
+    local audio_value = linearToLog(fader_position)
+    local db_value = value2db(audio_value)
     
-    -- For sine wave at steady state:
-    -- If Ableton shows -6.02 dB and true:level shows -6.1 LUFS
-    -- Then LUFS ≈ dB (almost no offset for sine wave!)
+    -- For sine wave: LUFS should be very close to dB
+    -- Your test shows -6.1 LUFS when meter shows -6.02 dB
+    -- So for sine wave, offset is nearly 0
     
-    local lufs_offset = 0.0  -- Start with no offset
+    local lufs_offset = 0.0
     
-    -- For sine wave, LUFS should be very close to RMS
-    -- For complex material, add offset
+    -- Dynamic offset based on level and content type
     if db_value >= -3 then
-        lufs_offset = 0.0  -- Sine wave or test signal
-    elseif db_value >= -12 then
-        lufs_offset = 3.0  -- Light compression
-    elseif db_value >= -20 then
-        lufs_offset = 6.0  -- Typical music
+        lufs_offset = 0.0  -- Test signal/sine wave
+    elseif db_value >= -9 then
+        lufs_offset = 0.1  -- Very slight offset for louder signals
+    elseif db_value >= -15 then
+        lufs_offset = 3.0  -- Typical music with some dynamics
+    elseif db_value >= -25 then
+        lufs_offset = 6.0  -- More dynamic material
     else
-        lufs_offset = 9.0  -- Dynamic material
+        lufs_offset = 9.0  -- Very dynamic/quiet material
     end
     
     local lufs = db_value - lufs_offset
     
     -- Debug logging
-    debugLog(string.format("Meter: %.3f, dB: %.1f, offset: %.1f, LUFS: %.1f", 
-        meter_normalized, db_value, lufs_offset, lufs))
+    debugLog(string.format("Meter: %.3f → Fader: %.3f → Audio: %.3f → dB: %.1f → offset: %.1f → LUFS: %.1f", 
+        meter_normalized, fader_position, audio_value, db_value, lufs_offset, lufs))
     
     -- Clamp to reasonable LUFS range
     if lufs < -60 then
@@ -315,13 +360,13 @@ function init()
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
         log("LUFS calculated from output meter levels")
-        log("Using " .. bufferSize .. " sample averaging (faster response)")
-        log("Calibrated for Ableton meter scaling")
+        log("Using " .. bufferSize .. " sample averaging")
+        log("Using exact meter calibration")
     end
     
     if DEBUG == 1 then
-        log("DEBUG MODE ENABLED - Conversion details will be logged")
-        log("Calibration: meter 0.871 = -6dB")
+        log("DEBUG MODE ENABLED - Full conversion chain logged")
+        log("Known calibration: 0.8399 = -6dB")
     end
 end
 
