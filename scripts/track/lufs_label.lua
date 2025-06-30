@@ -1,21 +1,19 @@
 -- TouchOSC LUFS Meter Display
--- Version: 1.5.1
--- Diagnostic version to check timing and calibration
+-- Version: 1.6.0
+-- Shows approximate LUFS based on track output meter level
+-- Calibrated to match true:level measurements
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "1.5.1"
+local VERSION = "1.6.0"
 
 -- State variables
 local lastLUFS = -60.0
-local lastMeterValue = 0
-local lastMeterTime = 0
-local updateCount = 0
 local lufsBuffer = {}  -- Buffer for averaging
-local bufferSize = 1   -- NO AVERAGING for diagnostics
+local bufferSize = 3   -- Minimal buffer for stability without lag
 
 -- Debug mode
-local DEBUG = 1  -- ALWAYS ON for diagnostics
+local DEBUG = 0  -- Set to 1 for detailed logging
 
 -- ===========================
 -- CALIBRATION FROM METER SCRIPT
@@ -42,9 +40,9 @@ local log_exponent = 0.515
 
 local function log(message)
     -- Get parent name for context
-    local context = "LUFS_DIAG"
+    local context = "LUFS"
     if self.parent and self.parent.name then
-        context = "LUFS_DIAG(" .. self.parent.name .. ")"
+        context = "LUFS(" .. self.parent.name .. ")"
     end
     
     -- Send to document script for logger text update
@@ -52,6 +50,12 @@ local function log(message)
     
     -- Also print to console for development
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
+end
+
+local function debugLog(message)
+    if DEBUG == 1 then
+        log("[DEBUG] " .. message)
+    end
 end
 
 -- ===========================
@@ -188,7 +192,7 @@ function value2db(vl)
 end
 
 -- ===========================
--- LUFS CALCULATION - FIXED CALIBRATION
+-- LUFS CALCULATION - CALIBRATED
 -- ===========================
 
 -- Convert meter level to approximate LUFS
@@ -198,17 +202,24 @@ function meterToLUFS(meter_normalized)
     local audio_value = linearToLog(fader_position)
     local db_value = value2db(audio_value)
     
-    -- FIXED CALIBRATION:
-    -- At 0dB fader (meter 0.630), we want -22.2 LUFS
-    -- Your test shows meter 0.630 → -19.6 dB
-    -- So offset should be: -19.6 - (-22.2) = 2.6 dB
+    -- CALIBRATED OFFSET:
+    -- At 0dB fader (meter 0.630), we get -19.6 dB
+    -- We want -22.2 LUFS
+    -- Base offset = 2.6 dB
     local lufs_offset = 2.6
+    
+    -- Slight adjustment for different levels
+    if db_value >= -3 then
+        lufs_offset = 2.0  -- Slightly less offset at very loud levels
+    elseif db_value < -30 then
+        lufs_offset = 3.0  -- Slightly more offset at quiet levels
+    end
     
     local lufs = db_value - lufs_offset
     
-    -- Log everything for diagnostics
-    log(string.format("CALC: Meter %.3f → Fader %.3f → Audio %.3f → dB %.1f → LUFS %.1f", 
-        meter_normalized, fader_position, audio_value, db_value, lufs))
+    -- Debug logging
+    debugLog(string.format("Meter: %.3f → dB: %.1f → offset: %.1f → LUFS: %.1f", 
+        meter_normalized, db_value, lufs_offset, lufs))
     
     -- Clamp to reasonable LUFS range
     if lufs < -60 then
@@ -220,9 +231,32 @@ function meterToLUFS(meter_normalized)
     return lufs
 end
 
--- NO AVERAGING for diagnostics
+-- Minimal averaging for stability
 function averageLUFS(new_lufs)
-    return new_lufs  -- Direct passthrough
+    -- Clear buffer on large jumps
+    if #lufsBuffer > 0 then
+        local lastValue = lufsBuffer[#lufsBuffer]
+        if math.abs(lastValue - new_lufs) > 10 then
+            debugLog("Large jump detected, clearing buffer")
+            lufsBuffer = {}
+        end
+    end
+    
+    -- Add to buffer
+    table.insert(lufsBuffer, new_lufs)
+    
+    -- Keep only recent values
+    while #lufsBuffer > bufferSize do
+        table.remove(lufsBuffer, 1)
+    end
+    
+    -- Calculate average
+    local sum = 0
+    for _, value in ipairs(lufsBuffer) do
+        sum = sum + value
+    end
+    
+    return sum / #lufsBuffer
 end
 
 -- Format LUFS value for display with unit
@@ -235,7 +269,7 @@ function formatLUFS(lufs_value)
 end
 
 -- ===========================
--- OSC HANDLER WITH TIMING
+-- OSC HANDLER
 -- ===========================
 
 function onReceiveOSC(message, connections)
@@ -265,55 +299,22 @@ function onReceiveOSC(message, connections)
         return false
     end
     
-    -- Get meter level
+    -- Get meter level and calculate LUFS
     local meter_level = arguments[2].value
-    
-    -- Track timing
-    local currentTime = os.clock() * 1000  -- Convert to milliseconds
-    local timeSinceLastUpdate = currentTime - lastMeterTime
-    lastMeterTime = currentTime
-    updateCount = updateCount + 1
-    
-    -- Log update frequency
-    if updateCount % 10 == 0 then  -- Every 10th update
-        log(string.format("UPDATE FREQ: %d updates, last gap: %.0f ms", 
-            updateCount, timeSinceLastUpdate))
-    end
-    
-    -- Check if meter value changed
-    if math.abs(meter_level - lastMeterValue) > 0.001 then
-        log(string.format("METER CHANGE: %.3f → %.3f (Δ%.3f)", 
-            lastMeterValue, meter_level, meter_level - lastMeterValue))
-        
-        -- Also check fader position
-        local fader = self.parent and self.parent.children and self.parent.children.fader
-        if fader and fader.values then
-            log(string.format("FADER POS: %.1f%% (%.3f)", 
-                fader.values.x * 100, fader.values.x))
-        end
-    end
-    lastMeterValue = meter_level
-    
-    -- Calculate LUFS
     local instant_lufs = meterToLUFS(meter_level)
     local averaged_lufs = averageLUFS(instant_lufs)
     
     -- Update display
     self.values.text = formatLUFS(averaged_lufs)
     
-    -- Log final value
-    log(string.format("DISPLAY: %s", formatLUFS(averaged_lufs)))
+    -- Only log significant changes to reduce spam
+    if not lastLUFS or math.abs(averaged_lufs - lastLUFS) > 1.0 then
+        log(string.format("Track %d: %s (meter: %.3f)", 
+            myTrackNumber, formatLUFS(averaged_lufs), meter_level))
+        lastLUFS = averaged_lufs
+    end
     
     return false  -- Don't block other receivers
-end
-
--- ===========================
--- UPDATE FUNCTION
--- ===========================
-
-function update()
-    -- This runs at 60fps - we can use it to check update frequency
-    -- But don't log here as it would spam the console
 end
 
 -- ===========================
@@ -327,15 +328,12 @@ function onReceiveNotify(key, value)
         self.values.text = "-60.0 LUFS"
         lastLUFS = -60.0
         lufsBuffer = {}
-        lastMeterValue = 0
-        updateCount = 0
         log("Track changed - display reset")
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
         self.values.text = "-"
         lastLUFS = nil
         lufsBuffer = {}
-        lastMeterValue = 0
         log("Track unmapped - display shows dash")
     elseif key == "control_enabled" then
         -- Show/hide based on track mapping status
@@ -349,7 +347,7 @@ end
 
 function init()
     -- Log version
-    log("Script v" .. VERSION .. " loaded - TIMING DIAGNOSTICS")
+    log("Script v" .. VERSION .. " loaded")
     
     -- Set initial text
     if isTrackMapped() then
@@ -358,18 +356,18 @@ function init()
         self.values.text = "-"
     end
     
-    -- Initialize state
+    -- Initialize buffer
     lufsBuffer = {}
-    lastMeterValue = 0
-    lastMeterTime = os.clock() * 1000
-    updateCount = 0
     
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("FIXED OFFSET: 2.6 dB (calibrated for -22.2 LUFS at 0dB)")
-        log("NO AVERAGING - Direct display")
-        log("Monitoring update frequency...")
+        log("LUFS estimate from meter output")
+        log("Calibrated: -22.2 LUFS at 0dB fader")
+    end
+    
+    if DEBUG == 1 then
+        log("DEBUG MODE ENABLED")
     end
 end
 
