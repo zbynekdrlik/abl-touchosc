@@ -1,8 +1,8 @@
 -- Group Initialization Script
--- Version: 1.12.1
--- Purpose: Track group state management with multi-connection routing and visual feedback
+-- Version: 1.13.0
+-- Purpose: Track group state management with multi-connection routing and visual communication feedback
 -- Connection routing: Uses control name prefixes (band_, master_) to route to different connections
--- Status indicators: Red=unmapped, Green=mapped, Blue=fader movement detected
+-- Status indicators: Red=unmapped, Green=mapped/idle, Blue=sending, Yellow=receiving
 
 local DEBUG = false
 
@@ -36,7 +36,8 @@ function init()
     -- Initialize state
     self.values.trackIndex = -1
     self.values.trackName = ""
-    self.values.lastActivityTime = 0
+    self.values.lastSendTime = 0
+    self.values.lastReceiveTime = 0
     self.values.lastFaderValue = nil
     
     -- Update label to show unmapped state
@@ -54,19 +55,19 @@ function init()
     debugLog("=== GROUP INIT COMPLETE ===")
 end
 
--- Monitor fader for activity (only thing we can actually detect without modifying other scripts)
+-- Monitor fader for outgoing activity
 function monitorActivity()
     local group = self.parent
     if not group then return end
     
     local currentTime = getMillis()
     
-    -- Check fader for changes
+    -- Check fader for changes (outgoing data)
     local fader = group:findByName("1 #")
     if fader and fader.values.x then
         local currentValue = fader.values.x
         if self.values.lastFaderValue and math.abs(currentValue - self.values.lastFaderValue) > 0.001 then
-            self.values.lastActivityTime = currentTime
+            self.values.lastSendTime = currentTime
             debugLog("Fader movement detected")
         end
         self.values.lastFaderValue = currentValue
@@ -88,18 +89,30 @@ function updateStatusIndicator()
     if not statusIndicator then return end
     
     local currentTime = getMillis()
-    local timeSinceActivity = currentTime - (self.values.lastActivityTime or 0)
+    local timeSinceSend = currentTime - (self.values.lastSendTime or 0)
+    local timeSinceReceive = currentTime - (self.values.lastReceiveTime or 0)
     
     -- Check if mapped
     if self.values.trackIndex and self.values.trackIndex > 0 then
-        -- Mapped - check for recent activity
-        if timeSinceActivity < 150 then
-            -- Active - blue
+        -- Determine current state based on activity
+        if timeSinceSend < 150 then
+            -- Recently sent data - blue
             statusIndicator.color = Color(0, 0.5, 1, 1)
-        elseif timeSinceActivity < 500 then
-            -- Fading from blue to green
-            local fade = (timeSinceActivity - 150) / 350  -- 0 to 1 over 350ms
-            statusIndicator.color = Color(0, 0.5 * (1 - fade) + fade, 1 * (1 - fade) + fade * 0, 1)
+        elseif timeSinceReceive < 150 then
+            -- Recently received data - yellow
+            statusIndicator.color = Color(1, 1, 0, 1)
+        elseif timeSinceSend < 500 or timeSinceReceive < 500 then
+            -- Fading from active to idle
+            local fadeTime = math.min(timeSinceSend, timeSinceReceive) - 150
+            local fade = fadeTime / 350  -- 0 to 1 over 350ms
+            
+            if timeSinceSend < timeSinceReceive then
+                -- Fade from blue to green
+                statusIndicator.color = Color(0, 0.5 * (1 - fade) + fade, 1 * (1 - fade) + fade * 0, 1)
+            else
+                -- Fade from yellow to green
+                statusIndicator.color = Color(1 * (1 - fade), 1, 0, 1)
+            end
         else
             -- Idle - solid green
             statusIndicator.color = Color(0, 1, 0, 1)
@@ -107,6 +120,31 @@ function updateStatusIndicator()
     else
         -- Not mapped - red
         statusIndicator.color = Color(1, 0, 0, 1)
+    end
+end
+
+-- Handle incoming OSC
+function onReceiveOSC(message, connections)
+    -- Only process if we have a track index
+    if not self.values.trackIndex or self.values.trackIndex < 0 then
+        return
+    end
+    
+    local address = message[1]
+    
+    -- Check if this is meter or volume data for our track
+    if address == "/live/track/meter" then
+        local trackIndex = message[2].value
+        if trackIndex == self.values.trackIndex then
+            self.values.lastReceiveTime = getMillis()
+            debugLog("Received meter data for track " .. trackIndex)
+        end
+    elseif address == "/live/track/volume" then
+        local trackIndex = message[2].value
+        if trackIndex == self.values.trackIndex then
+            self.values.lastReceiveTime = getMillis()
+            debugLog("Received volume data for track " .. trackIndex)
+        end
     end
 end
 
@@ -150,13 +188,6 @@ function processGroupOSC(data)
     updateStatusIndicator()
 end
 
--- Called by other scripts to notify of incoming data
-function notifyIncomingData()
-    self.values.lastActivityTime = getMillis()
-    self.values.incomingData = true
-    debugLog("Incoming data notification received")
-end
-
 -- Connection label helper for child controls
 function getConnectionLabel()
     local group = self.parent
@@ -171,4 +202,4 @@ function getConnectionLabel()
     return nil
 end
 
-debugLog("Group init script loaded v1.12.1")
+debugLog("Group init script loaded v1.13.0")
