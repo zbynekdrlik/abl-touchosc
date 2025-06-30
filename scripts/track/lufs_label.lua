@@ -1,14 +1,16 @@
 -- TouchOSC LUFS Meter Display
--- Version: 1.6.0
+-- Version: 1.6.1
 -- Shows approximate LUFS based on track output meter level
--- Calibrated to match true:level measurements
+-- Includes fallback to fader position when meter is delayed
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "1.6.0"
+local VERSION = "1.6.1"
 
 -- State variables
 local lastLUFS = -60.0
+local lastMeterTime = 0
+local lastMeterValue = 0
 local lufsBuffer = {}  -- Buffer for averaging
 local bufferSize = 3   -- Minimal buffer for stability without lag
 
@@ -231,6 +233,27 @@ function meterToLUFS(meter_normalized)
     return lufs
 end
 
+-- Convert fader position directly to estimated LUFS
+function faderToLUFS(fader_position)
+    -- Direct conversion from fader position
+    local audio_value = linearToLog(fader_position)
+    local db_value = value2db(audio_value)
+    
+    -- Apply standard offset plus correction for no actual audio
+    local lufs_offset = 5.0  -- Higher offset when estimating from fader only
+    
+    local lufs = db_value - lufs_offset
+    
+    -- Clamp to reasonable LUFS range
+    if lufs < -60 then
+        lufs = -60
+    elseif lufs > 0 then
+        lufs = 0
+    end
+    
+    return lufs
+end
+
 -- Minimal averaging for stability
 function averageLUFS(new_lufs)
     -- Clear buffer on large jumps
@@ -269,6 +292,27 @@ function formatLUFS(lufs_value)
 end
 
 -- ===========================
+-- UPDATE FUNCTION
+-- ===========================
+
+function update()
+    -- Check if meter hasn't updated in a while
+    local currentTime = os.clock()
+    if currentTime - lastMeterTime > 0.5 then  -- No meter update for 500ms
+        -- Use fader position as fallback
+        local fader = self.parent and self.parent.children and self.parent.children.fader
+        if fader and fader.values then
+            local fader_lufs = faderToLUFS(fader.values.x)
+            local display_text = formatLUFS(fader_lufs) .. " (est)"
+            if self.values.text ~= display_text then
+                self.values.text = display_text
+                debugLog("Using fader estimate due to meter delay")
+            end
+        end
+    end
+end
+
+-- ===========================
 -- OSC HANDLER
 -- ===========================
 
@@ -301,10 +345,13 @@ function onReceiveOSC(message, connections)
     
     -- Get meter level and calculate LUFS
     local meter_level = arguments[2].value
+    lastMeterValue = meter_level
+    lastMeterTime = os.clock()
+    
     local instant_lufs = meterToLUFS(meter_level)
     local averaged_lufs = averageLUFS(instant_lufs)
     
-    -- Update display
+    -- Update display (no "est" suffix for actual meter readings)
     self.values.text = formatLUFS(averaged_lufs)
     
     -- Only log significant changes to reduce spam
@@ -328,6 +375,7 @@ function onReceiveNotify(key, value)
         self.values.text = "-60.0 LUFS"
         lastLUFS = -60.0
         lufsBuffer = {}
+        lastMeterTime = os.clock()
         log("Track changed - display reset")
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
@@ -358,11 +406,12 @@ function init()
     
     -- Initialize buffer
     lufsBuffer = {}
+    lastMeterTime = os.clock()
     
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("LUFS estimate from meter output")
+        log("LUFS from meter with fader fallback")
         log("Calibrated: -22.2 LUFS at 0dB fader")
     end
     
