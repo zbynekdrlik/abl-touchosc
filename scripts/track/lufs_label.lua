@@ -1,19 +1,18 @@
 -- TouchOSC LUFS Meter Display
--- Version: 1.4.1
--- Debug version to diagnose fader/meter relationship
+-- Version: 1.5.0
+-- Shows approximate loudness based on track output meter level
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "1.4.1"
+local VERSION = "1.5.0"
 
 -- State variables
 local lastLUFS = -60.0
-local lastMeterValue = 0
 local lufsBuffer = {}  -- Buffer for averaging
-local bufferSize = 10  -- ~0.17 seconds at 60fps for responsive but stable display
+local bufferSize = 5   -- Reduced for more responsive display
 
 -- Debug mode
-local DEBUG = 1  -- ALWAYS ON for diagnostics
+local DEBUG = 0  -- Set to 1 for detailed logging
 
 -- ===========================
 -- CALIBRATION FROM METER SCRIPT
@@ -40,9 +39,9 @@ local log_exponent = 0.515
 
 local function log(message)
     -- Get parent name for context
-    local context = "LUFS_METER"
+    local context = "LOUDNESS"
     if self.parent and self.parent.name then
-        context = "LUFS_METER(" .. self.parent.name .. ")"
+        context = "LOUDNESS(" .. self.parent.name .. ")"
     end
     
     -- Send to document script for logger text update
@@ -50,6 +49,12 @@ local function log(message)
     
     -- Also print to console for development
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
+end
+
+local function debugLog(message)
+    if DEBUG == 1 then
+        log("[DEBUG] " .. message)
+    end
 end
 
 -- ===========================
@@ -186,11 +191,11 @@ function value2db(vl)
 end
 
 -- ===========================
--- LUFS CALCULATION
+-- LOUDNESS CALCULATION
 -- ===========================
 
--- Convert meter level to approximate LUFS
-function meterToLUFS(meter_normalized)
+-- Convert meter level to approximate loudness
+function meterToLoudness(meter_normalized)
     -- Use exact same conversion as meter script
     local fader_position = abletonToFaderPosition(meter_normalized)
     local audio_value = linearToLog(fader_position)
@@ -199,37 +204,41 @@ function meterToLUFS(meter_normalized)
     -- Calibrated offset based on testing:
     -- When meter shows 0.630 → -19.6 dB → true:level shows -22.2 LUFS
     -- Base offset is approximately 2.5 dB
-    local lufs_offset
+    local loudness_offset
     
     -- Dynamic offset based on level
     if db_value >= -3 then
-        lufs_offset = 0.1  -- Very loud, minimal offset
+        loudness_offset = 0.1  -- Very loud, minimal offset
     elseif db_value >= -6 then
-        lufs_offset = 0.5  -- Loud signal
+        loudness_offset = 0.5  -- Loud signal
     elseif db_value >= -12 then
-        lufs_offset = 1.5  -- Moderately loud
+        loudness_offset = 1.5  -- Moderately loud
     elseif db_value >= -20 then
-        lufs_offset = 2.5  -- Normal levels (calibrated)
+        loudness_offset = 2.5  -- Normal levels (calibrated)
     elseif db_value >= -30 then
-        lufs_offset = 4.0  -- Quieter material
+        loudness_offset = 4.0  -- Quieter material
     else
-        lufs_offset = 6.0  -- Very quiet
+        loudness_offset = 6.0  -- Very quiet
     end
     
-    local lufs = db_value - lufs_offset
+    local loudness = db_value - loudness_offset
     
-    -- Clamp to reasonable LUFS range
-    if lufs < -60 then
-        lufs = -60
-    elseif lufs > 0 then
-        lufs = 0
+    -- Debug logging
+    debugLog(string.format("Meter: %.3f → dB: %.1f → offset: %.1f → Loudness: %.1f", 
+        meter_normalized, db_value, loudness_offset, loudness))
+    
+    -- Clamp to reasonable loudness range
+    if loudness < -60 then
+        loudness = -60
+    elseif loudness > 0 then
+        loudness = 0
     end
     
-    return lufs
+    return loudness
 end
 
 -- Smart averaging that handles large jumps
-function averageLUFS(new_lufs)
+function averageLoudness(new_loudness)
     -- Clear buffer on large jumps or if buffer has very old values
     if #lufsBuffer > 0 then
         local lastValue = lufsBuffer[#lufsBuffer]
@@ -240,14 +249,14 @@ function averageLUFS(new_lufs)
         avgValue = avgValue / #lufsBuffer
         
         -- Clear if new value is very different from average
-        if math.abs(avgValue - new_lufs) > 15 then
-            log("[DEBUG] Large jump detected, clearing buffer")
+        if math.abs(avgValue - new_loudness) > 15 then
+            debugLog("Large jump detected, clearing buffer")
             lufsBuffer = {}
         end
     end
     
     -- Add to buffer
-    table.insert(lufsBuffer, new_lufs)
+    table.insert(lufsBuffer, new_loudness)
     
     -- Keep only recent values
     while #lufsBuffer > bufferSize do
@@ -263,12 +272,13 @@ function averageLUFS(new_lufs)
     return sum / #lufsBuffer
 end
 
--- Format LUFS value for display with unit
-function formatLUFS(lufs_value)
-    if lufs_value <= -60 then
-        return "-60.0 LUFS"
+-- Format loudness value for display
+function formatLoudness(loudness_value)
+    if loudness_value <= -60 then
+        return "-60 LUFS"
     else
-        return string.format("%.1f LUFS", lufs_value)
+        -- Show as integer for cleaner display
+        return string.format("%d LUFS", math.floor(loudness_value + 0.5))
     end
 end
 
@@ -303,34 +313,20 @@ function onReceiveOSC(message, connections)
         return false
     end
     
-    -- Get meter level
+    -- Get meter level and calculate loudness
     local meter_level = arguments[2].value
-    
-    -- DEBUG: Check if meter value is changing
-    local meter_changed = math.abs(meter_level - lastMeterValue) > 0.001
-    if meter_changed then
-        log(string.format("[METER CHANGE] %.3f → %.3f (delta: %.3f)", 
-            lastMeterValue, meter_level, meter_level - lastMeterValue))
-    end
-    lastMeterValue = meter_level
-    
-    -- Also check current fader position
-    local fader = self.parent and self.parent.children and self.parent.children.fader
-    if fader and fader.values then
-        log(string.format("[FADER POSITION] %.1f%% (%.3f)", 
-            fader.values.x * 100, fader.values.x))
-    end
-    
-    -- Calculate LUFS
-    local instant_lufs = meterToLUFS(meter_level)
-    local averaged_lufs = averageLUFS(instant_lufs)
+    local instant_loudness = meterToLoudness(meter_level)
+    local averaged_loudness = averageLoudness(instant_loudness)
     
     -- Update display
-    self.values.text = formatLUFS(averaged_lufs)
+    self.values.text = formatLoudness(averaged_loudness)
     
-    -- Always log in debug mode
-    log(string.format("[UPDATE] Meter: %.3f → %.1f LUFS (avg: %.1f)", 
-        meter_level, instant_lufs, averaged_lufs))
+    -- Only log significant changes to reduce spam
+    if not lastLUFS or math.abs(averaged_loudness - lastLUFS) > 2.0 then
+        log(string.format("Track %d: %s", 
+            myTrackNumber, formatLoudness(averaged_loudness)))
+        lastLUFS = averaged_loudness
+    end
     
     return false  -- Don't block other receivers
 end
@@ -343,17 +339,15 @@ function onReceiveNotify(key, value)
     -- Handle track changes
     if key == "track_changed" then
         -- Clear the display and buffer when track changes
-        self.values.text = "-60.0 LUFS"
+        self.values.text = "-60 LUFS"
         lastLUFS = -60.0
         lufsBuffer = {}
-        lastMeterValue = 0
         log("Track changed - display reset")
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
         self.values.text = "-"
         lastLUFS = nil
         lufsBuffer = {}
-        lastMeterValue = 0
         log("Track unmapped - display shows dash")
     elseif key == "control_enabled" then
         -- Show/hide based on track mapping status
@@ -367,23 +361,27 @@ end
 
 function init()
     -- Log version
-    log("Script v" .. VERSION .. " loaded - DEBUG MODE")
+    log("Script v" .. VERSION .. " loaded")
     
     -- Set initial text
     if isTrackMapped() then
-        self.values.text = "-60.0 LUFS"
+        self.values.text = "-60 LUFS"
     else
         self.values.text = "-"
     end
     
     -- Initialize buffer
     lufsBuffer = {}
-    lastMeterValue = 0
     
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("DEBUG: Monitoring meter changes vs fader position")
+        log("Loudness estimate from output meter")
+        log("Note: This is an approximation, not true LUFS measurement")
+    end
+    
+    if DEBUG == 1 then
+        log("DEBUG MODE ENABLED")
     end
 end
 
