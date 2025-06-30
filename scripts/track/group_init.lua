@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.13.0
--- Added: OSC receive patterns for activity detection (meter/volume data)
+-- Version: 1.13.1
+-- Fixed: Runtime error with schedule method
 
 -- Version constant
-local SCRIPT_VERSION = "1.13.0"
+local SCRIPT_VERSION = "1.13.1"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -81,27 +81,8 @@ local function getChild(parent, name)
     return nil
 end
 
--- Monitor fader for outgoing activity
-local function monitorActivity()
-    local currentTime = getMillis()
-    
-    -- Check fader for changes (outgoing data)
-    local fader = getChild(self, "fader")
-    if fader and fader.values and fader.values.x then
-        local currentValue = fader.values.x
-        if lastFaderValue and math.abs(currentValue - lastFaderValue) > 0.001 then
-            lastSendTime = currentTime
-            -- log("Fader movement detected")
-        end
-        lastFaderValue = currentValue
-    end
-    
-    -- Update status indicator
-    updateStatusIndicator()
-    
-    -- Schedule next check
-    self.parent:schedule(50, monitorActivity)
-end
+-- Forward declaration for monitorActivity
+local monitorActivity
 
 -- Update status indicator based on activity
 local function updateStatusIndicator()
@@ -144,6 +125,25 @@ local function updateStatusIndicator()
         indicator.visible = true
         indicator.color = Color(1, 0, 0, 1)
     end
+end
+
+-- Monitor fader for outgoing activity
+monitorActivity = function()
+    local currentTime = getMillis()
+    
+    -- Check fader for changes (outgoing data)
+    local fader = getChild(self, "fader")
+    if fader and fader.values and fader.values.x then
+        local currentValue = fader.values.x
+        if lastFaderValue and math.abs(currentValue - lastFaderValue) > 0.001 then
+            lastSendTime = currentTime
+            -- log("Fader movement detected")
+        end
+        lastFaderValue = currentValue
+    end
+    
+    -- Update status indicator
+    updateStatusIndicator()
 end
 
 -- Enable/disable all controls in the group - ONLY INTERACTIVITY
@@ -249,10 +249,13 @@ function init()
         end
     end
     
-    -- Start monitoring timer
-    self.parent:schedule(50, monitorActivity)
-    
     log("Ready - waiting for refresh")
+end
+
+-- Use update() function instead of schedule for periodic monitoring
+function update()
+    -- Monitor activity periodically
+    monitorActivity()
 end
 
 function refreshTrackMapping()
