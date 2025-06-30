@@ -1,10 +1,11 @@
 -- TouchOSC LUFS Meter Display
--- Version: 1.1.0
+-- Version: 1.1.1
 -- Shows approximate LUFS based on track output meter level
 -- Multi-connection routing support
+-- Updated: Display "LUFS" unit after value
 
 -- Version constant
-local VERSION = "1.1.0"
+local VERSION = "1.1.1"
 
 -- State variables
 local lastLUFS = -60.0
@@ -233,12 +234,12 @@ function averageLUFS(new_lufs)
     return sum / #lufsBuffer
 end
 
--- Format LUFS value for display
+-- Format LUFS value for display with unit
 function formatLUFS(lufs_value)
     if lufs_value <= -60 then
-        return "-60.0"
+        return "-60.0 LUFS"
     else
-        return string.format("%.1f", lufs_value)
+        return string.format("%.1f LUFS", lufs_value)
     end
 end
 
@@ -283,7 +284,7 @@ function onReceiveOSC(message, connections)
     
     -- Only log significant changes to reduce spam
     if not lastLUFS or math.abs(averaged_lufs - lastLUFS) > 1.0 then
-        log(string.format("Track %d: %s LUFS (meter: %.3f)", 
+        log(string.format("Track %d: %s (meter: %.3f)", 
             myTrackNumber, formatLUFS(averaged_lufs), meter_level))
         lastLUFS = averaged_lufs
     end
@@ -299,7 +300,7 @@ function onReceiveNotify(key, value)
     -- Handle track changes
     if key == "track_changed" then
         -- Clear the display and buffer when track changes
-        self.values.text = "-60.0"
+        self.values.text = "-60.0 LUFS"
         lastLUFS = -60.0
         lufsBuffer = {}
         log("Track changed - display reset")
@@ -325,7 +326,7 @@ function init()
     
     -- Set initial text
     if isTrackMapped() then
-        self.values.text = "-60.0"
+        self.values.text = "-60.0 LUFS"
     else
         self.values.text = "-"
     end
