@@ -2,72 +2,78 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Currently working on: Creating LUFS display label script
-- [ ] Waiting for: User to test script in TouchOSC
+- [x] Currently working on: LUFS meter display based on audio output
+- [ ] Waiting for: User to test updated script in TouchOSC
 - [ ] Blocked by: Need user to add LUFS label control to TouchOSC interface
 
 ## Implementation Status
 - Phase: Feature Development - LUFS Display
-- Step: Script created, needs integration
+- Step: Script updated to use meter output
 - Status: IMPLEMENTING
 
-## Feature: Add LUFS Display to Fader
-Adding LUFS (Loudness Units relative to Full Scale) display functionality alongside existing dB display.
+## Feature: Add LUFS Display Based on Track Output
+Adding LUFS (Loudness Units relative to Full Scale) display that shows actual audio loudness from track output meter.
 
 ### Requirements
-- Display LUFS value based on fader position
-- Update in real-time with fader movement
+- Display LUFS value based on actual audio output level
+- Update in real-time with audio meter
 - Show appropriate LUFS range (typically -60 to 0 LUFS)
+- Use averaging for more stable LUFS reading
 - Integrate with existing multi-connection routing
 
 ### Implementation Plan
 1. [x] Create `lufs_label.lua` script based on `db_label.lua` structure
-2. [x] Implement LUFS calculation from audio value
-3. [ ] Add LUFS label control to track groups
-4. [ ] Test with fader movements
-5. [ ] Update documentation
+2. [x] Update to use meter output instead of fader position
+3. [x] Implement LUFS calculation with averaging
+4. [ ] Add LUFS label control to track groups
+5. [ ] Test with actual audio playback
+6. [ ] Update documentation
 
-### LUFS Mapping Implementation
-The script uses this approximation:
-- 0 dB → -14 LUFS (common streaming target)
-- -6 dB → -20 LUFS
-- -inf dB → -60 LUFS
-- Positive dB values scale from -14 to 0 LUFS
+### LUFS Implementation Details
+The script now:
+- Listens to `/live/track/get/output_meter_level` (same as meter)
+- Calculates approximate LUFS from peak meter values
+- Uses 30-sample averaging (approximately 0.5 seconds)
+- Dynamic offset based on signal level:
+  - Near clipping (-3dB): 8dB offset (compressed material)
+  - Loud (-12dB): 12dB offset
+  - Normal (-24dB): 15dB offset  
+  - Quiet: 18dB offset (dynamic material)
 
 ## Testing Status Matrix
 | Component | Implemented | Unit Tested | Integration Tested | Multi-Instance Tested | 
 |-----------|------------|-------------|--------------------|-----------------------|
-| lufs_label.lua | ✅ v1.0.0 | ❌ | ❌ | ❌ |
+| lufs_label.lua | ✅ v1.1.0 | ❌ | ❌ | ❌ |
 
 ## Last User Action
 - Date/Time: 2025-06-30
-- Action: Requested LUFS display feature
-- Result: Script created
+- Action: Requested LUFS based on meter output, not fader
+- Result: Script updated to use meter values
 - Next Required: Add LUFS label to TouchOSC interface
 
 ## Script Versions - Feature Branch
 | Script | Version | Status |
 |--------|---------|---------|
-| lufs_label.lua | 1.0.0 | ✅ Created, needs testing |
+| lufs_label.lua | 1.1.0 | ✅ Updated to use meter output |
 
 ## TouchOSC Integration Steps Required
 User needs to:
 1. Open TouchOSC editor
 2. Add a new Label control to each track group
-3. Name it "lufs_label" (must match exactly)
-4. Position it near the existing dB label
+3. Name it exactly: `lufs_label`
+4. Position it near the existing dB label or meter
 5. Attach the `lufs_label.lua` script to it
-6. Set OSC receive pattern: `/live/track/get/volume`
-7. Test with fader movements
+6. Set OSC receive pattern: `/live/track/get/output_meter_level`
+7. Test with actual audio playback
 
 ## Configuration
 - No configuration changes required
-- LUFS label will use same connection routing as other controls
+- LUFS label uses same connection routing as meter
 - Works with existing track mapping system
 
 ## Next Steps
 1. User adds LUFS label control to TouchOSC
-2. Test LUFS display with fader movements
-3. Verify LUFS values are reasonable
-4. Update group_init.lua if needed
+2. Test LUFS display with audio playback
+3. Verify LUFS values respond to actual audio
+4. Fine-tune offset values if needed
 5. Update documentation
