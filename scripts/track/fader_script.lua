@@ -1,6 +1,18 @@
--- FINAL PROFESSIONAL FADER - MOVEMENT SMOOTHING SYSTEM
+-- TouchOSC Professional Fader with Movement Smoothing
+-- Version: 2.3.5
+-- Fixed: Never change fader position based on assumptions
+-- Added: Centralized logging and multi-connection routing
+-- Preserved: ALL original fader functionality
+
+-- Version constant
+local VERSION = "2.3.5"
+
+-- ===========================
+-- ORIGINAL CONFIGURATION
+-- ===========================
+
 -- DEBUG CONTROL: Set to 1 to enable all logging, 0 to disable completely
-local DEBUG = 1
+local DEBUG = 0
 
 -- GRADUAL FIRST MOVEMENT SCALING SETTINGS
 local ENABLE_FIRST_MOVEMENT_SCALING = true
@@ -68,12 +80,108 @@ local double_tap_animation_active = false
 local double_tap_target_position = 0
 local double_tap_start_position = 0
 
--- DEBUG PRINT FUNCTION
+-- ===========================
+-- CENTRALIZED LOGGING
+-- ===========================
+
+-- Centralized logging through document script
+local function log(message)
+    -- Get parent name for context
+    local context = "FADER"
+    if self.parent and self.parent.name then
+        context = "FADER(" .. self.parent.name .. ")"
+    end
+    
+    -- Send to document script for logger text update
+    root:notify("log_message", context .. ": " .. message)
+    
+    -- Also print to console for development/debugging
+    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
+end
+
+-- DEBUG PRINT FUNCTION (modified to use centralized logging)
 function debugPrint(...)
   if DEBUG == 1 then
-    print(...)
+    local args = {...}
+    local msg = table.concat(args, " ")
+    log(msg)
   end
 end
+
+-- ===========================
+-- CONNECTION HELPERS
+-- ===========================
+
+-- Get connection configuration (read directly from config text)
+local function getConnectionIndex()
+    -- Check if parent has tag with instance:trackNumber format
+    if self.parent and self.parent.tag then
+        local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
+        if instance then
+            -- Find configuration object
+            local configObj = root:findByName("configuration", true)
+            if not configObj or not configObj.values or not configObj.values.text then
+                debugPrint("Warning: No configuration found, using default connection 1")
+                return 1
+            end
+            
+            local configText = configObj.values.text
+            local searchKey = "connection_" .. instance .. ":"
+            
+            -- Parse configuration text
+            for line in configText:gmatch("[^\r\n]+") do
+                line = line:match("^%s*(.-)%s*$")  -- Trim whitespace
+                if line:sub(1, #searchKey) == searchKey then
+                    local value = line:sub(#searchKey + 1):match("^%s*(.-)%s*$")
+                    return tonumber(value) or 1
+                end
+            end
+            
+            debugPrint("Warning: No config for " .. instance .. " - using default (1)")
+            return 1
+        end
+    end
+    
+    -- Fallback to default
+    return 1
+end
+
+-- Build connection table for OSC routing
+local function buildConnectionTable(index)
+    local connections = {}
+    for i = 1, 10 do
+        connections[i] = (i == index)
+    end
+    return connections
+end
+
+-- Get track number from parent group
+local function getTrackNumber()
+    -- Parent stores combined tag like "band:5"
+    if self.parent and self.parent.tag then
+        local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
+        if trackNum then
+            return tonumber(trackNum)
+        end
+    end
+    return nil
+end
+
+-- Check if track is properly mapped
+local function isTrackMapped()
+    -- If parent doesn't have proper tag format, it's not mapped
+    if not self.parent or not self.parent.tag then
+        return false
+    end
+    
+    -- Check for instance:trackNumber format
+    local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
+    return instance ~= nil and trackNum ~= nil
+end
+
+-- ===========================
+-- ORIGINAL FADER FUNCTIONS
+-- ===========================
 
 function linearToLog(linear_pos)
   if linear_pos <= 0 then return 0
@@ -358,9 +466,34 @@ function applyFirstMovementScaling(raw_position, is_touching)
   return raw_position
 end
 
+-- MINIMAL DEAD ZONES - REMOVED TO ALLOW DOUBLE-TAP AT -INF
+function isInDeadZone(audio_value)
+  -- This function is modified to always return false,
+  -- effectively removing any "dead zone" that would disable double-tap.
+  return false, "No dead zone (double-tap enabled everywhere)" 
+end
+
+-- ===========================
+-- OSC HANDLERS WITH CONNECTION ROUTING
+-- ===========================
+
 function onReceiveOSC(message, connections)
+  -- THIS WAS THE BUG! The original fader expects arguments[1].value to be the track number
+  -- but we need to handle the original format
   local arguments = message[2]
-  if arguments[1].value == tonumber(self.parent.tag) then
+  
+  -- For the original fader behavior, it was checking:
+  -- if arguments[1].value == tonumber(self.parent.tag) then
+  -- But now self.parent.tag is "band:39" not "39"
+  
+  -- So we need to extract just the track number from our tag
+  local myTrackNumber = getTrackNumber()
+  if not myTrackNumber then
+    return false
+  end
+  
+  -- Check if this message is for our track
+  if arguments[1].value == myTrackNumber then
     local remote_audio_value = arguments[2].value
     last_osc_audio = remote_audio_value
     
@@ -385,6 +518,16 @@ function onReceiveOSC(message, connections)
       debugPrint("*** OSC RECEIVED WHILE TOUCHING - Ignoring to prevent jump ***")
     end
   end
+  
+  return false  -- Don't block other receivers
+end
+
+-- Send OSC with connection routing - FIXED TO INCLUDE ALL PARAMETERS
+local function sendOSCRouted(path, track, volume)
+  local connectionIndex = getConnectionIndex()
+  local connections = buildConnectionTable(connectionIndex)
+  -- CRITICAL FIX: Must send track AND volume as separate parameters
+  sendOSC(path, track, volume, connections)
 end
 
 function update()
@@ -414,7 +557,10 @@ function update()
           double_tap_animation_active = false
           debugPrint("*** DOUBLE-TAP ANIMATION COMPLETE (Already at target) ***")
           local final_audio = use_log_curve and linearToLog(double_tap_target_position) or double_tap_target_position
-          sendOSC('/live/track/set/volume', tonumber(self.parent.tag), final_audio)
+          local trackNumber = getTrackNumber()
+          if trackNumber then
+            sendOSCRouted('/live/track/set/volume', trackNumber, final_audio)
+          end
           return
       end
 
@@ -430,7 +576,10 @@ function update()
           double_tap_animation_active = false
           debugPrint("*** DOUBLE-TAP ANIMATION COMPLETE (Snapped to target) ***")
           local final_audio = use_log_curve and linearToLog(double_tap_target_position) or double_tap_target_position
-          sendOSC('/live/track/set/volume', tonumber(self.parent.tag), final_audio)
+          local trackNumber = getTrackNumber()
+          if trackNumber then
+            sendOSCRouted('/live/track/set/volume', trackNumber, final_audio)
+          end
       else
           -- Move towards target with constant speed
           self.values.x = proposed_new_position
@@ -438,7 +587,10 @@ function update()
           
           -- Send OSC update
           local new_audio = use_log_curve and linearToLog(proposed_new_position) or proposed_new_position
-          sendOSC('/live/track/set/volume', tonumber(self.parent.tag), new_audio)
+          local trackNumber = getTrackNumber()
+          if trackNumber then
+            sendOSCRouted('/live/track/set/volume', trackNumber, new_audio)
+          end
           
           debugPrint("*** DOUBLE-TAP ANIMATION (Constant Speed) ***")
           -- Progress calculation assuming linear movement
@@ -477,16 +629,20 @@ function update()
     synced = true
     debugPrint("*** Touch detected during sync delay - cancelling sync ***")
   end
-end
-
--- MINIMAL DEAD ZONES - REMOVED TO ALLOW DOUBLE-TAP AT -INF
-function isInDeadZone(audio_value)
-  -- This function is modified to always return false,
-  -- effectively removing any "dead zone" that would disable double-tap.
-  return false, "No dead zone (double-tap enabled everywhere)" 
+  
+  -- REMOVED: Color changing code
+  -- The group script handles enabling/disabling interactivity
+  -- We should NOT change colors here
 end
 
 function onValueChanged()
+  -- Safety check: only process if track is mapped
+  if not isTrackMapped() then
+    -- FIXED: Don't change fader position - just return
+    debugPrint("Track not mapped - ignoring value change")
+    return
+  end
+  
   -- Skip processing if animation is active and no touch
   if double_tap_animation_active and not self.values.touch then
     return  -- Let update() handle the animation
@@ -564,7 +720,14 @@ function onValueChanged()
   end
   last_logged_position = scaled_fader_position
   
-  sendOSC('/live/track/set/volume', tonumber(self.parent.tag), audio_value)
+  -- Send OSC with routing - FIXED TO SEND BOTH TRACK AND VOLUME
+  local trackNumber = getTrackNumber()
+  if trackNumber then
+    sendOSCRouted('/live/track/set/volume', trackNumber, audio_value)
+    
+    -- Volume change log ONLY in debug mode
+    debugPrint(string.format("Volume change for track %d: %.3f", trackNumber, scaled_fader_position))
+  end
   
   -- TOUCH DETECTION WITH DEBUG
   if self.values.touch and not touch_started then
@@ -650,8 +813,31 @@ function onValueChanged()
   end
 end
 
+-- Handle notifications from parent group
+function onReceiveNotify(key, value)
+  -- Parent might notify us of track changes
+  if key == "track_changed" then
+    -- FIXED: Don't change fader position - just reset internal state
+    touched = false
+    synced = true
+    last_position = self.values.x  -- Keep current position
+    debugPrint("Track changed - state reset, position preserved")
+  elseif key == "track_unmapped" then
+    -- FIXED: Don't change fader position
+    debugPrint("Track unmapped - fader position preserved")
+  end
+end
+
 -- VERIFICATION
 function init()
+  -- Log version with centralized logging
+  log("Script v" .. VERSION .. " loaded")
+  
+  -- Log parent info
+  if self.parent and self.parent.name then
+    log("Initialized for parent: " .. self.parent.name)
+  end
+  
   debugPrint("=== PROFESSIONAL FADER WITH IMMEDIATE 0.1dB RESPONSE ===")
   debugPrint("DEBUG MODE:", DEBUG == 1 and "ENABLED" or "DISABLED")
   debugPrint("Gradual movement scaling:", ENABLE_FIRST_MOVEMENT_SCALING and "ENABLED" or "DISABLED")
@@ -680,8 +866,11 @@ function init()
   debugPrint("50% fader:", string.format("%.3f", test_50), "audio", formatDB(value2db(test_50)))
   debugPrint("Unity position:", string.format("%.1f%%", logToLinear(0.85) * 100), "fader")
   
-  -- Initialize scaling variables
+  -- Initialize scaling variables - preserve current position
   last_position = self.values.x or 0
+  
+  -- REMOVED: Initial color setting
+  -- Let the group script handle interactivity
 end
 
 init()
