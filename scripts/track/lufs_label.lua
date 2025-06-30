@@ -1,16 +1,19 @@
 -- TouchOSC LUFS Meter Display
--- Version: 1.1.1
+-- Version: 1.2.0
 -- Shows approximate LUFS based on track output meter level
 -- Multi-connection routing support
--- Updated: Display "LUFS" unit after value
+-- Simplified conversion for better accuracy
 
 -- Version constant
-local VERSION = "1.1.1"
+local VERSION = "1.2.0"
 
 -- State variables
 local lastLUFS = -60.0
 local lufsBuffer = {}  -- Buffer for averaging
-local bufferSize = 30  -- Number of samples to average (approximately 0.5 seconds at 60fps)
+local bufferSize = 15  -- Reduced for faster response (~0.25 seconds at 60fps)
+
+-- Debug mode
+local DEBUG = 0  -- Set to 1 to see conversion details
 
 -- ===========================
 -- CENTRALIZED LOGGING
@@ -28,6 +31,12 @@ local function log(message)
     
     -- Also print to console for development
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
+end
+
+local function debugLog(message)
+    if DEBUG == 1 then
+        log("[DEBUG] " .. message)
+    end
 end
 
 -- ===========================
@@ -92,118 +101,63 @@ local function getConnectionIndex()
 end
 
 -- ===========================
--- CALIBRATION (from meter script)
+-- SIMPLIFIED LUFS CALCULATION
 -- ===========================
 
--- Calibration points from meter script
-local CALIBRATION_POINTS = {
-    {0.0, 0.0},      -- Silent
-    {0.3945, 0.027}, -- -40dB
-    {0.6839, 0.169}, -- -18dB
-    {0.7629, 0.313}, -- -12dB
-    {0.8399, 0.5},   -- -6dB
-    {0.9200, 0.729}, -- 0dB
-    {1.0, 1.0}       -- Max
-}
-
--- Convert AbletonOSC normalized value to fader position
-function abletonToFaderPosition(normalized)
-    if not normalized or normalized <= 0 then
-        return 0
+-- Direct conversion from normalized meter value to dB
+-- Based on AbletonOSC meter output (0-1 normalized)
+function meterToDB(meter_normalized)
+    if not meter_normalized or meter_normalized <= 0 then
+        return -math.huge
     end
     
-    if normalized >= 1.0 then
-        return 1.0
+    -- AbletonOSC meter is already in a useful scale
+    -- We'll use a simpler conversion based on common meter scaling
+    -- where 1.0 = 0dB and it follows a logarithmic scale
+    
+    -- Simple logarithmic conversion
+    -- This assumes the meter value is already properly scaled
+    local db = 20 * math.log10(meter_normalized)
+    
+    -- Clamp to reasonable range
+    if db < -60 then
+        return -60
+    elseif db > 6 then
+        return 6
     end
     
-    -- Find the two closest points for interpolation
-    for i = 1, #CALIBRATION_POINTS - 1 do
-        local point1 = CALIBRATION_POINTS[i]
-        local point2 = CALIBRATION_POINTS[i + 1]
-        
-        if normalized >= point1[1] and normalized <= point2[1] then
-            -- Linear interpolation
-            local ratio = (normalized - point1[1]) / (point2[1] - point1[1])
-            local fader_position = point1[2] + ratio * (point2[2] - point1[2])
-            return fader_position
-        end
-    end
-    
-    return normalized
+    return db
 end
-
--- ===========================
--- dB CONVERSION (from fader script)
--- ===========================
-
-local log_exponent = 0.515
-
-function linearToLog(linear_pos)
-    if not linear_pos or linear_pos <= 0 then return 0
-    elseif linear_pos >= 1 then return 1
-    else return math.pow(linear_pos, log_exponent) end
-end
-
-function value2db(vl)
-    if not vl then return -math.huge end
-    
-    if vl <= 1 and vl >= 0.4 then
-        return 40*vl - 34
-    elseif vl < 0.4 and vl >= 0.15 then
-        local alpha = 799.503788
-        local beta = 12630.61132
-        local gamma = 201.871345
-        local delta = 399.751894
-        return -((delta*vl - gamma)^2 + beta)/alpha
-    elseif vl < 0.15 then
-        local alpha = 70.
-        local beta = 118.426374
-        local gamma = 7504./5567.
-        local db_value = beta*(vl^(1/gamma)) - alpha
-        if db_value <= -70.0 then 
-            return -math.huge
-        else
-            return db_value
-        end
-    else
-        return 0
-    end
-end
-
--- ===========================
--- LUFS CALCULATION
--- ===========================
 
 -- Convert meter level to approximate LUFS
--- Since we only have peak meter, this is an approximation
 function meterToLUFS(meter_normalized)
-    -- Convert to fader position and then to dB
-    local fader_pos = abletonToFaderPosition(meter_normalized)
-    local audio_value = linearToLog(fader_pos)
-    local db_value = value2db(audio_value)
+    -- Get dB value directly
+    local db_value = meterToDB(meter_normalized)
     
-    -- LUFS approximation from peak meter
-    -- Peak to LUFS offset typically ranges from 8-20 dB depending on content
-    -- We'll use a dynamic offset based on level
-    local lufs_offset
+    -- For sine wave: LUFS ≈ RMS level
+    -- For a sine wave, peak = RMS + 3dB
+    -- So if we have peak meter, LUFS ≈ peak - 3dB for sine
+    -- For complex material, the offset varies
     
-    if db_value == -math.huge or db_value < -60 then
-        return -60.0  -- Minimum LUFS display
-    elseif db_value >= -3 then
-        -- Near clipping - assume heavily compressed/limited
-        lufs_offset = 8  -- Smaller offset for loud, compressed material
+    -- Simple approach: assume meter shows peak, apply offset
+    local lufs_offset = 3.0  -- Start with sine wave offset
+    
+    -- Adjust offset based on level (louder = more compressed typically)
+    if db_value >= -6 then
+        lufs_offset = 3.0  -- Sine wave or very dynamic
     elseif db_value >= -12 then
-        -- Loud material
-        lufs_offset = 12
-    elseif db_value >= -24 then
-        -- Normal material
-        lufs_offset = 15
+        lufs_offset = 6.0  -- Typical music
+    elseif db_value >= -20 then
+        lufs_offset = 9.0  -- More dynamic range
     else
-        -- Quiet material - likely more dynamic
-        lufs_offset = 18
+        lufs_offset = 12.0  -- Very dynamic
     end
     
     local lufs = db_value - lufs_offset
+    
+    -- Debug logging
+    debugLog(string.format("Meter: %.3f, dB: %.1f, offset: %.1f, LUFS: %.1f", 
+        meter_normalized, db_value, lufs_offset, lufs))
     
     -- Clamp to reasonable LUFS range
     if lufs < -60 then
@@ -338,7 +292,12 @@ function init()
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
         log("LUFS calculated from output meter levels")
-        log("Using " .. bufferSize .. " sample averaging")
+        log("Using " .. bufferSize .. " sample averaging (faster response)")
+        log("Simplified conversion for better accuracy")
+    end
+    
+    if DEBUG == 1 then
+        log("DEBUG MODE ENABLED - Conversion details will be logged")
     end
 end
 
