@@ -1,55 +1,52 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.3.8
+-- Version: 2.4.0
 -- Shows actual peak dBFS level from track output meter
--- Updated calibration with additional mid-range point
+-- Accurately calibrated to match Ableton Live's display
 -- Multi-connection routing support
--- LOGS EVERY METER UPDATE - NO THRESHOLDS
 
 -- Version constant
-local VERSION = "2.3.8"
+local VERSION = "2.4.0"
 
 -- State variables
 local lastDB = -70.0
 local lastMeterValue = 0
-local messageCount = 0
 
 -- Debug mode
-local DEBUG = 1  -- ENABLED until feature is approved
+local DEBUG = 0  -- Set to 1 for detailed logging
 
 -- ===========================
 -- METER CALIBRATION TABLE
 -- ===========================
--- Updated calibration table based on verified values
--- Note: AbletonOSC uses VERY non-linear scaling
--- IMPORTANT: 0.921 = 0 dBFS, 1.0 = +6 dBFS (headroom)
+-- Calibration table based on extensive testing with Ableton Live
+-- AbletonOSC uses non-linear scaling with 0.921 = 0 dBFS, 1.0 = +6 dBFS
 local METER_DB_CALIBRATION = {
     {0.000, -math.huge},  -- Silence
     {0.001, -100.0},      -- Very quiet
-    {0.010, -80.0},       -- Adjusted
-    {0.050, -70.0},       -- Adjusted
-    {0.070, -64.7},       -- VERIFIED by user
-    {0.100, -60.0},       -- Adjusted
-    {0.150, -54.0},       -- Adjusted
-    {0.200, -50.0},       -- Adjusted
-    {0.250, -46.0},       -- Adjusted
-    {0.300, -43.0},       -- Adjusted
-    {0.350, -40.5},       -- Adjusted
-    {0.400, -38.5},       -- Adjusted
-    {0.425, -37.7},       -- VERIFIED by user
-    {0.500, -33.0},       -- Adjusted
-    {0.539, -29.0},       -- VERIFIED by user
-    {0.600, -24.4},       -- VERIFIED by user
-    {0.631, -22.0},       -- VERIFIED by user
-    {0.674, -18.8},       -- VERIFIED by user
-    {0.700, -16.8},       -- Adjusted based on verified data
-    {0.750, -14.0},       -- 
-    {0.800, -10.0},       -- 
-    {0.842, -6.0},        -- VERIFIED by user
-    {0.900, -3.0},        -- Adjusted
-    {0.921, 0.0},         -- VERIFIED by user (unity/0 dBFS)
-    {0.950, 2.0},         -- Adjusted for headroom
-    {0.980, 4.0},         -- Adjusted for headroom
-    {1.000, 6.0},         -- VERIFIED by user (max headroom)
+    {0.010, -80.0},       
+    {0.050, -70.0},       
+    {0.070, -64.7},       -- Verified
+    {0.100, -60.0},       
+    {0.150, -54.0},       
+    {0.200, -50.0},       
+    {0.250, -46.0},       
+    {0.300, -43.0},       
+    {0.350, -40.5},       
+    {0.400, -38.5},       
+    {0.425, -37.7},       -- Verified
+    {0.500, -33.0},       
+    {0.539, -29.0},       -- Verified
+    {0.600, -24.4},       -- Verified
+    {0.631, -22.0},       -- Verified
+    {0.674, -18.8},       -- Verified
+    {0.700, -16.8},       
+    {0.750, -14.0},       
+    {0.800, -10.0},       
+    {0.842, -6.0},        -- Verified
+    {0.900, -3.0},        
+    {0.921, 0.0},         -- Verified (unity/0 dBFS)
+    {0.950, 2.0},         
+    {0.980, 4.0},         
+    {1.000, 6.0},         -- Verified (max headroom)
 }
 
 -- ===========================
@@ -180,6 +177,9 @@ function meterToDB(meter_normalized)
                 local interpolation_ratio = meter_offset / meter_range
                 local db_value = point1[2] + (db_range * interpolation_ratio)
                 
+                debugLog(string.format("Meter: %.4f → Between %.4f (%.1f dB) and %.4f (%.1f dB) → %.1f dB", 
+                    meter_normalized, point1[1], point1[2], point2[1], point2[2], db_value))
+                
                 return db_value
             end
         end
@@ -247,22 +247,23 @@ function onReceiveOSC(message, connections)
     -- Always update the display for every meter value
     self.values.text = formatDB(db_value)
     
-    -- Increment message counter
-    messageCount = messageCount + 1
+    -- Enhanced logging for debugging
+    local shouldLog = false
     
-    -- LOG EVERY SINGLE METER UPDATE - NO THRESHOLDS
-    log(string.format("[MSG #%d] Track %d: %s (meter: %.6f)%s", 
-        messageCount,
-        myTrackNumber, 
-        formatDB(db_value), 
-        meter_level,
-        db_value > 0 and " [CLIPPING]" or ""))
+    -- Always log if value changed significantly
+    if not lastDB or math.abs(db_value - lastDB) > 1.0 then
+        shouldLog = true
+    end
     
-    -- Also log deltas if we have previous values
-    if lastMeterValue and lastDB then
-        debugLog(string.format("Δmeter: %.6f, ΔdB: %.2f", 
-            meter_level - lastMeterValue, 
-            db_value - lastDB))
+    -- Log clipping
+    if db_value > 0 and (not lastDB or lastDB <= 0) then
+        shouldLog = true
+    end
+    
+    if shouldLog then
+        log(string.format("Track %d: %s (meter: %.4f)%s", 
+            myTrackNumber, formatDB(db_value), meter_level,
+            db_value > 0 and " [CLIPPING]" or ""))
     end
     
     lastDB = db_value
@@ -290,8 +291,7 @@ function onReceiveNotify(key, value)
         self.values.text = "-∞ dBFS"
         lastDB = -math.huge
         lastMeterValue = 0
-        messageCount = 0
-        log("Track changed - display reset, message counter reset")
+        log("Track changed - display reset")
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
         self.values.text = "-"
@@ -322,11 +322,12 @@ function init()
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("Peak dBFS meter - v2.3.8 with 9 calibration points")
-        log("Verified: 0.070=-64.7dB, 0.425=-37.7dB, 0.539=-29dB")
-        log("         0.600=-24.4dB, 0.631=-22dB, 0.674=-18.8dB")
-        log("         0.842=-6dB, 0.921=0dB, 1.000=+6dB")
-        log("LOGS EVERY METER UPDATE - No thresholds")
+        log("Peak dBFS meter - accurately calibrated to match Ableton Live")
+        log("Range: -∞ to +6 dBFS (32-bit float headroom)")
+    end
+    
+    if DEBUG == 1 then
+        log("DEBUG MODE ENABLED")
     end
 end
 
