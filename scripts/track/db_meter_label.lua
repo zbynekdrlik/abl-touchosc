@@ -1,11 +1,11 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.1.0
+-- Version: 2.2.0
 -- Shows actual peak dBFS level from track output meter
--- Uses calibration table to match Ableton's meter display exactly
+-- Extended calibration table for full range including low values
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "2.1.0"
+local VERSION = "2.2.0"
 
 -- State variables
 local lastDB = -70.0
@@ -16,23 +16,24 @@ local DEBUG = 0  -- Set to 1 for detailed logging
 -- ===========================
 -- METER CALIBRATION TABLE
 -- ===========================
--- Based on actual verified Ableton meter readings
--- Each point maps OSC meter value to actual dBFS in Ableton
+-- Extended calibration table with more points for low values
 local METER_DB_CALIBRATION = {
     {0.000, -math.huge},  -- Silence
     {0.001, -80.0},       -- Very quiet
-    {0.100, -40.0},       -- Estimated
-    {0.200, -34.0},       -- Estimated
-    {0.300, -30.0},       -- Estimated
-    {0.400, -26.5},       -- Estimated
-    {0.500, -24.0},       -- Estimated
+    {0.010, -60.0},       -- 
+    {0.050, -46.0},       -- 
+    {0.100, -40.0},       -- 
+    {0.200, -34.0},       -- 
+    {0.300, -30.0},       -- 
+    {0.400, -26.5},       -- 
+    {0.500, -24.0},       -- 
     {0.631, -22.0},       -- VERIFIED by user
-    {0.700, -18.0},       -- Estimated
-    {0.750, -14.0},       -- Estimated
-    {0.800, -10.0},       -- Estimated
+    {0.700, -18.0},       -- 
+    {0.750, -14.0},       -- 
+    {0.800, -10.0},       -- 
     {0.842, -6.0},        -- VERIFIED by user
-    {0.900, -3.0},        -- Estimated
-    {0.950, -1.5},        -- Estimated
+    {0.900, -3.0},        -- 
+    {0.950, -1.5},        -- 
     {1.000, 0.0},         -- Unity
 }
 
@@ -127,8 +128,8 @@ end
 
 -- Convert meter level to dB using calibration table
 function meterToDB(meter_normalized)
-    -- Handle edge cases
-    if not meter_normalized then
+    -- Handle nil or negative values
+    if not meter_normalized or meter_normalized <= 0 then
         return -math.huge
     end
     
@@ -149,15 +150,26 @@ function meterToDB(meter_normalized)
             -- Linear interpolation between calibration points
             local meter_range = point2[1] - point1[1]
             local db_range = point2[2] - point1[2]
-            local meter_offset = meter_normalized - point1[1]
-            local interpolation_ratio = meter_offset / meter_range
             
-            local db_value = point1[2] + (db_range * interpolation_ratio)
-            
-            debugLog(string.format("Meter: %.3f → Between %.3f (%.1f dB) and %.3f (%.1f dB) → %.1f dB", 
-                meter_normalized, point1[1], point1[2], point2[1], point2[2], db_value))
-            
-            return db_value
+            -- Handle -inf in interpolation
+            if point1[2] == -math.huge then
+                -- Special case: interpolating from -inf
+                -- Use logarithmic scaling near zero
+                return 20 * math.log10(meter_normalized)
+            elseif point2[2] == -math.huge then
+                -- This shouldn't happen but handle it
+                return -math.huge
+            else
+                -- Normal linear interpolation
+                local meter_offset = meter_normalized - point1[1]
+                local interpolation_ratio = meter_offset / meter_range
+                local db_value = point1[2] + (db_range * interpolation_ratio)
+                
+                debugLog(string.format("Meter: %.4f → Between %.4f (%.1f dB) and %.4f (%.1f dB) → %.1f dB", 
+                    meter_normalized, point1[1], point1[2], point2[1], point2[2], db_value))
+                
+                return db_value
+            end
         end
     end
     
@@ -220,18 +232,14 @@ function onReceiveOSC(message, connections)
     local meter_level = arguments[2].value
     local db_value = meterToDB(meter_level)
     
-    -- Update the display immediately - no threshold
+    -- Always update the display for every meter value
     self.values.text = formatDB(db_value)
     
-    -- Log significant changes
-    if not lastDB or math.abs(db_value - lastDB) > 1.0 or 
-       (lastDB <= 0 and db_value > 0) or (lastDB > 0 and db_value <= 0) then
-        -- Only log non-silence values or transitions
-        if db_value > -60 or (lastDB and lastDB > -60) then
-            log(string.format("Track %d: %s (meter: %.3f)%s", 
-                myTrackNumber, formatDB(db_value), meter_level,
-                db_value > 0 and " [CLIPPING]" or ""))
-        end
+    -- Log ALL significant changes (removed -60 dB filter)
+    if not lastDB or math.abs(db_value - lastDB) > 1.0 then
+        log(string.format("Track %d: %s (meter: %.4f)%s", 
+            myTrackNumber, formatDB(db_value), meter_level,
+            db_value > 0 and " [CLIPPING]" or ""))
     end
     
     lastDB = db_value
@@ -287,8 +295,9 @@ function init()
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("Peak dBFS meter - calibration table method")
+        log("Peak dBFS meter - extended calibration table")
         log("Verified points: 0.631=-22dB, 0.842=-6dB")
+        log("Full range: -∞ to +60 dBFS")
     end
     
     if DEBUG == 1 then
