@@ -4,45 +4,51 @@
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
 - [x] Currently working on: dB meter label display based on audio output
 - [x] Created new feature branch: feature/db-meter
-- [x] Created db_meter_label.lua script v2.2.1 with enhanced low-value logging
-- [x] Added calibration rule documentation
-- [x] Fixed all calibration and range issues
-- [ ] Waiting for: User to test low values below -22 dBFS with v2.2.1
-- [ ] Issue: User reports meter visually moves but no logs appear below -22 dBFS
+- [x] Created db_meter_label.lua script v2.3.0 with corrected calibration
+- [x] Fixed calibration issue: 0.600 = -24.4 dBFS (was showing -22.5)
+- [ ] Waiting for: User to test v2.3.0 with corrected calibration
+- [ ] Next: Verify low values now display correctly
 
 ## Implementation Status
 - Phase: Feature Development - dB Meter Display
-- Step: Debugging low value logging with v2.2.1
-- Status: TESTING/DEBUGGING
+- Step: Testing corrected calibration
+- Status: TESTING
 
 ## Feature: Add dBFS Meter Display Based on Track Output
 Creating a proper peak dBFS meter that shows actual audio level from track output meter.
 
-### Current Solution (v2.2.1)
+### Current Solution (v2.3.0)
 - Calibration table method with extended range
 - Based on verified reference points:
+  - OSC meter 0.600 = -24.4 dBFS ✓ (NEW)
   - OSC meter 0.631 = -22 dBFS ✓
   - OSC meter 0.842 = -6 dBFS ✓
 - Full range from -∞ to +60 dBFS
-- **v2.2.1 Enhancement**: Always logs values below -22 dBFS for debugging
+- **v2.3.0 Fix**: Corrected calibration for 0.600 value
 
 ### Issues Fixed
 1. **v1.x**: Incorrect calibration using fader math
 2. **v2.0.0**: Single-point calibration didn't work across range
 3. **v2.1.0**: Missing calibration points below -22 dBFS
-4. **v2.2.0**: FIXED - Extended calibration table for full range
-5. **v2.2.1**: Enhanced logging to debug low values not appearing in logs
+4. **v2.2.0**: Extended calibration table for full range
+5. **v2.2.1**: Enhanced logging to debug low values
+6. **v2.3.0**: FIXED - Incorrect calibration at 0.600 (was -22.5, now -24.4)
+
+### Key Discovery
+- AbletonOSC appears to stop sending meter updates below ~0.578 (-22.8 dBFS)
+- This is why we don't see values below -24.4 dBFS even though Ableton shows lower values
+- The 0.600 value corresponds to -24.4 dBFS in Ableton's display
 
 ## Testing Status Matrix
 | Component | Implemented | Unit Tested | Integration Tested | Multi-Instance Tested | 
 |-----------|------------|-------------|--------------------|-----------------------|
-| db_meter_label.lua | ✅ v2.2.1 | ⏳ Testing | ❌ | ❌ |
+| db_meter_label.lua | ✅ v2.3.0 | ⏳ Testing | ❌ | ❌ |
 | Calibration rule | ✅ | - | - | - |
 
 ## Script Versions - Feature Branch
 | Script | Version | Status |
 |--------|---------|--------|
-| db_meter_label.lua | 2.2.1 | ⏳ Testing low value logging |
+| db_meter_label.lua | 2.3.0 | ⏳ Testing corrected calibration |
 
 ### Version History
 - v1.0.0: Initial implementation (incorrect calibration)
@@ -52,19 +58,8 @@ Creating a proper peak dBFS meter that shows actual audio level from track outpu
 - v2.0.0: Complete rewrite with calibration (single point)
 - v2.1.0: Calibration table method (missing low values)
 - v2.2.0: Extended calibration table for full range
-- **v2.2.1: Enhanced logging for values below -22 dBFS**
-
-## Current Issue
-User reports:
-- Meter visually moves to lower positions
-- Values correctly show down to -22.3 dBFS
-- No logs appear for values below -22 dBFS
-
-### v2.2.1 Changes
-- Added `lastMeterValue` tracking
-- Always logs values below -22 dBFS (unless -∞)
-- Logs when meter value changes by > 0.01 for values below -20 dB
-- Should catch gradual fades that 1.0 dB threshold was missing
+- v2.2.1: Enhanced logging for values below -22 dBFS
+- **v2.3.0: Fixed calibration - 0.600 = -24.4 dBFS**
 
 ## TouchOSC Integration Steps
 User needs to:
@@ -90,8 +85,8 @@ User needs to:
 - Preserved verified calibration points for future reference
 
 ## Next Steps
-1. User tests the v2.2.1 script with enhanced logging
-2. Check if logs now appear for values below -22 dBFS
-3. Verify meter values are being sent by AbletonOSC for very low signals
-4. If still no logs, may need to check if AbletonOSC stops sending updates below certain threshold
-5. Consider adding DEBUG mode for even more verbose logging
+1. User tests the v2.3.0 script with corrected calibration
+2. Verify that 0.600 now shows -24.4 dBFS (matching Ableton)
+3. Confirm AbletonOSC limitation for values below ~-24.4 dBFS
+4. Consider documenting this limitation in the calibration rules
+5. If working correctly, prepare for PR merge
