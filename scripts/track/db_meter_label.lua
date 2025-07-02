@@ -1,12 +1,12 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.3.6
+-- Version: 2.3.7
 -- Shows actual peak dBFS level from track output meter
--- Updated calibration with additional verified points
+-- Updated calibration with full range including headroom
 -- Multi-connection routing support
 -- LOGS EVERY METER UPDATE - NO THRESHOLDS
 
 -- Version constant
-local VERSION = "2.3.6"
+local VERSION = "2.3.7"
 
 -- State variables
 local lastDB = -70.0
@@ -20,7 +20,8 @@ local DEBUG = 1  -- ENABLED until feature is approved
 -- METER CALIBRATION TABLE
 -- ===========================
 -- Updated calibration table based on verified values
--- Note: AbletonOSC uses VERY non-linear scaling across the entire range
+-- Note: AbletonOSC uses VERY non-linear scaling
+-- IMPORTANT: 0.921 = 0 dBFS, 1.0 = +6 dBFS (headroom)
 local METER_DB_CALIBRATION = {
     {0.000, -math.huge},  -- Silence
     {0.001, -100.0},      -- Very quiet
@@ -45,8 +46,9 @@ local METER_DB_CALIBRATION = {
     {0.842, -6.0},        -- VERIFIED by user
     {0.900, -3.0},        -- Adjusted
     {0.921, 0.0},         -- VERIFIED by user (unity/0 dBFS)
-    {0.950, 1.5},         -- Adjusted for headroom
-    {1.000, 3.0},         -- Adjusted for headroom
+    {0.950, 2.0},         -- Adjusted for headroom
+    {0.980, 4.0},         -- Adjusted for headroom
+    {1.000, 6.0},         -- VERIFIED by user (max headroom)
 }
 
 -- ===========================
@@ -145,12 +147,12 @@ function meterToDB(meter_normalized)
         return -math.huge
     end
     
-    -- Handle values above 1.0 (Ableton's floating-point headroom)
+    -- Handle values above 1.0 (extended range)
     if meter_normalized > 1.0 then
-        -- Linear extrapolation above 0 dB
-        -- Approximately 20 dB per doubling
-        local db_above_zero = 20 * math.log10(meter_normalized)
-        return db_above_zero
+        -- Extrapolate beyond our calibration
+        -- We know 1.0 = +6 dBFS, so continue linearly
+        local db_above_6 = 6.0 + ((meter_normalized - 1.0) * 20)
+        return db_above_6
     end
     
     -- Find calibration points for interpolation
@@ -248,11 +250,12 @@ function onReceiveOSC(message, connections)
     messageCount = messageCount + 1
     
     -- LOG EVERY SINGLE METER UPDATE - NO THRESHOLDS
-    log(string.format("[MSG #%d] Track %d: %s (meter: %.6f)", 
+    log(string.format("[MSG #%d] Track %d: %s (meter: %.6f)%s", 
         messageCount,
         myTrackNumber, 
         formatDB(db_value), 
-        meter_level))
+        meter_level,
+        db_value > 0 and " [CLIPPING]" or ""))
     
     -- Also log deltas if we have previous values
     if lastMeterValue and lastDB then
@@ -318,9 +321,10 @@ function init()
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("Peak dBFS meter - v2.3.6 with full range calibration")
+        log("Peak dBFS meter - v2.3.7 COMPLETE CALIBRATION")
         log("Verified: 0.070=-64.7dB, 0.425=-37.7dB, 0.600=-24.4dB")
-        log("         0.631=-22dB, 0.674=-18.8dB, 0.842=-6dB, 0.921=0dB")
+        log("         0.631=-22dB, 0.674=-18.8dB, 0.842=-6dB")
+        log("         0.921=0dB (unity), 1.000=+6dB (max)")
         log("LOGS EVERY METER UPDATE - No thresholds")
     end
 end
