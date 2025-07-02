@@ -2,100 +2,92 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Currently working on: dB meter label display based on audio output
-- [x] Created new feature branch: feature/db-meter
-- [x] Created db_meter_label.lua script v2.4.0 - PRODUCTION READY
-- [x] Fixed all calibration issues with 9 verified points
-- [x] Tested extensively and matches Ableton Live display exactly
-- [x] Set DEBUG=0 for production release
-- [ ] Ready for PR merge
+- [ ] Currently working on: Analyzing return track support in AbletonOSC
+- [ ] Created new feature branch: feature/return-tracks
+- [ ] Initial research complete - documented findings
+- [ ] Waiting for: Testing approach to verify return track access methods
 
 ## Implementation Status
-- Phase: Feature Development - dB Meter Display
-- Step: COMPLETE - Ready for merge
-- Status: PRODUCTION READY
+- Phase: Research & Analysis
+- Step: Understanding AbletonOSC's return track implementation
+- Status: RESEARCH IN PROGRESS
 
-## Feature: Add dBFS Meter Display Based on Track Output
-Creating a proper peak dBFS meter that shows actual audio level from track output meter.
+## Feature: Add Send/Return Track Control
+Enable control of Ableton's send/return tracks in addition to regular audio/MIDI tracks.
 
-### Final Solution (v2.4.0)
-- Calibration table method with 9 verified points
-- Linear interpolation between calibration points
-- Accurate from -∞ to +6 dBFS (32-bit float headroom)
-- Multi-connection routing support
-- Integrates seamlessly with existing track mapping
+### Research Findings
+1. **AbletonOSC claims support** - Documentation mentions "audio, MIDI, return or master track"
+2. **No clear documentation** - How to access return tracks is undocumented
+3. **Legacy LiveOSC had explicit support** - Used `/live/return/` namespace
+4. **Testing required** - Need to determine actual implementation
 
-### Verified Calibration Points
-- 0.070 = -64.7 dBFS ✓
-- 0.425 = -37.7 dBFS ✓
-- 0.539 = -29.0 dBFS ✓
-- 0.600 = -24.4 dBFS ✓
-- 0.631 = -22.0 dBFS ✓
-- 0.674 = -18.8 dBFS ✓
-- 0.842 = -6.0 dBFS ✓
-- 0.921 = 0.0 dBFS ✓ (unity)
-- 1.000 = +6.0 dBFS ✓ (max headroom)
-
-### Key Discoveries
-1. AbletonOSC uses custom non-linear meter scaling
-2. Standard formula `20 × log₁₀(meter)` does NOT work
-3. Unity (0 dBFS) is at 0.921, not 1.0
-4. The range 0.921-1.0 represents 6 dB of headroom
-5. AbletonOSC stops sending updates below ~0.578 (-24.4 dBFS)
+### Key Questions
+1. Are return tracks indexed after regular tracks?
+2. Do they use same `/live/track/` commands?
+3. Is there a separate API for return tracks?
 
 ## Testing Status Matrix
-| Component | Implemented | Unit Tested | Integration Tested | Multi-Instance Tested | 
-|-----------|------------|-------------|--------------------|-----------------------|
-| db_meter_label.lua | ✅ v2.4.0 | ✅ | ✅ | ✅ |
-| Calibration rule | ✅ | ✅ | ✅ | ✅ |
+| Component | Researched | Documented | Implementation | Tested | 
+|-----------|------------|------------|----------------|--------|
+| Return track analysis | ✅ | ✅ | ❌ | ❌ |
+| Access method | 🔄 | ❌ | ❌ | ❌ |
+| TouchOSC integration | ❌ | ❌ | ❌ | ❌ |
 
-## Script Versions - Feature Branch
-| Script | Version | Status |
-|--------|---------|--------|
-| db_meter_label.lua | 2.4.0 | ✅ PRODUCTION READY |
-
-### Version History
-- v1.0.0-1.1.1: Initial attempts with incorrect calibration
-- v2.0.0-2.1.0: Calibration table method development
-- v2.2.0-2.2.1: Extended calibration and debugging
-- v2.3.0-2.3.8: Progressive calibration refinement
-- **v2.4.0: PRODUCTION RELEASE with DEBUG=0**
-
-## TouchOSC Integration Steps
-User needs to:
-1. Open TouchOSC editor
-2. Add a new Label control to each track group
-3. Name it exactly: `db_meter_label`
-4. Position it near the existing meter
-5. Attach the `db_meter_label.lua` script to it
-6. Set OSC receive pattern: `/live/track/get/output_meter_level`
-7. Size label to fit text like "-12.5 dBFS" (10-11 characters)
-8. Test with actual audio playback
-
-## Technical Implementation
-- Calibration table with 9 verified points
-- Linear interpolation between calibration points
-- Special handling for near-zero values (logarithmic)
-- Proper dBFS formatting with unit notation
-- Clipping indicator for values > 0 dBFS
-- Full range: -∞ to +6 dBFS
+## Previous Task Completed
+- [x] db_meter_label.lua v2.4.0 - Production ready
+- [x] PR #7 merged to main
+- [x] Feature complete - no more work needed
 
 ## Documentation Created
-- `rules/abletonosc-meter-calibration.md` - Complete calibration documentation
-- Documented why standard formulas fail
-- Preserved all verified calibration points
-- Documented AbletonOSC limitations
-
-## PR Ready Checklist
-- [x] Feature fully implemented and tested
-- [x] All calibration points verified against Ableton
-- [x] DEBUG mode disabled for production
-- [x] Documentation complete
-- [x] Integration tested with existing system
-- [x] Version incremented to 2.4.0
-- [x] Ready for merge to main
+- `docs/return-tracks-analysis.md` - Initial research findings
 
 ## Next Steps
-1. Merge PR #7 to main
-2. Close feature branch
-3. User integrates into TouchOSC template
+1. Set up test environment with AbletonOSC
+2. Create test Ableton project with return tracks
+3. Test different indexing approaches:
+   - Continue indices after regular tracks
+   - Check for separate return track commands
+   - Query track properties to identify return tracks
+4. Document findings
+5. Design implementation for TouchOSC
+
+## User Context
+User wants to control send/return tracks in Ableton, not just regular tracks. They suspect AbletonOSC doesn't fully implement return track control yet.
+
+## Testing Plan Details
+
+### Test 1: Track Indexing Discovery
+```
+/live/song/get/num_tracks
+/live/song/get/track_names
+```
+See if return tracks appear in the count and names.
+
+### Test 2: Extended Index Access
+If we have 8 regular tracks + 2 returns:
+```
+/live/track/get/name 8
+/live/track/get/name 9
+```
+Check if indices 8 and 9 access return tracks.
+
+### Test 3: Property Identification
+Query track properties to identify return tracks:
+```
+/live/track/get/has_audio_input [index]
+/live/track/get/available_input_routing_types [index]
+```
+
+### Test 4: Alternative Commands
+Check for undocumented return-specific commands:
+```
+/live/song/get/return_tracks
+/live/song/get/num_return_tracks
+/live/return/get/name 0
+```
+
+## Research Resources
+- AbletonOSC GitHub: https://github.com/ideoforms/AbletonOSC
+- Live Object Model docs: Ableton's official API documentation
+- Legacy LiveOSC2: Shows how return tracks were handled before
+- Forum discussions: Users asking about return track access
