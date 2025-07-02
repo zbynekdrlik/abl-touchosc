@@ -1,16 +1,17 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.3.1
+-- Version: 2.3.2
 -- Shows actual peak dBFS level from track output meter
 -- Fixed calibration based on user verification
 -- Multi-connection routing support
--- DEBUG MODE ENABLED
+-- LOGS EVERY METER UPDATE - NO THRESHOLDS
 
 -- Version constant
-local VERSION = "2.3.1"
+local VERSION = "2.3.2"
 
 -- State variables
 local lastDB = -70.0
 local lastMeterValue = 0
+local messageCount = 0
 
 -- Debug mode
 local DEBUG = 1  -- ENABLED until feature is approved
@@ -168,9 +169,6 @@ function meterToDB(meter_normalized)
                 local interpolation_ratio = meter_offset / meter_range
                 local db_value = point1[2] + (db_range * interpolation_ratio)
                 
-                debugLog(string.format("Meter: %.4f → Between %.4f (%.1f dB) and %.4f (%.1f dB) → %.1f dB", 
-                    meter_normalized, point1[1], point1[2], point2[1], point2[2], db_value))
-                
                 return db_value
             end
         end
@@ -238,43 +236,21 @@ function onReceiveOSC(message, connections)
     -- Always update the display for every meter value
     self.values.text = formatDB(db_value)
     
-    -- DEBUG: Enhanced logging while in debug mode
-    local shouldLog = false
+    -- Increment message counter
+    messageCount = messageCount + 1
     
-    -- In debug mode, log more frequently
-    if DEBUG == 1 then
-        -- Log if value changed by more than 0.5 dB (instead of 1.0)
-        if not lastDB or math.abs(db_value - lastDB) > 0.5 then
-            shouldLog = true
-        end
-        
-        -- Also log if meter value changed significantly
-        if lastMeterValue and math.abs(meter_level - lastMeterValue) > 0.005 then
-            shouldLog = true
-        end
-    else
-        -- Normal logging threshold
-        if not lastDB or math.abs(db_value - lastDB) > 1.0 then
-            shouldLog = true
-        end
-    end
+    -- LOG EVERY SINGLE METER UPDATE - NO THRESHOLDS
+    log(string.format("[MSG #%d] Track %d: %s (meter: %.6f)", 
+        messageCount,
+        myTrackNumber, 
+        formatDB(db_value), 
+        meter_level))
     
-    -- Always log values at specific calibration points
-    if math.abs(meter_level - 0.600) < 0.01 or 
-       math.abs(meter_level - 0.631) < 0.01 or
-       math.abs(meter_level - 0.842) < 0.01 then
-        shouldLog = true
-    end
-    
-    if shouldLog then
-        log(string.format("Track %d: %s (meter: %.4f)%s", 
-            myTrackNumber, formatDB(db_value), meter_level,
-            db_value > 0 and " [CLIPPING]" or ""))
-            
-        if DEBUG == 1 and lastMeterValue then
-            debugLog(string.format("Meter delta: %.4f, dB delta: %.1f", 
-                meter_level - lastMeterValue, db_value - lastDB))
-        end
+    -- Also log deltas if we have previous values
+    if lastMeterValue and lastDB then
+        debugLog(string.format("Δmeter: %.6f, ΔdB: %.2f", 
+            meter_level - lastMeterValue, 
+            db_value - lastDB))
     end
     
     lastDB = db_value
@@ -302,7 +278,8 @@ function onReceiveNotify(key, value)
         self.values.text = "-∞ dBFS"
         lastDB = -math.huge
         lastMeterValue = 0
-        log("Track changed - display reset")
+        messageCount = 0
+        log("Track changed - display reset, message counter reset")
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
         self.values.text = "-"
@@ -333,14 +310,9 @@ function init()
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("Peak dBFS meter - v2.3.1 with corrected calibration")
+        log("Peak dBFS meter - v2.3.2 LOGS EVERY METER UPDATE")
         log("Verified points: 0.600=-24.4dB, 0.631=-22dB, 0.842=-6dB")
-        log("Full range: -∞ to +60 dBFS")
-        
-        if DEBUG == 1 then
-            log("DEBUG MODE ENABLED - More frequent logging")
-            log("Will log changes > 0.5 dB (instead of 1.0 dB)")
-        end
+        log("NO LOGGING THRESHOLDS - Every OSC message will be logged")
     end
 end
 
