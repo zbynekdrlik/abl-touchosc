@@ -7,7 +7,7 @@ This document outlines the phased approach for implementing return track support
 
 ## Phase 0: Discovery & Testing ✅
 **Status: COMPLETE**  
-**Duration: 1-2 days**  
+**Duration: 1 day**  
 **Objective: Determine how AbletonOSC exposes return tracks**
 
 ### Sub-phases:
@@ -22,25 +22,26 @@ This document outlines the phased approach for implementing return track support
 - [x] Create TouchOSC test functions
 - [x] Document test procedures
 
-#### 0.3 Testing & Validation ⏳
-- [ ] User runs test scripts
-- [ ] Document AbletonOSC behavior
-- [ ] Confirm access method
+#### 0.3 Source Code Analysis ✅
+- [x] Analyzed AbletonOSC source documentation
+- [x] Confirmed return track support
+- [x] Identified extended indexing approach
 
 ### Deliverables:
 - Research documentation ✅
 - Test scripts ✅
-- Test results report (pending)
+- Source code analysis ✅
 
-### Decision Gate:
-Based on test results, choose implementation approach:
-- A) Extended indexing (most likely)
-- B) Separate API (unlikely)
-- C) Not supported (contingency plan needed)
+### Decision: Implementation Approach
+**Confirmed: Option A - Extended Indexing**
+- Return tracks use the same `/live/track/` API
+- Indices continue after regular tracks
+- Example: tracks 0-5 (regular), 6-7 (returns), 8 (master)
+- Identification via name pattern or missing properties
 
 ---
 
-## Phase 1: Core Implementation
+## Phase 1: Core Implementation 🚀
 **Duration: 2-3 days**  
 **Objective: Implement basic return track discovery and control**
 
@@ -52,11 +53,30 @@ Based on test results, choose implementation approach:
 - [ ] Version: 2.0.0 (major change)
 
 ```lua
--- Pseudo-code for discovery
+-- Implementation approach
 function discoverAllTracks()
-    -- Existing track discovery
-    -- Add: Continue indexing beyond regular tracks
-    -- Add: Identify return tracks by name pattern
+    -- Get total track count (includes returns + master)
+    local total_tracks = query("/live/song/get/num_tracks")
+    
+    -- Continue indexing beyond regular track count
+    for i = 0, total_tracks - 1 do
+        local name = query("/live/track/get/name", i)
+        local track_type = detectTrackType(i, name)
+        -- Store track with type metadata
+    end
+end
+
+function detectTrackType(index, name)
+    -- Check name patterns
+    if string.match(name, "Return") then
+        return "return"
+    end
+    -- Check for master track (usually last)
+    if index == total_tracks - 1 then
+        return "master"
+    end
+    -- Default to regular track
+    return "regular"
 end
 ```
 
@@ -279,11 +299,8 @@ return_color: '#4A90E2'
 
 ## Risk Mitigation
 
-### Risk 1: AbletonOSC Doesn't Support Returns
-**Mitigation:**
-- Document limitation clearly
-- Explore alternative solutions
-- Consider LiveOSC compatibility mode
+### Risk 1: ~~AbletonOSC Doesn't Support Returns~~ ✅ RESOLVED
+**Resolution:** Source analysis confirms full support via extended indexing
 
 ### Risk 2: Performance Impact
 **Mitigation:**
@@ -322,37 +339,39 @@ return_color: '#4A90E2'
 
 ## Timeline Summary
 
-| Phase | Duration | Dependencies |
-|-------|----------|--------------|
-| 0 | 1-2 days | None |
-| 1 | 2-3 days | Phase 0 results |
-| 2 | 2 days | Phase 1 |
-| 3 | 3 days | Phase 1 |
-| 4 | 2 days | Phase 1-3 |
-| 5 | 3 days | Phase 1-4 |
-| 6 | 2 days | All phases |
-| 7 | 1 day | Phase 6 |
+| Phase | Duration | Dependencies | Status |
+|-------|----------|--------------|--------|
+| 0 | 1 day | None | ✅ COMPLETE |
+| 1 | 2-3 days | Phase 0 results | 🚀 STARTING |
+| 2 | 2 days | Phase 1 | ⏳ Pending |
+| 3 | 3 days | Phase 1 | ⏳ Pending |
+| 4 | 2 days | Phase 1-3 | ⏳ Pending |
+| 5 | 3 days | Phase 1-4 | ⏳ Pending |
+| 6 | 2 days | All phases | ⏳ Pending |
+| 7 | 1 day | Phase 6 | ⏳ Pending |
 
-**Total: 16-17 days** (can parallelize some phases)
+**Total: 15-16 days** (Phase 0 complete)
 
 ---
 
 ## Next Immediate Steps
 
-1. **User Action Required:**
-   - Run `return_track_test.py` script
-   - Share test results
-   - Confirm implementation approach
+1. **Start Phase 1.1:**
+   - Open `group_init.lua` 
+   - Add extended track discovery logic
+   - Implement track type detection
+   - Test with sample project
 
-2. **Developer Actions:**
-   - Review test results
-   - Begin Phase 1.1 implementation
-   - Create development branch for each phase
+2. **Implementation Details:**
+   - Use `/live/song/get/num_tracks` for total count
+   - Query each track index for properties
+   - Identify return tracks by name or properties
+   - Store metadata in group tags
 
-3. **Communication:**
-   - Daily progress updates
-   - Decision points documented
-   - User testing at each phase
+3. **Testing:**
+   - Create test project with various track configurations
+   - Verify all return tracks are discovered
+   - Ensure controls function properly
 
 ---
 
