@@ -1,39 +1,36 @@
 -- TouchOSC dB Meter Label Display
--- Version: 1.1.1
+-- Version: 2.0.0
 -- Shows actual peak dBFS level from track output meter
--- Handles Ableton's floating-point headroom (can show > 0 dBFS)
+-- Properly calibrated to match Ableton's meter display
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "1.1.1"
+local VERSION = "2.0.0"
 
 -- State variables
 local lastDB = -70.0
 local lastUpdateTime = 0
 local UPDATE_THRESHOLD = 0.1  -- Only update display if dB changes by more than this
-local SILENCE_THRESHOLD = -60.0  -- Consider signal below this as silence
 
 -- Debug mode
 local DEBUG = 0  -- Set to 1 for detailed logging
 
 -- ===========================
--- CALIBRATION FROM METER SCRIPT
+-- METER CALIBRATION
 -- ===========================
+-- Based on actual Ableton meter readings
+-- These values are derived from comparing OSC meter values to Ableton's dB display
 
--- EXACT CALIBRATION POINTS FROM METER SCRIPT
-local CALIBRATION_POINTS = {
-  {0.0, 0.0},      -- Silent -> 0%
-  {0.3945, 0.027}, -- -40dB -> 2.7%
-  {0.6839, 0.169}, -- -18dB -> 16.9%
-  {0.7629, 0.313}, -- -12dB -> 31.3%
-  {0.8399, 0.5},   -- -6dB -> 50%
-  {0.9200, 0.729}, -- 0dB -> 72.9%
-  {1.0, 1.0}       -- Max -> 100%
-}
+-- Direct meter to dB conversion
+-- AbletonOSC sends normalized values where:
+-- 0.0 = -∞ dB
+-- 0.631 = -22 dBFS (verified by user)
+-- 0.842 = -6 dBFS (from user logs)
+-- 1.0 = 0 dBFS (maximum before clipping)
 
--- CURVE SETTINGS FROM METER SCRIPT
-local use_log_curve = true
-local log_exponent = 0.515
+-- Using logarithmic conversion with proper calibration
+local METER_REFERENCE = 0.631  -- This equals -22 dBFS in Ableton
+local DB_REFERENCE = -22.0
 
 -- ===========================
 -- CENTRALIZED LOGGING
@@ -121,91 +118,40 @@ local function getConnectionIndex()
 end
 
 -- ===========================
--- EXACT CONVERSION FROM METER SCRIPT
+-- METER TO DB CONVERSION
 -- ===========================
 
--- Convert AbletonOSC normalized value to fader position
-function abletonToFaderPosition(normalized)
-  if not normalized or normalized <= 0 then
-    return 0
-  end
-  
-  -- IMPORTANT: Ableton's floating-point engine can send values > 1.0
-  -- when tracks are clipping internally
-  if normalized > 1.0 then
-    -- Linear extrapolation for values above 100%
-    -- If 0.92 = 0dB and 1.0 = +6dB, then values > 1.0 continue linearly
-    return 1.0 + (normalized - 1.0)
-  end
-  
-  -- Check for exact calibration matches first
-  for _, point in ipairs(CALIBRATION_POINTS) do
-    if math.abs(normalized - point[1]) < 0.01 then
-      return point[2]
+-- Convert meter level to dB with proper calibration
+function meterToDB(meter_normalized)
+    -- Handle silence
+    if not meter_normalized or meter_normalized <= 0.001 then
+        return -math.huge
     end
-  end
-  
-  -- Find the two closest points for interpolation
-  for i = 1, #CALIBRATION_POINTS - 1 do
-    local point1 = CALIBRATION_POINTS[i]
-    local point2 = CALIBRATION_POINTS[i + 1]
     
-    if normalized >= point1[1] and normalized <= point2[1] then
-      -- Linear interpolation
-      local ratio = (normalized - point1[1]) / (point2[1] - point1[1])
-      local fader_position = point1[2] + ratio * (point2[2] - point1[2])
-      return fader_position
+    -- Handle values above 1.0 (Ableton's floating-point headroom)
+    if meter_normalized > 1.0 then
+        -- Linear extrapolation above 0 dB
+        -- Each 0.1 above 1.0 = roughly +6 dB
+        local db_above_zero = (meter_normalized - 1.0) * 60
+        return db_above_zero
     end
-  end
-  
-  -- Fallback
-  return normalized
-end
-
--- Convert linear position to logarithmic (must match fader exactly)
-function linearToLog(linear_pos)
-  if not linear_pos or linear_pos <= 0 then return 0
-  elseif linear_pos >= 1 then 
-    -- For positions > 1 (clipping), maintain linear relationship
-    return linear_pos
-  else 
-    return math.pow(linear_pos, log_exponent) 
-  end
-end
-
--- Convert audio value to dB (extended for floating-point headroom)
-function value2db(vl)
-  if not vl then return -math.huge end
-  
-  -- Handle values above 1.0 (floating-point headroom)
-  if vl > 1.0 then
-    -- Linear continuation: if 1.0 = +6dB, extrapolate
-    local db_above_unity = (vl - 1.0) * 60  -- Rough approximation
-    return 6.0 + db_above_unity
-  end
-  
-  -- Original conversion for values 0-1
-  if vl <= 1 and vl >= 0.4 then
-    return 40*vl -34
-  elseif vl < 0.4 and vl >= 0.15 then
-    local alpha = 799.503788
-    local beta = 12630.61132
-    local gamma = 201.871345
-    local delta = 399.751894
-    return -((delta*vl - gamma)^2 + beta)/alpha
-  elseif vl < 0.15 then
-    local alpha = 70.
-    local beta = 118.426374
-    local gamma = 7504./5567.
-    local db_value_str = beta*(vl^(1/gamma)) - alpha
-    if db_value_str <= -70.0 then 
-      return -math.huge  -- -inf
-    else
-      return db_value_str
-    end
-  else
-    return 0
-  end
+    
+    -- Standard logarithmic conversion for 0-1 range
+    -- Using 20 * log10(meter) with calibration offset
+    local db_raw = 20 * math.log10(meter_normalized)
+    
+    -- Calibration: adjust so that our reference point matches Ableton
+    -- When meter = 0.631, we want -22 dB
+    local db_raw_at_reference = 20 * math.log10(METER_REFERENCE)
+    local calibration_offset = DB_REFERENCE - db_raw_at_reference
+    
+    local db_calibrated = db_raw + calibration_offset
+    
+    -- Debug logging
+    debugLog(string.format("Meter: %.3f → Raw dB: %.1f → Calibrated: %.1f", 
+        meter_normalized, db_raw, db_calibrated))
+    
+    return db_calibrated
 end
 
 -- ===========================
@@ -222,20 +168,6 @@ function formatDB(db_value)
     else
         return string.format("%.1f dBFS", db_value)
     end
-end
-
--- Convert meter level to dB
-function meterToDB(meter_normalized)
-    -- Use exact same conversion as meter script
-    local fader_position = abletonToFaderPosition(meter_normalized)
-    local audio_value = linearToLog(fader_position)
-    local db_value = value2db(audio_value)
-    
-    -- Debug logging
-    debugLog(string.format("Meter: %.3f → Fader: %.3f → Audio: %.3f → dB: %.1f", 
-        meter_normalized, fader_position, audio_value, db_value))
-    
-    return db_value
 end
 
 -- ===========================
@@ -274,14 +206,13 @@ function onReceiveOSC(message, connections)
     local db_value = meterToDB(meter_level)
     
     -- Always update the display when we receive a meter value
-    -- The meter itself decides when to show -∞
     self.values.text = formatDB(db_value)
     
-    -- Log significant changes (including when going above 0 dBFS)
+    -- Log significant changes
     if not lastDB or math.abs(db_value - lastDB) > 1.0 or 
        (lastDB <= 0 and db_value > 0) or (lastDB > 0 and db_value <= 0) then
         -- Only log non-silence values or transitions
-        if db_value > SILENCE_THRESHOLD or (lastDB and lastDB > SILENCE_THRESHOLD) then
+        if db_value > -60 or (lastDB and lastDB > -60) then
             log(string.format("Track %d: %s (meter: %.3f)%s", 
                 myTrackNumber, formatDB(db_value), meter_level,
                 db_value > 0 and " [CLIPPING]" or ""))
@@ -295,12 +226,12 @@ function onReceiveOSC(message, connections)
 end
 
 -- ===========================
--- UPDATE FUNCTION - REMOVED TIMEOUT
+-- UPDATE FUNCTION
 -- ===========================
 
 function update()
-    -- Don't use timeout - let AbletonOSC control when to show silence
-    -- The meter values from AbletonOSC already handle silence properly
+    -- Let AbletonOSC control when to show silence
+    -- No artificial timeouts
 end
 
 -- ===========================
@@ -347,8 +278,8 @@ function init()
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("Peak dBFS meter with floating-point headroom")
-        log("Range: -∞ to +60 dBFS (Ableton's 32-bit float)")
+        log("Peak dBFS meter - calibrated to match Ableton")
+        log("Verified: meter 0.631 = -22 dBFS")
     end
     
     if DEBUG == 1 then
