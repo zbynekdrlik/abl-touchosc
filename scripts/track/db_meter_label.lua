@@ -1,12 +1,12 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.3.3
+-- Version: 2.3.4
 -- Shows actual peak dBFS level from track output meter
--- Updated calibration with additional verified point
+-- Updated calibration with additional verified points
 -- Multi-connection routing support
 -- LOGS EVERY METER UPDATE - NO THRESHOLDS
 
 -- Version constant
-local VERSION = "2.3.3"
+local VERSION = "2.3.4"
 
 -- State variables
 local lastDB = -70.0
@@ -20,20 +20,22 @@ local DEBUG = 1  -- ENABLED until feature is approved
 -- METER CALIBRATION TABLE
 -- ===========================
 -- Updated calibration table based on verified values
+-- Note: AbletonOSC uses non-linear scaling, especially at low levels
 local METER_DB_CALIBRATION = {
     {0.000, -math.huge},  -- Silence
     {0.001, -80.0},       -- Very quiet
     {0.010, -60.0},       -- 
-    {0.050, -46.0},       -- 
-    {0.100, -40.0},       -- 
-    {0.200, -34.0},       -- 
-    {0.300, -30.0},       -- 
-    {0.400, -28.0},       -- 
-    {0.500, -26.0},       -- 
+    {0.050, -52.0},       -- Adjusted
+    {0.100, -46.0},       -- Adjusted
+    {0.200, -42.0},       -- Adjusted
+    {0.300, -40.0},       -- Adjusted
+    {0.400, -38.0},       -- Adjusted
+    {0.425, -37.7},       -- VERIFIED by user
+    {0.500, -35.0},       -- Adjusted
     {0.600, -24.4},       -- VERIFIED by user
     {0.631, -22.0},       -- VERIFIED by user
-    {0.674, -18.8},       -- VERIFIED by user (new)
-    {0.700, -16.8},       -- Adjusted based on new data point
+    {0.674, -18.8},       -- VERIFIED by user
+    {0.700, -16.8},       -- Adjusted based on verified data
     {0.750, -14.0},       -- 
     {0.800, -10.0},       -- 
     {0.842, -6.0},        -- VERIFIED by user
@@ -311,8 +313,8 @@ function init()
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("Peak dBFS meter - v2.3.3 with updated calibration")
-        log("Verified: 0.600=-24.4dB, 0.631=-22dB, 0.674=-18.8dB, 0.842=-6dB")
+        log("Peak dBFS meter - v2.3.4 with low-level calibration fix")
+        log("Verified: 0.425=-37.7dB, 0.600=-24.4dB, 0.631=-22dB, 0.674=-18.8dB, 0.842=-6dB")
         log("LOGS EVERY METER UPDATE - No thresholds")
     end
 end
