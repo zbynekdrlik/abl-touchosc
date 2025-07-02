@@ -1,11 +1,11 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.2.1
+-- Version: 2.3.0
 -- Shows actual peak dBFS level from track output meter
--- Enhanced logging for low values to debug calibration
+-- Fixed calibration based on user verification
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "2.2.1"
+local VERSION = "2.3.0"
 
 -- State variables
 local lastDB = -70.0
@@ -17,7 +17,7 @@ local DEBUG = 0  -- Set to 1 for detailed logging
 -- ===========================
 -- METER CALIBRATION TABLE
 -- ===========================
--- Extended calibration table with more points for low values
+-- Updated calibration table based on verified values
 local METER_DB_CALIBRATION = {
     {0.000, -math.huge},  -- Silence
     {0.001, -80.0},       -- Very quiet
@@ -26,9 +26,10 @@ local METER_DB_CALIBRATION = {
     {0.100, -40.0},       -- 
     {0.200, -34.0},       -- 
     {0.300, -30.0},       -- 
-    {0.400, -26.5},       -- 
-    {0.500, -24.0},       -- 
-    {0.631, -22.0},       -- VERIFIED by user
+    {0.400, -28.0},       -- 
+    {0.500, -26.0},       -- 
+    {0.600, -24.4},       -- VERIFIED by user
+    {0.631, -22.0},       -- VERIFIED by user  
     {0.700, -18.0},       -- 
     {0.750, -14.0},       -- 
     {0.800, -10.0},       -- 
@@ -236,7 +237,7 @@ function onReceiveOSC(message, connections)
     -- Always update the display for every meter value
     self.values.text = formatDB(db_value)
     
-    -- Enhanced logging for debugging low values
+    -- Enhanced logging for debugging
     local shouldLog = false
     
     -- Always log if value changed significantly
@@ -244,16 +245,11 @@ function onReceiveOSC(message, connections)
         shouldLog = true
     end
     
-    -- ALWAYS log values below -22 dBFS to debug calibration
-    if db_value < -22 and db_value > -math.huge then
+    -- Log values at specific calibration points
+    if math.abs(meter_level - 0.600) < 0.01 or 
+       math.abs(meter_level - 0.631) < 0.01 or
+       math.abs(meter_level - 0.842) < 0.01 then
         shouldLog = true
-    end
-    
-    -- Also log if meter value changed significantly (helps debug very low values)
-    if lastMeterValue and math.abs(meter_level - lastMeterValue) > 0.01 then
-        if db_value < -20 then  -- Extra logging for low values
-            shouldLog = true
-        end
     end
     
     if shouldLog then
@@ -318,10 +314,9 @@ function init()
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("Peak dBFS meter - v2.2.1 with enhanced low-value logging")
-        log("Verified points: 0.631=-22dB, 0.842=-6dB")
+        log("Peak dBFS meter - v2.3.0 with corrected calibration")
+        log("Verified points: 0.600=-24.4dB, 0.631=-22dB, 0.842=-6dB")
         log("Full range: -∞ to +60 dBFS")
-        log("Low values (<-22dB) will always be logged for debugging")
     end
     
     if DEBUG == 1 then
