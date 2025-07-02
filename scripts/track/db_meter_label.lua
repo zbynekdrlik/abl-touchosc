@@ -1,12 +1,12 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.3.7
+-- Version: 2.3.8
 -- Shows actual peak dBFS level from track output meter
--- Updated calibration with full range including headroom
+-- Updated calibration with additional mid-range point
 -- Multi-connection routing support
 -- LOGS EVERY METER UPDATE - NO THRESHOLDS
 
 -- Version constant
-local VERSION = "2.3.7"
+local VERSION = "2.3.8"
 
 -- State variables
 local lastDB = -70.0
@@ -36,7 +36,8 @@ local METER_DB_CALIBRATION = {
     {0.350, -40.5},       -- Adjusted
     {0.400, -38.5},       -- Adjusted
     {0.425, -37.7},       -- VERIFIED by user
-    {0.500, -35.0},       -- Adjusted
+    {0.500, -33.0},       -- Adjusted
+    {0.539, -29.0},       -- VERIFIED by user
     {0.600, -24.4},       -- VERIFIED by user
     {0.631, -22.0},       -- VERIFIED by user
     {0.674, -18.8},       -- VERIFIED by user
@@ -321,10 +322,10 @@ function init()
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("Peak dBFS meter - v2.3.7 COMPLETE CALIBRATION")
-        log("Verified: 0.070=-64.7dB, 0.425=-37.7dB, 0.600=-24.4dB")
-        log("         0.631=-22dB, 0.674=-18.8dB, 0.842=-6dB")
-        log("         0.921=0dB (unity), 1.000=+6dB (max)")
+        log("Peak dBFS meter - v2.3.8 with 9 calibration points")
+        log("Verified: 0.070=-64.7dB, 0.425=-37.7dB, 0.539=-29dB")
+        log("         0.600=-24.4dB, 0.631=-22dB, 0.674=-18.8dB")
+        log("         0.842=-6dB, 0.921=0dB, 1.000=+6dB")
         log("LOGS EVERY METER UPDATE - No thresholds")
     end
 end
