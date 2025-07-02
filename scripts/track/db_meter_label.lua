@@ -1,16 +1,17 @@
 -- TouchOSC dB Meter Label Display
--- Version: 1.1.0
+-- Version: 1.1.1
 -- Shows actual peak dBFS level from track output meter
 -- Handles Ableton's floating-point headroom (can show > 0 dBFS)
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "1.1.0"
+local VERSION = "1.1.1"
 
 -- State variables
 local lastDB = -70.0
 local lastUpdateTime = 0
 local UPDATE_THRESHOLD = 0.1  -- Only update display if dB changes by more than this
+local SILENCE_THRESHOLD = -60.0  -- Consider signal below this as silence
 
 -- Debug mode
 local DEBUG = 0  -- Set to 1 for detailed logging
@@ -272,40 +273,34 @@ function onReceiveOSC(message, connections)
     local meter_level = arguments[2].value
     local db_value = meterToDB(meter_level)
     
-    -- Update display only if change is significant
-    if not lastDB or math.abs(db_value - lastDB) > UPDATE_THRESHOLD then
-        self.values.text = formatDB(db_value)
-        
-        -- Log significant changes (including when going above 0 dBFS)
-        if not lastDB or math.abs(db_value - lastDB) > 1.0 or 
-           (lastDB <= 0 and db_value > 0) or (lastDB > 0 and db_value <= 0) then
+    -- Always update the display when we receive a meter value
+    -- The meter itself decides when to show -∞
+    self.values.text = formatDB(db_value)
+    
+    -- Log significant changes (including when going above 0 dBFS)
+    if not lastDB or math.abs(db_value - lastDB) > 1.0 or 
+       (lastDB <= 0 and db_value > 0) or (lastDB > 0 and db_value <= 0) then
+        -- Only log non-silence values or transitions
+        if db_value > SILENCE_THRESHOLD or (lastDB and lastDB > SILENCE_THRESHOLD) then
             log(string.format("Track %d: %s (meter: %.3f)%s", 
                 myTrackNumber, formatDB(db_value), meter_level,
                 db_value > 0 and " [CLIPPING]" or ""))
         end
-        
-        lastDB = db_value
     end
     
+    lastDB = db_value
     lastUpdateTime = os.clock()
     
     return false  -- Don't block other receivers
 end
 
 -- ===========================
--- UPDATE FUNCTION
+-- UPDATE FUNCTION - REMOVED TIMEOUT
 -- ===========================
 
 function update()
-    -- If no meter update for a while, show -∞
-    local currentTime = os.clock()
-    if currentTime - lastUpdateTime > 2.0 then  -- No update for 2 seconds
-        if self.values.text ~= "-∞ dBFS" then
-            self.values.text = "-∞ dBFS"
-            lastDB = -math.huge
-            debugLog("No meter data - showing -∞")
-        end
-    end
+    -- Don't use timeout - let AbletonOSC control when to show silence
+    -- The meter values from AbletonOSC already handle silence properly
 end
 
 -- ===========================
