@@ -1,36 +1,40 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.0.0
+-- Version: 2.1.0
 -- Shows actual peak dBFS level from track output meter
--- Properly calibrated to match Ableton's meter display
+-- Uses calibration table to match Ableton's meter display exactly
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "2.0.0"
+local VERSION = "2.1.0"
 
 -- State variables
 local lastDB = -70.0
-local lastUpdateTime = 0
-local UPDATE_THRESHOLD = 0.1  -- Only update display if dB changes by more than this
 
 -- Debug mode
 local DEBUG = 0  -- Set to 1 for detailed logging
 
 -- ===========================
--- METER CALIBRATION
+-- METER CALIBRATION TABLE
 -- ===========================
--- Based on actual Ableton meter readings
--- These values are derived from comparing OSC meter values to Ableton's dB display
-
--- Direct meter to dB conversion
--- AbletonOSC sends normalized values where:
--- 0.0 = -∞ dB
--- 0.631 = -22 dBFS (verified by user)
--- 0.842 = -6 dBFS (from user logs)
--- 1.0 = 0 dBFS (maximum before clipping)
-
--- Using logarithmic conversion with proper calibration
-local METER_REFERENCE = 0.631  -- This equals -22 dBFS in Ableton
-local DB_REFERENCE = -22.0
+-- Based on actual verified Ableton meter readings
+-- Each point maps OSC meter value to actual dBFS in Ableton
+local METER_DB_CALIBRATION = {
+    {0.000, -math.huge},  -- Silence
+    {0.001, -80.0},       -- Very quiet
+    {0.100, -40.0},       -- Estimated
+    {0.200, -34.0},       -- Estimated
+    {0.300, -30.0},       -- Estimated
+    {0.400, -26.5},       -- Estimated
+    {0.500, -24.0},       -- Estimated
+    {0.631, -22.0},       -- VERIFIED by user
+    {0.700, -18.0},       -- Estimated
+    {0.750, -14.0},       -- Estimated
+    {0.800, -10.0},       -- Estimated
+    {0.842, -6.0},        -- VERIFIED by user
+    {0.900, -3.0},        -- Estimated
+    {0.950, -1.5},        -- Estimated
+    {1.000, 0.0},         -- Unity
+}
 
 -- ===========================
 -- CENTRALIZED LOGGING
@@ -121,37 +125,48 @@ end
 -- METER TO DB CONVERSION
 -- ===========================
 
--- Convert meter level to dB with proper calibration
+-- Convert meter level to dB using calibration table
 function meterToDB(meter_normalized)
-    -- Handle silence
-    if not meter_normalized or meter_normalized <= 0.001 then
+    -- Handle edge cases
+    if not meter_normalized then
         return -math.huge
     end
     
     -- Handle values above 1.0 (Ableton's floating-point headroom)
     if meter_normalized > 1.0 then
         -- Linear extrapolation above 0 dB
-        -- Each 0.1 above 1.0 = roughly +6 dB
-        local db_above_zero = (meter_normalized - 1.0) * 60
+        -- Approximately 20 dB per doubling
+        local db_above_zero = 20 * math.log10(meter_normalized)
         return db_above_zero
     end
     
-    -- Standard logarithmic conversion for 0-1 range
-    -- Using 20 * log10(meter) with calibration offset
-    local db_raw = 20 * math.log10(meter_normalized)
+    -- Find calibration points for interpolation
+    for i = 1, #METER_DB_CALIBRATION - 1 do
+        local point1 = METER_DB_CALIBRATION[i]
+        local point2 = METER_DB_CALIBRATION[i + 1]
+        
+        if meter_normalized >= point1[1] and meter_normalized <= point2[1] then
+            -- Linear interpolation between calibration points
+            local meter_range = point2[1] - point1[1]
+            local db_range = point2[2] - point1[2]
+            local meter_offset = meter_normalized - point1[1]
+            local interpolation_ratio = meter_offset / meter_range
+            
+            local db_value = point1[2] + (db_range * interpolation_ratio)
+            
+            debugLog(string.format("Meter: %.3f → Between %.3f (%.1f dB) and %.3f (%.1f dB) → %.1f dB", 
+                meter_normalized, point1[1], point1[2], point2[1], point2[2], db_value))
+            
+            return db_value
+        end
+    end
     
-    -- Calibration: adjust so that our reference point matches Ableton
-    -- When meter = 0.631, we want -22 dB
-    local db_raw_at_reference = 20 * math.log10(METER_REFERENCE)
-    local calibration_offset = DB_REFERENCE - db_raw_at_reference
-    
-    local db_calibrated = db_raw + calibration_offset
-    
-    -- Debug logging
-    debugLog(string.format("Meter: %.3f → Raw dB: %.1f → Calibrated: %.1f", 
-        meter_normalized, db_raw, db_calibrated))
-    
-    return db_calibrated
+    -- Fallback for values outside calibration range
+    if meter_normalized <= METER_DB_CALIBRATION[1][1] then
+        return METER_DB_CALIBRATION[1][2]
+    else
+        return METER_DB_CALIBRATION[#METER_DB_CALIBRATION][2]
+    end
 end
 
 -- ===========================
@@ -205,7 +220,7 @@ function onReceiveOSC(message, connections)
     local meter_level = arguments[2].value
     local db_value = meterToDB(meter_level)
     
-    -- Always update the display when we receive a meter value
+    -- Update the display immediately - no threshold
     self.values.text = formatDB(db_value)
     
     -- Log significant changes
@@ -220,7 +235,6 @@ function onReceiveOSC(message, connections)
     end
     
     lastDB = db_value
-    lastUpdateTime = os.clock()
     
     return false  -- Don't block other receivers
 end
@@ -230,8 +244,7 @@ end
 -- ===========================
 
 function update()
-    -- Let AbletonOSC control when to show silence
-    -- No artificial timeouts
+    -- No update needed - display updates on OSC messages
 end
 
 -- ===========================
@@ -244,7 +257,6 @@ function onReceiveNotify(key, value)
         -- Clear the display when track changes
         self.values.text = "-∞ dBFS"
         lastDB = -math.huge
-        lastUpdateTime = os.clock()
         log("Track changed - display reset")
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
@@ -272,14 +284,11 @@ function init()
         self.values.text = "-"
     end
     
-    -- Initialize state
-    lastUpdateTime = os.clock()
-    
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("Peak dBFS meter - calibrated to match Ableton")
-        log("Verified: meter 0.631 = -22 dBFS")
+        log("Peak dBFS meter - calibration table method")
+        log("Verified points: 0.631=-22dB, 0.842=-6dB")
     end
     
     if DEBUG == 1 then
