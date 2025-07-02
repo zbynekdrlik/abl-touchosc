@@ -1,10 +1,11 @@
 -- TouchOSC dB Meter Label Display
--- Version: 1.0.1
+-- Version: 1.1.0
 -- Shows actual peak dBFS level from track output meter
+-- Handles Ableton's floating-point headroom (can show > 0 dBFS)
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "1.0.1"
+local VERSION = "1.1.0"
 
 -- State variables
 local lastDB = -70.0
@@ -128,8 +129,12 @@ function abletonToFaderPosition(normalized)
     return 0
   end
   
-  if normalized >= 1.0 then
-    return 1.0
+  -- IMPORTANT: Ableton's floating-point engine can send values > 1.0
+  -- when tracks are clipping internally
+  if normalized > 1.0 then
+    -- Linear extrapolation for values above 100%
+    -- If 0.92 = 0dB and 1.0 = +6dB, then values > 1.0 continue linearly
+    return 1.0 + (normalized - 1.0)
   end
   
   -- Check for exact calibration matches first
@@ -159,14 +164,26 @@ end
 -- Convert linear position to logarithmic (must match fader exactly)
 function linearToLog(linear_pos)
   if not linear_pos or linear_pos <= 0 then return 0
-  elseif linear_pos >= 1 then return 1
-  else return math.pow(linear_pos, log_exponent) end
+  elseif linear_pos >= 1 then 
+    -- For positions > 1 (clipping), maintain linear relationship
+    return linear_pos
+  else 
+    return math.pow(linear_pos, log_exponent) 
+  end
 end
 
--- Convert audio value to dB (EXACT copy from fader script)
+-- Convert audio value to dB (extended for floating-point headroom)
 function value2db(vl)
   if not vl then return -math.huge end
   
+  -- Handle values above 1.0 (floating-point headroom)
+  if vl > 1.0 then
+    -- Linear continuation: if 1.0 = +6dB, extrapolate
+    local db_above_unity = (vl - 1.0) * 60  -- Rough approximation
+    return 6.0 + db_above_unity
+  end
+  
+  -- Original conversion for values 0-1
   if vl <= 1 and vl >= 0.4 then
     return 40*vl -34
   elseif vl < 0.4 and vl >= 0.15 then
@@ -199,7 +216,7 @@ function formatDB(db_value)
     if db_value == -math.huge or db_value <= -70 then
         return "-∞ dBFS"
     elseif db_value >= 0 then
-        -- Show + for positive values
+        -- Show + for positive values (floating-point headroom)
         return string.format("+%.1f dBFS", db_value)
     else
         return string.format("%.1f dBFS", db_value)
@@ -259,10 +276,12 @@ function onReceiveOSC(message, connections)
     if not lastDB or math.abs(db_value - lastDB) > UPDATE_THRESHOLD then
         self.values.text = formatDB(db_value)
         
-        -- Log significant changes
-        if not lastDB or math.abs(db_value - lastDB) > 1.0 then
-            log(string.format("Track %d: %s (meter: %.3f)", 
-                myTrackNumber, formatDB(db_value), meter_level))
+        -- Log significant changes (including when going above 0 dBFS)
+        if not lastDB or math.abs(db_value - lastDB) > 1.0 or 
+           (lastDB <= 0 and db_value > 0) or (lastDB > 0 and db_value <= 0) then
+            log(string.format("Track %d: %s (meter: %.3f)%s", 
+                myTrackNumber, formatDB(db_value), meter_level,
+                db_value > 0 and " [CLIPPING]" or ""))
         end
         
         lastDB = db_value
@@ -333,8 +352,8 @@ function init()
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("Peak dBFS meter from output level")
-        log("Range: -∞ to +6.0 dBFS")
+        log("Peak dBFS meter with floating-point headroom")
+        log("Range: -∞ to +60 dBFS (Ableton's 32-bit float)")
     end
     
     if DEBUG == 1 then
