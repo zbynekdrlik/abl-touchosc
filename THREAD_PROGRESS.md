@@ -3,41 +3,51 @@
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
 - [x] Phase document created: `docs/return-tracks-phases.md`
-- [ ] Currently in Phase 0.3: Testing & Validation
-- [ ] Waiting for: User to run `return_track_test.py` script
-- [ ] Next: Analyze test results and choose implementation approach (A/B/C)
+- [x] Source code analysis complete - return tracks use extended indexing
+- [ ] Moving to Phase 1: Core Implementation
+- [ ] Next: Update group_init.lua to discover return tracks
 
 ## Implementation Status
-- Phase: 0 - Discovery & Testing
-- Step: 0.3 - Testing & Validation
-- Status: WAITING FOR TEST EXECUTION
+- Phase: 1 - Core Implementation
+- Step: 1.1 - Track Discovery Extension
+- Status: READY TO IMPLEMENT
 
 ## Feature: Add Send/Return Track Control
 Enable control of Ableton's send/return tracks in addition to regular audio/MIDI tracks.
 
-### Phase 0 Progress
-- [x] 0.1 Research & Documentation ✅
-- [x] 0.2 Test Script Development ✅
-- [ ] 0.3 Testing & Validation ⏳
+### Phase 0 Complete ✅
+- [x] 0.1 Research & Documentation
+- [x] 0.2 Test Script Development
+- [x] 0.3 Source Code Analysis - CONFIRMED: Extended indexing approach
 
-### Research Findings
-1. **AbletonOSC claims support** - Documentation mentions "audio, MIDI, return or master track"
-2. **No clear documentation** - How to access return tracks is undocumented
-3. **Legacy LiveOSC had explicit support** - Used `/live/return/` namespace
-4. **Testing required** - Need to determine actual implementation
+### Source Code Analysis Results
+1. **AbletonOSC DOES support return tracks**
+   - Track API explicitly mentions "audio, MIDI, return or master track"
+   - APIs exist: `/live/song/create_return_track` and `/live/song/delete_return_track`
+   
+2. **Return tracks use extended indexing**
+   - Same `/live/track/` commands as regular tracks
+   - Indices continue after regular tracks
+   - Example: 6 regular tracks (0-5), 2 returns (6-7), master (8)
 
-### Key Questions (To be answered by test script)
-1. Are return tracks indexed after regular tracks?
-2. Do they use same `/live/track/` commands?
-3. Is there a separate API for return tracks?
+3. **Identification methods**
+   - Track names often contain "Return"
+   - Missing certain properties (input_routing_channel)
+   - Position in track list (after regular, before master)
+
+### Phase 1 Starting
+- [x] Confirmed implementation approach: Extended indexing
+- [ ] 1.1 Modify group_init.lua for return track discovery
+- [ ] 1.2 Implement track type detection system
+- [ ] 1.3 Test basic control functionality
 
 ## Testing Status Matrix
 | Component | Researched | Documented | Implementation | Tested | 
 |-----------|------------|------------|----------------|--------|
 | Return track analysis | ✅ | ✅ | ❌ | ❌ |
-| Test scripts | ✅ | ✅ | ✅ | ⏳ |
+| Access method | ✅ | ✅ | ❌ | ❌ |
 | Phase planning | ✅ | ✅ | N/A | N/A |
-| Access method | 🔄 | ❌ | ❌ | ❌ |
+| Source code analysis | ✅ | ✅ | N/A | N/A |
 | TouchOSC integration | ❌ | ❌ | ❌ | ❌ |
 
 ## Previous Task Completed
@@ -51,68 +61,33 @@ Enable control of Ableton's send/return tracks in addition to regular audio/MIDI
 - `docs/return-tracks-phases.md` - Comprehensive 7-phase implementation plan
 
 ## Scripts Created
-- `return_track_test.py` - Discovery script to test AbletonOSC behavior
+- `return_track_test.py` - Discovery script (no longer needed)
 - TouchOSC test functions - For manual testing if needed
 
 ## Next Immediate Actions
-1. **User Action Required:**
-   - Run `python return_track_test.py` in test environment
-   - Ensure Ableton Live is open with AbletonOSC loaded
-   - Create test project with regular tracks + return tracks
-   - Share complete test output
+1. **Begin Phase 1.1 Implementation:**
+   - Modify `group_init.lua` to continue track discovery beyond regular tracks
+   - Add logic to identify return tracks by name/properties
+   - Store track type in group metadata
+   - Version: 2.0.0 (major functionality addition)
 
-2. **Based on Test Results:**
-   - **Option A (Extended Indexing)**: Return tracks use indices after regular tracks
-   - **Option B (Separate API)**: Return tracks have dedicated commands
-   - **Option C (Not Supported)**: Need to document limitation and explore workarounds
-
-3. **Then Begin Phase 1:**
-   - Core implementation based on chosen approach
-   - Version 2.0.0 for major functionality addition
+2. **Implementation approach:**
+   - Query total track count with `/live/song/get/num_tracks`
+   - Continue indexing beyond known regular tracks
+   - Identify returns by name pattern or missing properties
+   - Tag groups with track type for UI differentiation
 
 ## User Context
-User wants to control send/return tracks in Ableton, not just regular tracks. They suspect AbletonOSC doesn't fully implement return track control yet.
+User wants to control send/return tracks in Ableton, not just regular tracks. Source code analysis confirms AbletonOSC supports this via extended indexing.
 
-## Testing Plan Details
-
-### Test 1: Track Indexing Discovery
-```
-/live/song/get/num_tracks
-/live/song/get/track_names
-```
-See if return tracks appear in the count and names.
-
-### Test 2: Extended Index Access
-If we have 8 regular tracks + 2 returns:
-```
-/live/track/get/name 8
-/live/track/get/name 9
-```
-Check if indices 8 and 9 access return tracks.
-
-### Test 3: Property Identification
-Query track properties to identify return tracks:
-```
-/live/track/get/has_audio_input [index]
-/live/track/get/available_input_routing_types [index]
-```
-
-### Test 4: Alternative Commands
-Check for undocumented return-specific commands:
-```
-/live/song/get/return_tracks
-/live/song/get/num_return_tracks
-/live/return/get/name 0
-```
-
-## Research Resources
-- AbletonOSC GitHub: https://github.com/ideoforms/AbletonOSC
-- Live Object Model docs: Ableton's official API documentation
-- Legacy LiveOSC2: Shows how return tracks were handled before
-- Forum discussions: Users asking about return track access
+## Key Code Insights
+- Return tracks are part of the standard track list
+- No separate `/live/return/` namespace (unlike old LiveOSC)
+- All track commands work on return tracks
+- Track indices are continuous: regular → return → master
 
 ## Thread Handoff Notes
-- Phase document exists with complete 7-phase plan
-- Currently waiting for test script execution
-- All research and planning complete
-- Ready to implement once test results confirm approach
+- Source analysis complete - no test script needed
+- Ready to implement Phase 1
+- Extended indexing confirmed as the approach
+- All research indicates this will work as expected
