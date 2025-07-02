@@ -1,10 +1,10 @@
 -- TouchOSC dB Meter Label Display
--- Version: 1.0.0
--- Shows actual peak dB level from track output meter
+-- Version: 1.0.1
+-- Shows actual peak dBFS level from track output meter
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "1.0.0"
+local VERSION = "1.0.1"
 
 -- State variables
 local lastDB = -70.0
@@ -39,9 +39,9 @@ local log_exponent = 0.515
 
 local function log(message)
     -- Get parent name for context
-    local context = "dB"
+    local context = "dBFS"
     if self.parent and self.parent.name then
-        context = "dB(" .. self.parent.name .. ")"
+        context = "dBFS(" .. self.parent.name .. ")"
     end
     
     -- Send to document script for logger text update
@@ -191,18 +191,18 @@ function value2db(vl)
 end
 
 -- ===========================
--- dB DISPLAY FORMATTING
+-- dBFS DISPLAY FORMATTING
 -- ===========================
 
--- Format dB value for display
+-- Format dBFS value for display with proper unit
 function formatDB(db_value)
     if db_value == -math.huge or db_value <= -70 then
-        return "-∞ dB"
+        return "-∞ dBFS"
     elseif db_value >= 0 then
         -- Show + for positive values
-        return string.format("+%.1f dB", db_value)
+        return string.format("+%.1f dBFS", db_value)
     else
-        return string.format("%.1f dB", db_value)
+        return string.format("%.1f dBFS", db_value)
     end
 end
 
@@ -281,8 +281,8 @@ function update()
     -- If no meter update for a while, show -∞
     local currentTime = os.clock()
     if currentTime - lastUpdateTime > 2.0 then  -- No update for 2 seconds
-        if self.values.text ~= "-∞ dB" then
-            self.values.text = "-∞ dB"
+        if self.values.text ~= "-∞ dBFS" then
+            self.values.text = "-∞ dBFS"
             lastDB = -math.huge
             debugLog("No meter data - showing -∞")
         end
@@ -297,7 +297,7 @@ function onReceiveNotify(key, value)
     -- Handle track changes
     if key == "track_changed" then
         -- Clear the display when track changes
-        self.values.text = "-∞ dB"
+        self.values.text = "-∞ dBFS"
         lastDB = -math.huge
         lastUpdateTime = os.clock()
         log("Track changed - display reset")
@@ -322,7 +322,7 @@ function init()
     
     -- Set initial text
     if isTrackMapped() then
-        self.values.text = "-∞ dB"
+        self.values.text = "-∞ dBFS"
     else
         self.values.text = "-"
     end
@@ -333,8 +333,8 @@ function init()
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("Peak dB meter from output level")
-        log("Range: -∞ to +6.0 dB")
+        log("Peak dBFS meter from output level")
+        log("Range: -∞ to +6.0 dBFS")
     end
     
     if DEBUG == 1 then
