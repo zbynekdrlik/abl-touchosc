@@ -1,12 +1,12 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.3.2
+-- Version: 2.3.3
 -- Shows actual peak dBFS level from track output meter
--- Fixed calibration based on user verification
+-- Updated calibration with additional verified point
 -- Multi-connection routing support
 -- LOGS EVERY METER UPDATE - NO THRESHOLDS
 
 -- Version constant
-local VERSION = "2.3.2"
+local VERSION = "2.3.3"
 
 -- State variables
 local lastDB = -70.0
@@ -31,8 +31,9 @@ local METER_DB_CALIBRATION = {
     {0.400, -28.0},       -- 
     {0.500, -26.0},       -- 
     {0.600, -24.4},       -- VERIFIED by user
-    {0.631, -22.0},       -- VERIFIED by user  
-    {0.700, -18.0},       -- 
+    {0.631, -22.0},       -- VERIFIED by user
+    {0.674, -18.8},       -- VERIFIED by user (new)
+    {0.700, -16.8},       -- Adjusted based on new data point
     {0.750, -14.0},       -- 
     {0.800, -10.0},       -- 
     {0.842, -6.0},        -- VERIFIED by user
@@ -310,9 +311,9 @@ function init()
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("Peak dBFS meter - v2.3.2 LOGS EVERY METER UPDATE")
-        log("Verified points: 0.600=-24.4dB, 0.631=-22dB, 0.842=-6dB")
-        log("NO LOGGING THRESHOLDS - Every OSC message will be logged")
+        log("Peak dBFS meter - v2.3.3 with updated calibration")
+        log("Verified: 0.600=-24.4dB, 0.631=-22dB, 0.674=-18.8dB, 0.842=-6dB")
+        log("LOGS EVERY METER UPDATE - No thresholds")
     end
 end
 
