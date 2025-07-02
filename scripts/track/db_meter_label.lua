@@ -1,14 +1,15 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.2.0
+-- Version: 2.2.1
 -- Shows actual peak dBFS level from track output meter
--- Extended calibration table for full range including low values
+-- Enhanced logging for low values to debug calibration
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "2.2.0"
+local VERSION = "2.2.1"
 
 -- State variables
 local lastDB = -70.0
+local lastMeterValue = 0
 
 -- Debug mode
 local DEBUG = 0  -- Set to 1 for detailed logging
@@ -235,14 +236,34 @@ function onReceiveOSC(message, connections)
     -- Always update the display for every meter value
     self.values.text = formatDB(db_value)
     
-    -- Log ALL significant changes (removed -60 dB filter)
+    -- Enhanced logging for debugging low values
+    local shouldLog = false
+    
+    -- Always log if value changed significantly
     if not lastDB or math.abs(db_value - lastDB) > 1.0 then
+        shouldLog = true
+    end
+    
+    -- ALWAYS log values below -22 dBFS to debug calibration
+    if db_value < -22 and db_value > -math.huge then
+        shouldLog = true
+    end
+    
+    -- Also log if meter value changed significantly (helps debug very low values)
+    if lastMeterValue and math.abs(meter_level - lastMeterValue) > 0.01 then
+        if db_value < -20 then  -- Extra logging for low values
+            shouldLog = true
+        end
+    end
+    
+    if shouldLog then
         log(string.format("Track %d: %s (meter: %.4f)%s", 
             myTrackNumber, formatDB(db_value), meter_level,
             db_value > 0 and " [CLIPPING]" or ""))
     end
     
     lastDB = db_value
+    lastMeterValue = meter_level
     
     return false  -- Don't block other receivers
 end
@@ -265,11 +286,13 @@ function onReceiveNotify(key, value)
         -- Clear the display when track changes
         self.values.text = "-∞ dBFS"
         lastDB = -math.huge
+        lastMeterValue = 0
         log("Track changed - display reset")
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
         self.values.text = "-"
         lastDB = nil
+        lastMeterValue = nil
         log("Track unmapped - display shows dash")
     elseif key == "control_enabled" then
         -- Show/hide based on track mapping status
@@ -295,9 +318,10 @@ function init()
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
-        log("Peak dBFS meter - extended calibration table")
+        log("Peak dBFS meter - v2.2.1 with enhanced low-value logging")
         log("Verified points: 0.631=-22dB, 0.842=-6dB")
         log("Full range: -∞ to +60 dBFS")
+        log("Low values (<-22dB) will always be logged for debugging")
     end
     
     if DEBUG == 1 then
