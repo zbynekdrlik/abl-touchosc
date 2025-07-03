@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.14.1
+-- Version: 1.14.2
 -- Auto-detects regular vs return tracks
 
 -- Version constant
-local SCRIPT_VERSION = "1.14.1"
+local SCRIPT_VERSION = "1.14.2"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -126,11 +126,6 @@ local function updateStatusIndicator()
         -- Not mapped - red
         indicator.visible = true
         indicator.color = Color(1, 0, 0, 1)
-    end
-    
-    -- Force visual update
-    if indicator.update then
-        indicator:update()
     end
 end
 
@@ -340,9 +335,6 @@ function onReceiveOSC(message, connections)
                             
                             setGroupEnabled(true)
                             
-                            -- Force immediate status update
-                            updateStatusIndicator()
-                            
                             -- Store combined info in tag
                             self.tag = instance .. ":" .. trackNumber .. ":track"
                             
@@ -397,9 +389,6 @@ function onReceiveOSC(message, connections)
                             
                             setGroupEnabled(true)
                             
-                            -- Force immediate status update
-                            updateStatusIndicator()
-                            
                             -- Store combined info in tag
                             self.tag = instance .. ":" .. trackNumber .. ":return"
                             
@@ -431,9 +420,6 @@ function onReceiveOSC(message, connections)
                 trackNumber = nil
                 trackType = nil
                 needsRefresh = false
-                
-                -- Force status update to show unmapped state
-                updateStatusIndicator()
                 
                 -- Notify children
                 notifyChildren("track_unmapped", nil)
