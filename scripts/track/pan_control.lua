@@ -1,10 +1,11 @@
 -- TouchOSC Pan Control Script
--- Version: 1.4.0
+-- Version: 1.4.1
+-- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
 -- Fixed: Added logger output using root:notify like other scripts
 
 -- Version constant
-local VERSION = "1.4.0"
+local VERSION = "1.4.1"
 
 -- Double-tap configuration
 local delay = 300 -- the maximum elapsed time between taps
@@ -65,10 +66,10 @@ end
 
 -- Get the connection index from parent group
 local function getConnectionIndex()
-    -- Check if parent has tag with instance:trackNumber format
+    -- Check if parent has tag with instance:trackNumber:trackType format
     if self.parent and self.parent.tag then
-        local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
-        if instance and trackNum then
+        local instance = self.parent.tag:match("^(%w+):")
+        if instance then
             -- Read configuration directly
             local config = readConfiguration()
             if config then
@@ -100,11 +101,12 @@ end
 
 -- Get track number and type from parent group
 local function getTrackInfo()
-    -- Parent stores track number and type
-    if self.parent then
-        local trackNumber = self.parent.trackNumber
-        local trackType = self.parent.trackType or "regular"  -- Default to regular if not set
-        return trackNumber, trackType
+    -- Parent stores track info in tag as "instance:trackNumber:trackType"
+    if self.parent and self.parent.tag then
+        local instance, trackNum, trackType = self.parent.tag:match("^(%w+):(%d+):(%w+)$")
+        if trackNum and trackType then
+            return tonumber(trackNum), trackType
+        end
     end
     return nil, nil
 end
@@ -176,7 +178,7 @@ function onReceiveOSC(message, connections)
     local isPanMessage = false
     if trackType == "return" and path == '/live/return/get/panning' then
         isPanMessage = true
-    elseif trackType == "regular" and path == '/live/track/get/panning' then
+    elseif (trackType == "regular" or trackType == "track") and path == '/live/track/get/panning' then
         isPanMessage = true
     end
     
