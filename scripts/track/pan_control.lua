@@ -1,9 +1,10 @@
 -- TouchOSC Pan Control Script
--- Version: 1.3.2
+-- Version: 1.4.0
+-- Added: Return track support using parent's trackType
 -- Fixed: Added logger output using root:notify like other scripts
 
 -- Version constant
-local VERSION = "1.3.2"
+local VERSION = "1.4.0"
 
 -- Double-tap configuration
 local delay = 300 -- the maximum elapsed time between taps
@@ -97,16 +98,15 @@ end
 -- TRACK INFORMATION
 -- ===========================
 
--- Get track number from parent group
-local function getTrackNumber()
-    -- Parent stores combined tag like "band:5"
-    if self.parent and self.parent.tag then
-        local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
-        if trackNum then
-            return tonumber(trackNum)
-        end
+-- Get track number and type from parent group
+local function getTrackInfo()
+    -- Parent stores track number and type
+    if self.parent then
+        local trackNumber = self.parent.trackNumber
+        local trackType = self.parent.trackType or "regular"  -- Default to regular if not set
+        return trackNumber, trackType
     end
-    return nil
+    return nil, nil
 end
 
 -- ===========================
@@ -115,7 +115,7 @@ end
 
 -- Handle value changes (touch and movement)
 function onValueChanged()
-    local trackNumber = getTrackNumber()
+    local trackNumber, trackType = getTrackInfo()
     if not trackNumber then
         return
     end
@@ -145,7 +145,9 @@ function onValueChanged()
     -- Convert to Ableton range (-1 to 1)
     local abletonValue = (self.values.x * 2) - 1
     
-    sendOSC('/live/track/set/panning', trackNumber, abletonValue, connections)
+    -- Send to correct path based on track type
+    local path = trackType == "return" and '/live/return/set/panning' or '/live/track/set/panning'
+    sendOSC(path, trackNumber, abletonValue, connections)
 end
 
 -- Update visual color based on pan position
@@ -162,8 +164,23 @@ end
 
 -- Handle incoming pan updates from Ableton
 function onReceiveOSC(message, connections)
-    -- Only process pan messages
-    if message[1] ~= '/live/track/get/panning' then
+    local path = message[1]
+    
+    -- Get track info from parent
+    local trackNumber, trackType = getTrackInfo()
+    if not trackNumber then
+        return false
+    end
+    
+    -- Check if this is a pan message for the correct track type
+    local isPanMessage = false
+    if trackType == "return" and path == '/live/return/get/panning' then
+        isPanMessage = true
+    elseif trackType == "regular" and path == '/live/track/get/panning' then
+        isPanMessage = true
+    end
+    
+    if not isPanMessage then
         return false
     end
     
@@ -180,9 +197,8 @@ function onReceiveOSC(message, connections)
     end
     
     local msgTrackNumber = arguments[1].value
-    local myTrackNumber = getTrackNumber()
     
-    if msgTrackNumber ~= myTrackNumber then
+    if msgTrackNumber ~= trackNumber then
         return false
     end
     
