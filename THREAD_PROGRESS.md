@@ -2,117 +2,94 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Group init script updated with auto-detection (v1.14.0)
-- [x] Currently testing group auto-detection
-- [x] Regular tracks working (go green when mapped)
-- [ ] Return tracks NOT working (stay red)
-- [ ] Waiting for: Debug logs to diagnose return track issue
+- [x] Group init script updated to v1.14.1 - fixed Observer errors
+- [x] Both regular and return tracks ARE mapping successfully (confirmed by logs)
+- [x] Added tracking for active listeners to prevent stop errors
+- [ ] Waiting for: User to test v1.14.1 and confirm status indicators work
 
-## Testing Results So Far
+## Latest Fix Applied
 
-### ✅ What Works:
-1. **Regular track detection** - `master_CG #` successfully maps and goes green
-2. **OSC patterns** - Group requires explicit patterns (no wildcards)
-3. **Track label** - Shows parsed track name from group name
+### Version 1.14.1 Changes:
+1. **Fixed "Observer not connected" errors** - Only stop listeners that were previously started
+2. **Added `listenersActive` flag** - Tracks when listeners are actually active
+3. **Enhanced status indicator updates** - Added explicit `update()` call for visual refresh
+4. **Better nil checking** - Ensure trackNumber is not nil before operations
 
-### ❌ What Doesn't Work:
-1. **Return track detection** - `master_Repro LR #` stays red, not mapping
-2. **TouchOSC wildcards** - `/live/*/get/*` pattern doesn't work
+## Testing Results From User Logs
 
-## Key Findings
+### ✅ What's Actually Working:
+1. **Regular track detection** - `master_CG #` maps to track 4 correctly
+2. **Return track detection** - `master_A-Repro LR #` maps to return 0 correctly
+3. **OSC communication** - Both track types receive correct commands
+4. **Script initialization** - Both scripts load v1.14.0 successfully
 
-### TouchOSC Pattern Requirements
-- **No wildcard support** in receive patterns
-- Must define explicit patterns
-- Required patterns for group (6 total):
-  ```
-  /live/song/get/track_names
-  /live/song/get/return_track_names
-  /live/track/get/output_meter_level
-  /live/track/get/volume
-  /live/return/get/output_meter_level
-  /live/return/get/volume
-  ```
+### 🔧 What Was Fixed:
+1. **Observer errors** - Prevented by tracking active listeners
+2. **Visual update issue** - Force indicator update after mapping
 
-### Current Issue: Return Track Not Mapping
-**Symptoms:**
-- Regular track `master_CG #` → Maps correctly, goes green
-- Return track `master_Repro LR #` → Doesn't map, stays red
+## Key Findings From Debug Logs
 
-**Possible Causes:**
-1. **Name mismatch** - Return track name in Ableton might be different
-2. **AbletonOSC fork** - Original version might be running instead of fork
-3. **OSC response** - `/live/song/get/return_track_names` might be empty
-4. **Script parsing** - Special characters in name might cause issues
+### Successful Mapping Confirmed:
+```
+[15:11:31] CONTROL(master_CG #) Mapped to Regular Track 4
+[15:11:31] CONTROL(master_A-Repro LR #) Mapped to Return Track 0
+```
 
-## Debug Steps Needed
+### OSC Messages Working:
+- `/live/song/get/return_track_names` returns: `STRING(A-Repro LR #)`
+- Both tracks start their listeners correctly
+- Volume and meter data received for regular track
 
-1. **Check exact return track name in Ableton**
-   - Often named like "A-Reverb" or "Return A"
-   - Must match exactly (case sensitive)
-
-2. **Verify in TouchOSC console:**
-   - Outgoing: `/live/song/get/return_track_names`
-   - Incoming: Should contain return track names
-   - Log messages from script
-
-3. **Verify AbletonOSC fork is installed:**
-   - Should be from: https://github.com/zbynekdrlik/AbletonOSC
-   - Branch: feature/return-tracks-support
-
-4. **Check for script errors:**
-   - Any errors in TouchOSC console
-   - Script version message
+### Error Pattern Fixed:
+- "Observer not connected" errors when stopping non-existent listeners
+- Fixed by only stopping listeners that were previously started
 
 ## Implementation Status
-- Phase: TESTING AND DEBUGGING
-- Step: Diagnosing return track detection issue
-- Status: Regular tracks work, return tracks need fixing
+- Phase: TESTING VISUAL INDICATORS
+- Step: Verifying status indicator updates work for both track types
+- Status: Core functionality working, visual feedback being verified
 
 ## Code Status
 
 ### ✅ Completed:
-1. **group_init.lua v1.14.0**:
-   - Auto-detection logic implemented
-   - Queries both track types
-   - Dynamic OSC routing
-   - Regular tracks working
+1. **group_init.lua v1.14.1**:
+   - Fixed observer errors
+   - Enhanced status indicator updates
+   - Both track types mapping correctly
+   - Proper listener management
 
-### 🔧 Needs Investigation:
-- Why return track detection fails
-- OSC response for return track names
-- Exact name matching logic
+### 🔧 Needs Testing:
+- Visual status indicator updates (should turn green when mapped)
+- Confirm no more "Observer not connected" errors
 
 ### ❌ Pending:
-- Child script updates (waiting until group works)
+- Child script updates (waiting until visual confirmation)
 - Old return implementation removal
 - Documentation updates
 
 ## Last User Action
-- Date/Time: 2025-07-03 12:15
-- Action: Tested group with regular and return tracks
-- Result: Regular works, return doesn't
-- Next Required: Check debug logs and exact return track names
+- Date/Time: 2025-07-03 13:15
+- Action: Provided debug logs showing successful mapping but visual issue
+- Result: Both tracks map, but status indicator issue identified
+- Next Required: Test v1.14.1 and confirm visual indicators work
 
-## Next Debugging Steps
-1. **Enable TouchOSC console logging**
-2. **Press refresh on return track group**
-3. **Capture:**
-   - Exact OSC messages sent/received
-   - Script log output
-   - Any error messages
-4. **Verify exact return track name in Ableton**
+## Next Steps
+1. **User should reload TouchOSC template** with v1.14.1
+2. **Test both track types again**
+3. **Confirm:**
+   - Status indicators turn green when mapped
+   - No "Observer not connected" errors
+   - All controls work for both track types
+4. **If successful**, proceed with child script updates
 
 ## Technical Notes
-- Track label comes from group name (not OSC)
-- Pattern `(%w+)` in label parsing excludes special chars
-- Script should log track type when mapped
-- Status indicator: Red = unmapped, Green = mapped
+- Both track types ARE mapping successfully in the logs
+- The issue was likely visual update timing
+- Observer errors were from stopping non-existent listeners
+- Solution: Track listener state and force visual updates
 
-## Questions to Answer
-1. What does `/live/song/get/return_track_names` return?
-2. Is the return track name exactly `Repro LR #`?
-3. Are there any script errors in the console?
-4. Is the forked AbletonOSC definitely installed?
-
-Once we resolve the return track detection issue, we can proceed with updating child scripts.
+## Questions Resolved
+1. ✅ Return tracks ARE being detected correctly
+2. ✅ OSC communication is working properly
+3. ✅ The forked AbletonOSC is functioning as expected
+4. ❓ Visual indicators should now update properly - needs confirmation
