@@ -10,11 +10,12 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 - **Dynamic Group Management**: Track groups auto-unfold based on configuration
 - **Complete Isolation**: Each instance operates independently without interference
 
-### Return Track Support (NEW!)
-- **Full Return Track Control**: Complete support for Ableton Live return tracks
-- **All Controls Available**: Volume, mute, pan, and metering for return tracks
-- **Automatic Discovery**: Return tracks are mapped by name just like regular tracks
-- **Requires**: [Forked AbletonOSC](https://github.com/zbynekdrlik/AbletonOSC/tree/feature/return-tracks-support) with return track support
+### Return Track Support (v1.2.0) 🎉
+- **Unified Architecture**: Same scripts handle both regular and return tracks
+- **Automatic Detection**: Groups automatically detect track type
+- **Full Control Suite**: Volume, mute, pan, and metering for return tracks
+- **Smart Track Labels**: First word display with return prefix handling
+- **Requires**: [Forked AbletonOSC](https://github.com/zbynekdrlik/AbletonOSC/tree/feature/return-tracks-support) with listener fixes
 
 ### Professional Controls
 
@@ -73,7 +74,6 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 # Connection mapping
 connection_band: 2      # Band controls → Ableton instance on connection 2
 connection_master: 3    # Master controls → Ableton instance on connection 3
-connection_return: 1    # Return tracks → Ableton instance on connection 1
 
 # Auto-unfold groups
 unfold_band: 'Band'     # Unfold 'Band' group in band instance
@@ -87,24 +87,33 @@ unfold_master: 'Master' # Unfold 'Master' group in master instance
 ### Control Layout
 
 Each track group contains:
-- **Track Label**: Shows track name or "???" if unmapped
+- **Track Label**: Shows track name (first word, smart prefix handling)
+- **Status Indicator**: Green when mapped, red when unmapped
 - **Volume Fader**: Professional fader with dB scaling
 - **dB Display**: Current volume in dB
-- **Level Meter**: Real-time level display
+- **Level Meter**: Real-time level display with peak colors
 - **Mute Button**: Toggle track mute
 - **Pan Control**: Stereo positioning
 
-### Return Track Controls
+### Return Track Setup
 
-Return track groups work identically to regular track groups but:
-- Use `return_` prefix in group names (e.g., `return_A-Reverb`)
-- Map to Ableton's return tracks by exact name matching
-- Support all the same controls as regular tracks
-- Use the `/live/return/` OSC namespace
+Return tracks use the exact same scripts and controls as regular tracks:
+
+1. **Name your group** with the exact return track name:
+   - Group name: `master_A-Reverb` (for return track "A-Reverb")
+   - Group name: `band_B-Delay` (for return track "B-Delay")
+
+2. **The scripts automatically detect** whether it's a regular or return track
+
+3. **Track labels** intelligently display the first word:
+   - "A-Reverb" → shows "Reverb" (skips the A- prefix)
+   - "B-Delay" → shows "Delay"
+   - "Drums" → shows "Drums" (regular tracks unchanged)
 
 ### Automatic Features
 
 - **Startup Refresh**: Tracks are discovered automatically 1 second after opening
+- **Track Type Detection**: Scripts automatically detect regular vs return tracks
 - **Connection Routing**: Controls automatically route to configured connections
 - **State Preservation**: Control positions are maintained between sessions
 - **Visual Feedback**: All controls provide immediate visual feedback
@@ -126,38 +135,29 @@ The configuration text control accepts these parameters:
 | unfold_[instance] | Auto-unfold group name for instance | `unfold_band: 'Band'` |
 | unfold | Legacy: unfold on all connections | `unfold: 'Drums'` |
 
-### Return Track Setup
-
-1. Create a group with name `return_YourReturnTrackName`
-2. Add the return track scripts to controls:
-   - Group: `scripts/return/group_init.lua`
-   - Fader: `scripts/return/fader_script.lua`
-   - Mute: `scripts/return/mute_button.lua`
-   - Pan: `scripts/return/pan_control.lua`
-3. Configure connection: `connection_return: 1`
-
 ### Multi-Instance Example
 
 ```yaml
-# Three separate connections
+# Two separate connections
 connection_band: 2      # Band mix Ableton
 connection_master: 3    # Master mix Ableton
-connection_return: 1    # Main Ableton with returns
 
 # Different unfold groups per instance  
 unfold_band: 'Band'
 unfold_master: 'Master'
 ```
 
+Both regular tracks and return tracks use the same connection for each instance.
+
 ## 📚 Technical Documentation
 
 ### Architecture Overview
 
-The system uses a distributed script architecture:
+The system uses a unified script architecture:
 - **Document Script**: Central configuration and logging
-- **Group Scripts**: Track discovery and mapping
-- **Control Scripts**: Individual control behavior
-- **Return Scripts**: Specialized scripts for return track control
+- **Group Scripts**: Track discovery with auto-detection
+- **Control Scripts**: Same scripts handle both track types
+- **Tag Communication**: Parent groups pass info via tags
 - **Complete Isolation**: No shared variables between scripts
 
 ### Script Versions
@@ -165,17 +165,28 @@ The system uses a distributed script architecture:
 | Script | Current Version | Purpose |
 |--------|----------------|---------|
 | document_script.lua | 2.7.1 | Configuration, logging, auto-refresh |
-| group_init.lua | 1.9.6 | Track group management |
-| return/group_init.lua | 1.0.0 | Return track group management |
-| fader_script.lua | 2.3.5 | Volume control with scaling |
-| return/fader_script.lua | 1.0.0 | Return track volume control |
-| meter_script.lua | 2.2.2 | Level metering with calibration |
-| mute_button.lua | 1.8.0 | Mute state management |
-| return/mute_button.lua | 1.0.0 | Return track mute control |
-| pan_control.lua | 1.3.2 | Pan control with feedback |
-| return/pan_control.lua | 1.0.0 | Return track pan control |
-| db_label.lua | 1.0.1 | dB value display |
+| group_init.lua | 1.14.5 | Track group with auto-detection |
+| fader_script.lua | 2.4.1 | Volume control for all track types |
+| meter_script.lua | 2.3.1 | Level metering unified |
+| mute_button.lua | 1.9.1 | Mute control unified |
+| pan_control.lua | 1.4.1 | Pan control unified |
+| db_label.lua | 1.2.0 | dB display unified |
+| db_meter_label.lua | 2.5.1 | Peak meter unified |
 | global_refresh_button.lua | 1.4.0 | Manual refresh trigger |
+
+### Unified Architecture Details
+
+Groups communicate track information through tags:
+```lua
+-- Tag format: "instance:trackNumber:trackType"
+self.tag = "master:0:return"  -- Return track 0 on master
+self.tag = "band:5:track"     -- Regular track 5 on band
+```
+
+Child scripts parse the parent tag to determine:
+- Which track number to control
+- Whether to use `/live/track/` or `/live/return/` OSC paths
+- Which connection to use for routing
 
 ### Return Track OSC Messages
 
@@ -194,12 +205,13 @@ The forked AbletonOSC adds these endpoints:
 
 ### Key Technical Features
 
+- **Auto-Detection**: Groups query both track types and map appropriately
+- **Unified Scripts**: No code duplication between track types
+- **Smart Labels**: Intelligent handling of return track prefixes
 - **Frame-based Timing**: Reliable startup refresh using frame counting
 - **Direct Configuration Reading**: Each script reads config independently
 - **Connection Filtering**: OSC messages filtered by connection
 - **State Machine Design**: Robust state tracking for all controls
-- **Professional dB Scaling**: Exact match to Ableton's fader curve
-- **Return Track Support**: Full control over Ableton's return tracks
 
 ## 🔧 Troubleshooting
 
@@ -207,8 +219,8 @@ The forked AbletonOSC adds these endpoints:
 
 **Return tracks not working:**
 - Install the [forked AbletonOSC](https://github.com/zbynekdrlik/AbletonOSC/tree/feature/return-tracks-support)
-- Check return track names match exactly
-- Verify with: `/live/song/get/num_return_tracks`
+- Check return track names match exactly (including "A-", "B-" prefixes)
+- Look for "Mapped to Return Track X" in logs
 
 **Controls not responding:**
 - Check connection numbers in configuration
@@ -216,14 +228,13 @@ The forked AbletonOSC adds these endpoints:
 - Press refresh button to re-discover tracks
 
 **Wrong tracks mapped:**
-- Check unfold group names match Ableton
-- Ensure tracks are visible in Ableton
+- Ensure exact name matching for groups
+- Check both regular and return track names
 - Try manual refresh
 
-**No automatic refresh:**
-- Update to latest script versions
-- Check logger for startup messages
-- Verify document script is attached
+**Track label shows wrong text:**
+- Update to group_init.lua v1.14.5 or later
+- Script now handles return prefixes intelligently
 
 ### Debug Mode
 
@@ -255,6 +266,6 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 ---
 
-**Current Status**: Production ready with automatic startup refresh, all core controls working perfectly, and full return track support. Ready for scaling to multiple track groups including returns.
+**Current Status**: v1.2.0 - Production ready with full return track support using unified architecture. All controls tested and working perfectly for both regular and return tracks.
 
 For development documentation and future plans, see the [docs](docs/) directory.
