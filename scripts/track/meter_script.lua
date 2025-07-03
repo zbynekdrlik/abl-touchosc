@@ -1,9 +1,10 @@
 -- TouchOSC Meter Script with Multi-Connection Support
--- Version: 2.3.0
+-- Version: 2.3.1
+-- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
 -- Fixed: Debug mode off, removed connection index logging issue
 
-local VERSION = "2.3.0"
+local VERSION = "2.3.1"
 
 -- DEBUG MODE
 local DEBUG = 0  -- Set to 1 to see meter values and conversions in console
@@ -69,11 +70,12 @@ end
 
 -- Get track number and type from parent group
 local function getTrackInfo()
-    -- Parent stores track number and type
-    if self.parent then
-        local trackNumber = self.parent.trackNumber
-        local trackType = self.parent.trackType or "regular"  -- Default to regular if not set
-        return trackNumber, trackType
+    -- Parent stores track info in tag as "instance:trackNumber:trackType"
+    if self.parent and self.parent.tag then
+        local instance, trackNum, trackType = self.parent.tag:match("^(%w+):(%d+):(%w+)$")
+        if trackNum and trackType then
+            return tonumber(trackNum), trackType
+        end
     end
     return nil, nil
 end
@@ -89,7 +91,7 @@ local function getConnectionIndex()
     end
     
     -- Extract instance name from tag
-    local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
+    local instance = self.parent.tag:match("^(%w+):")
     if not instance then
         return defaultConnection
     end
@@ -228,7 +230,7 @@ function onReceiveOSC(message, connections)
   local isMeterMessage = false
   if trackType == "return" and path == '/live/return/get/output_meter_level' then
     isMeterMessage = true
-  elseif trackType == "regular" and path == '/live/track/get/output_meter_level' then
+  elseif (trackType == "regular" or trackType == "track") and path == '/live/track/get/output_meter_level' then
     isMeterMessage = true
   end
   
