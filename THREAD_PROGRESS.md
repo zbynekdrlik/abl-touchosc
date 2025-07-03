@@ -1,114 +1,87 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**⚠️ REVISED STRATEGY - SEPARATE CONCERNS**
+**✅ READY TO MERGE - Documentation Complete**
 - [x] Return track feature: COMPLETE AND WORKING
-- [ ] Label display test: Need to verify A-, B- prefix removal
-- [ ] Performance issue: DEFER TO SEPARATE BRANCH
+- [ ] Label display test: Need to verify A-, B- prefix removal (should work)
+- [x] Performance issues: DOCUMENTED for future branch
 
-## Revised Merge Strategy (2025-07-03)
+## Current Status (2025-07-03 20:52)
 
-### Strategy Decision
-**Merge return tracks first, optimize performance separately**
+### Return Track Feature
+- **Status**: ✅ COMPLETE
+- **Version**: 1.2.0
+- **Testing**: All features working
+- **Ready**: YES - pending label display verification
 
-### Rationale:
-1. Return track feature is complete and working
-2. Performance issue affects ALL tracks, not just returns
-3. Better to have clean separation of features
-4. Easier to test and rollback if needed
+### Performance Optimization
+- **Status**: 📄 DOCUMENTED
+- **Action**: Will be addressed in separate branch
+- **Docs Created**:
+  - `performance-optimization-phases.md` - Full implementation plan
+  - `performance-issues-quick-reference.md` - Quick fixes guide
 
 ## Next Steps:
 
-### 1. Quick Label Test (Before Merge)
-Test return track names:
-- "A-Reverb" → should display "Reverb" ✓
-- "B-Delay Bus" → should display "Delay" ✓
-- "C-FX" → should display "FX" ✓
+### 1. Test Label Display ⏳
+Quick test before merge:
+- Create return track "A-Reverb" → verify shows "Reverb"
+- Create return track "B-Delay" → verify shows "Delay"
+- Code review indicates this should work (group_init.lua lines 193-210)
 
-Code review shows this should work (lines 193-210 in group_init.lua)
+### 2. Merge PR #8 ✅
+- Return track feature complete
+- Documentation complete
+- Performance issues documented for next branch
+- Ready for v1.2.0 release
 
-### 2. Merge Return Track Feature
-- [ ] Verify label display works
-- [ ] Merge PR #8 to main
-- [ ] Tag release v1.2.0
-- [ ] Close feature branch
-
-### 3. Create Performance Branch
-- [ ] New branch: `feature/performance-optimization`
-- [ ] Focus on fixing lag issues
-- [ ] Optimize update() functions
-- [ ] Remove debug overhead
-- [ ] Test on production hardware
+### 3. Future Work 🚀
+Create `feature/performance-optimization` branch with:
+- Phase 1: Quick wins (scheduled updates, debug fixes)
+- Phase 2: Smart updates (event-driven, batching)
+- Phase 3: Architecture optimization
+- Phase 4: Advanced optimizations
 
 ## Implementation Status - RETURN TRACKS
 - Phase: COMPLETE - READY FOR MERGE
 - Status: ✅ All features implemented and tested
 - Version: 1.2.0
 
-## Testing Status Matrix - RETURN TRACKS
-| Component | Implemented | Unit Tested | Integration Tested | Label Display |
-|-----------|------------|-------------|--------------------|--------------| 
-| Group Init v1.14.5 | ✅ | ✅ | ✅ | ⏳ |
-| Fader Script v2.4.1 | ✅ | ✅ | ✅ | N/A |
-| Meter Script v2.3.1 | ✅ | ✅ | ✅ | N/A |
-| Mute Button v1.9.1 | ✅ | ✅ | ✅ | N/A |
-| Pan Control v1.4.1 | ✅ | ✅ | ✅ | N/A |
-| dB Meter Label v2.5.1 | ✅ | ✅ | ✅ | N/A |
-| db_label.lua v1.2.0 | ✅ | ✅ | ✅ | N/A |
-
-## Performance Issues (For Future Branch)
-
-### Identified Problems:
-1. **update() runs every frame** (60-120Hz)
-   - Group script monitors constantly
-   - Fader script checks animations
-   - Multiplied by number of tracks
-
-2. **Debug code overhead**
-   - String operations run even when DEBUG=0
-   - Heavy formatting and concatenation
-
-3. **Complex calculations**
-   - Color smoothing every frame
-   - Activity monitoring overhead
-
-### Optimization Ideas:
-- Use scheduled updates instead of every frame
-- Conditional compilation for debug code
-- Simplify status indicators
-- Batch OSC updates
-- Profile on actual hardware
-
-## Version 1.2.0 Release - READY
-
-### Release Contents:
-- ✅ Full return track support
-- ✅ Unified architecture (no duplicate scripts)
-- ✅ Auto-detection of track types
-- ✅ Smart label display
-- ✅ All controls working
-- ✅ Bug fixes included
-
-### Known Issues (Document for Users):
-- Performance may be affected with many tracks
-- Optimization coming in next release
-
-## Branch Status - RETURN TRACKS
+## Branch Status
 
 - Implementation: ✅ Complete
-- Documentation: ✅ Complete
+- Documentation: ✅ Complete (including performance docs)
 - Cleanup: ✅ Complete
-- Testing: ✅ Complete (except label display)
-- **Ready for merge: YES** (after label test)
+- Testing: ✅ Complete (except label verification)
+- **Ready for merge: YES**
 
-## Last User Action
-- Date/Time: 2025-07-03 20:45
-- Action: Suggested separating optimization into new branch
-- Decision: Agreed - merge returns first, optimize separately
-- Next Required: Test label display, then merge
+## Key Decisions Made
 
----
+1. **Merge return tracks first** - Feature is complete and working
+2. **Optimize separately** - Performance affects all tracks, not just returns
+3. **Document thoroughly** - Created phase docs for optimization work
+
+## Performance Documentation Created
+
+### 1. performance-optimization-phases.md
+- 4 phases of optimization
+- Specific tasks and code examples
+- Expected impact measurements
+- Timeline: 8-12 days total
+
+### 2. performance-issues-quick-reference.md  
+- Critical issues identified
+- Quick fix examples
+- Priority order
+- Testing commands
 
 ## Summary
 
-The return track feature is complete and ready. Performance optimization should be handled separately in a dedicated branch. This provides cleaner separation of concerns and safer deployment.
+The return track feature (v1.2.0) is complete and ready to merge. Performance issues have been thoroughly documented for future optimization work. Once label display is verified, the PR can be merged and tagged for release.
+
+---
+
+## Last Actions
+- Created performance optimization documentation
+- Updated PR with merge strategy
+- Ready for final label test and merge
