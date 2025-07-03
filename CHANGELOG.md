@@ -5,50 +5,60 @@ All notable changes to the ABL TouchOSC project are documented here.
 ## [1.2.0] - 2025-07-03
 ### Return Track Support Release 🎚️
 
-This release adds complete return track support to ABL TouchOSC, made possible by forking AbletonOSC to expose return tracks.
+This release adds complete return track support to ABL TouchOSC using a unified architecture where the same scripts handle both regular and return tracks.
 
 ### Major Changes
 
-#### AbletonOSC Fork Created
+#### Unified Architecture Implementation
+- **No Separate Scripts**: Return tracks use the same scripts as regular tracks
+- **Auto-Detection**: Groups automatically detect track type (regular vs return)
+- **Single Connection**: Return tracks use the same connection as regular tracks (band/master)
+- **Tag-Based Communication**: Parent groups pass track info to children via tags
+
+#### AbletonOSC Fork Updated
 - **Repository**: https://github.com/zbynekdrlik/AbletonOSC
 - **Branch**: feature/return-tracks-support
 - **PR**: https://github.com/zbynekdrlik/AbletonOSC/pull/2
-- Added complete return track support to AbletonOSC
-- New OSC endpoints for return track control
+- Fixed "Observer not connected" errors for return tracks
+- Added missing listener support for return tracks
 
-#### Return Track Scripts Added
-- **return/group_init.lua [1.0.0]**: Return track group management
-- **return/fader_script.lua [1.0.0]**: Return track volume control
-- **return/mute_button.lua [1.0.0]**: Return track mute control
-- **return/pan_control.lua [1.0.0]**: Return track pan control
+#### Script Updates
+All scripts updated to support both track types:
+- **group_init.lua [1.14.5]**: Auto-detects track type, smart label display
+- **fader_script.lua [2.4.1]**: Volume control for both track types
+- **meter_script.lua [2.3.1]**: Meter display with return track support
+- **mute_button.lua [1.9.1]**: Mute control unified
+- **pan_control.lua [1.4.1]**: Pan control unified
+- **db_label.lua [1.2.0]**: dB display for both track types
+- **db_meter_label.lua [2.5.1]**: Peak meter display unified
 
-#### Documentation
-- Added comprehensive return track documentation
-- Created template examples for return track setup
-- Updated README with return track support information
+#### Bug Fixes
+- Fixed script property access errors (parent.trackNumber not available)
+- Fixed track label truncation for names with special characters
+- Added smart return track prefix handling (A-, B-, etc.)
 
 ### Features
 - **Full Return Track Control**: Volume, mute, pan, and metering
 - **Automatic Discovery**: Return tracks mapped by name matching
+- **Smart Track Labels**: Shows first word, skipping return prefixes
 - **Complete Integration**: Works with existing multi-instance routing
-- **All OSC Commands**: Query and control messages for return tracks
+- **Bidirectional Updates**: All controls update in both directions
 
-### OSC Endpoints Added
+### Implementation Details
+Groups now use a tag format to communicate track info:
 ```
-/live/song/get/num_return_tracks
-/live/song/get/return_track_names
-/live/song/get/return_track_data
-/live/return/get/[property] [index]
-/live/return/set/[property] [index] [value]
-/live/return/start_listen/[property] [index]
-/live/return/stop_listen/[property] [index]
+"instance:trackNumber:trackType"
+Example: "master:0:return"
 ```
+
+Child scripts parse this tag to determine which OSC paths to use.
 
 ### Testing Results
 - ✅ Return tracks successfully discovered and mapped
-- ✅ All controls working (volume, mute, pan)
-- ✅ OSC communication verified
+- ✅ All controls working bidirectionally
+- ✅ OSC data flow confirmed (logs show meter and dB values)
 - ✅ Multi-connection routing supported
+- ✅ No script errors
 
 ---
 
@@ -151,7 +161,7 @@ This is the first production release of ABL TouchOSC with complete multi-instanc
 ## Key Technical Achievements
 
 ### Return Track Support
-Successfully added return track support by forking AbletonOSC and implementing complete OSC control.
+Successfully added return track support using a unified architecture where the same scripts handle both track types through auto-detection.
 
 ### Multi-Connection Architecture
 Successfully implemented routing to control multiple Ableton instances from one TouchOSC interface with complete isolation.
@@ -176,7 +186,7 @@ Implemented principle that controls never change position based on assumptions.
 - Device parameter mapping
 - Scene launching capabilities
 - Debug level system for logging
-- Submit return track PR to upstream AbletonOSC
+- Submit unified return track approach to upstream AbletonOSC
 
 ---
 
