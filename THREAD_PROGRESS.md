@@ -2,118 +2,153 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Currently working on: Implementing auto-detection for return tracks
-- [x] Group initialization script updated with auto-detection (v1.14.0)
-- [ ] Waiting for: Updating child scripts (fader, mute, pan) to use auto-detection
-- [ ] Blocked by: Need to update all child scripts before testing
+- [x] Group init script updated with auto-detection (v1.14.0)
+- [ ] Currently working on: TESTING group auto-detection
+- [ ] Waiting for: Test results from group script
+- [ ] Blocked by: Need to verify auto-detection works before updating child scripts
 
 ## Implementation Status
-- Phase: IMPLEMENTATION IN PROGRESS
-- Step: Updating child scripts with auto-detection
-- Status: Group script complete, child scripts pending
+- Phase: TESTING GROUP SCRIPT
+- Step: Testing auto-detection in group_init.lua
+- Status: Need test results before proceeding
+
+## Testing Instructions for Group Script
+
+### Setup Required:
+1. Install forked AbletonOSC with return track support
+2. Create an Ableton project with:
+   - Regular tracks (e.g., "Drums", "Bass", "Lead")
+   - Return tracks (e.g., "Reverb", "Delay")
+3. Update TouchOSC template with new group_init.lua v1.14.0
+
+### Test Cases:
+
+#### Test 1: Regular Track Detection
+1. Create group named `band_Drums` (or any regular track name)
+2. Press refresh button
+3. **Expected logs:**
+   ```
+   Refreshing track mapping with auto-detection
+   Mapped to Regular Track [number]
+   ```
+4. **Expected behavior:**
+   - Status indicator turns green
+   - Controls enabled
+   - Tag shows: "band:[number]:track"
+
+#### Test 2: Return Track Detection  
+1. Create group named `band_Reverb` (or any return track name)
+2. Press refresh button
+3. **Expected logs:**
+   ```
+   Refreshing track mapping with auto-detection
+   Mapped to Return Track [number]
+   ```
+4. **Expected behavior:**
+   - Status indicator turns green
+   - Controls enabled
+   - Tag shows: "band:[number]:return"
+
+#### Test 3: Non-Existent Track
+1. Create group named `band_NonExistent`
+2. Press refresh button
+3. **Expected logs:**
+   ```
+   ERROR: Track not found: 'NonExistent' (checked both regular and return tracks)
+   ```
+4. **Expected behavior:**
+   - Status indicator stays red
+   - Controls remain disabled
+
+#### Test 4: Multiple Instances
+1. Create groups for both regular and return tracks
+2. Use different connections (band/master)
+3. Verify each maps to correct track type
+
+### What to Check:
+1. **OSC Messages** - Check TouchOSC console for:
+   - `/live/song/get/track_names` sent
+   - `/live/song/get/return_track_names` sent
+   - Correct listeners started (`/live/track/` vs `/live/return/`)
+
+2. **Visual Feedback**:
+   - Status indicators (red = unmapped, green = mapped)
+   - Track labels show correct names
+   - Controls enable/disable properly
+
+3. **Potential Issues to Watch**:
+   - Timing issues between queries
+   - Name matching problems
+   - Connection routing errors
+
+### Debug Tips:
+- Enable logging in TouchOSC console
+- Check for any script errors
+- Monitor OSC traffic to verify correct paths
 
 ## Implementation Progress
 
 ### ✅ Completed:
 1. **Updated group_init.lua (v1.14.0)**:
-   - Added trackType variable to store "track" or "return"
-   - Modified refreshTrackMapping() to query both track types
-   - Auto-detection logic implemented - searches regular tracks first, then return tracks
-   - Dynamic OSC path selection based on track type
-   - Added getTrackType() function for children to call
-   - Tag format now includes type: "instance:number:type"
+   - Added trackType variable
+   - Queries both track lists
+   - Auto-detection logic
+   - Dynamic OSC paths
+   - getTrackType() function
 
-### 🔄 In Progress:
-2. **Updating child scripts**:
-   - [ ] fader_script.lua - needs getTrackType() and dynamic OSC paths
-   - [ ] mute_button.lua - needs update
-   - [ ] pan_control.lua - needs update
-   - [ ] meter_script.lua - needs update
+### 🔄 Current Testing Focus:
+- Verify auto-detection works correctly
+- Check both regular and return tracks
+- Ensure proper OSC routing
+- Test error cases
 
-### ❌ Not Started:
-3. **Cleanup**:
-   - [ ] Remove `/scripts/return/` directory
-   - [ ] Update documentation
-   - [ ] Remove old return track examples
+### ❌ Pending (DO NOT START YET):
+- Update child scripts
+- Remove old return implementation
+- Update documentation
 
-## Auto-Detection Design (IMPLEMENTED)
-The solution now works as follows:
-1. User creates groups: `band_TrackName` or `master_TrackName`
-2. Group init queries both `/live/song/get/track_names` and `/live/song/get/return_track_names`
-3. Searches for exact name match in regular tracks first
-4. If not found, searches in return tracks
-5. Sets trackType = "track" or "return" accordingly
-6. Uses `/live/track/` or `/live/return/` OSC paths based on type
-7. Children call parent.getTrackType() to determine which OSC paths to use
+## Code to Monitor
 
-## Testing Status Matrix
-| Component | Implemented | Unit Tested | Integration Tested | Multi-Instance Tested | 
-|-----------|------------|-------------|--------------------|-----------------------|
-| AbletonOSC Fork | ✅ v1.0.0 | ❌ | ❌ | ❌ |
-| Group Auto-Detection | ✅ v1.14.0 | ❌ | ❌ | ❌ |
-| Fader Script | ❌ | ❌ | ❌ | ❌ |
-| Mute Script | ❌ | ❌ | ❌ | ❌ |
-| Pan Script | ❌ | ❌ | ❌ | ❌ |
+Key sections in group_init.lua to watch:
 
-## Last User Action
-- Date/Time: 2025-07-03 11:20
-- Action: Requested implementation of auto-detection
-- Result: Group script updated, child scripts pending
-- Next Required: Complete child script updates
-
-## Next Steps
-1. Update fader_script.lua to v2.4.0 with auto-detection
-2. Update mute_button.lua with track type detection
-3. Update pan_control.lua with track type detection
-4. Update meter_script.lua if exists
-5. Remove old `/scripts/return/` directory
-6. Test complete implementation
-7. Update all documentation
-
-## Code Changes Made
-
-### group_init.lua Changes:
-- Added `trackType` variable
-- Modified OSC listener paths based on type
-- Added `getTrackType()` function for children
-- Updated tag format to include type
-- Version bumped to 1.14.0
-
-### Expected Child Script Changes:
 ```lua
--- Get track type from parent
-local function getTrackType()
-    if self.parent and self.parent.getTrackType then
-        return self.parent.getTrackType()
-    end
-    return "track"  -- Default
-end
+-- Line ~311: Regular track detection
+if path == '/live/song/get/track_names' then
+    -- Should find regular tracks here
 
--- Use dynamic OSC paths
-local trackType = getTrackType()
+-- Line ~360: Return track detection  
+if path == '/live/song/get/return_track_names' then
+    -- Should find return tracks here
+
+-- Line ~275: OSC listener setup
+-- Should use correct prefix based on trackType
 local oscPrefix = trackType == "return" and "/live/return/" or "/live/track/"
-sendOSC(oscPrefix .. 'set/volume', trackNumber, value)
 ```
 
-## Files Modified
-- ✅ `/scripts/track/group_init.lua` - v1.14.0
-- ❌ `/scripts/track/fader_script.lua` - pending v2.4.0
-- ❌ `/scripts/track/mute_button.lua` - pending
-- ❌ `/scripts/track/pan_control.lua` - pending
+## Last User Action
+- Date/Time: 2025-07-03 11:30
+- Action: Requested to test group script first
+- Result: Ready for testing
+- Next Required: Test results and any needed fixes
 
-## Original Solution Components (TO BE REPLACED)
+## Next Steps
+1. **Test the group script thoroughly**
+2. **Fix any issues found**
+3. **Save state once working**
+4. **Then update child scripts**
 
-### 1. AbletonOSC Fork (KEEP THIS)
-- Repository: https://github.com/zbynekdrlik/AbletonOSC
-- The `/live/return/` endpoints are still needed
+## Notes for Testing
+- The script should be completely transparent
+- No special configuration needed
+- Just name groups normally
+- Auto-detection should "just work"
 
-### 2. Old Return Scripts (TO BE REMOVED)
-- `/scripts/return/` - Entire directory to be deleted after child updates
+## Expected Test Results
+Please provide:
+1. Log output from each test case
+2. Any error messages
+3. Observed behavior vs expected
+4. Any timing or sync issues
+5. OSC message flow
 
-### 3. Documentation (TO BE UPDATED)
-- Remove `return_` prefix requirement
-- Update to explain auto-detection
-- Simplify user instructions
-
-## Summary
-Auto-detection is partially implemented. The group script successfully detects track type and routes to correct OSC endpoints. Child scripts need updates to use the parent's track type information. Once complete, the system will be completely transparent to users - they just name groups normally and the scripts handle everything automatically.
+Once testing confirms the auto-detection works properly, we'll save this state and proceed with updating the child scripts.
