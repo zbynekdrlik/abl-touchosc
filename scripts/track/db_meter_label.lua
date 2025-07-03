@@ -1,11 +1,12 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.4.0
+-- Version: 2.5.0
+-- Added: Return track support using parent's trackType
 -- Shows actual peak dBFS level from track output meter
 -- Accurately calibrated to match Ableton Live's display
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "2.4.0"
+local VERSION = "2.5.0"
 
 -- State variables
 local lastDB = -70.0
@@ -77,26 +78,21 @@ end
 -- CONNECTION HELPERS
 -- ===========================
 
--- Get track number from parent group
-local function getTrackNumber()
-    -- Parent stores combined tag like "band:5"
-    if self.parent and self.parent.tag then
-        local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
-        if trackNum then
-            return tonumber(trackNum)
-        end
+-- Get track number and type from parent group
+local function getTrackInfo()
+    -- Parent stores track number and type
+    if self.parent then
+        local trackNumber = self.parent.trackNumber
+        local trackType = self.parent.trackType or "regular"  -- Default to regular if not set
+        return trackNumber, trackType
     end
-    return nil
+    return nil, nil
 end
 
 -- Check if track is properly mapped
 local function isTrackMapped()
-    if not self.parent or not self.parent.tag then
-        return false
-    end
-    
-    local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
-    return instance ~= nil and trackNum ~= nil
+    local trackNumber, trackType = getTrackInfo()
+    return trackNumber ~= nil
 end
 
 -- Get connection index for this instance
@@ -214,8 +210,23 @@ end
 -- ===========================
 
 function onReceiveOSC(message, connections)
-    -- Check if this is a meter message
-    if message[1] ~= '/live/track/get/output_meter_level' then
+    local path = message[1]
+    
+    -- Get track info from parent
+    local trackNumber, trackType = getTrackInfo()
+    if not trackNumber then
+        return false
+    end
+    
+    -- Check if this is a meter message for the correct track type
+    local isMeterMessage = false
+    if trackType == "return" and path == '/live/return/get/output_meter_level' then
+        isMeterMessage = true
+    elseif trackType == "regular" and path == '/live/track/get/output_meter_level' then
+        isMeterMessage = true
+    end
+    
+    if not isMeterMessage then
         return false
     end
     
@@ -234,9 +245,8 @@ function onReceiveOSC(message, connections)
     
     -- Check if this message is for our track
     local msgTrackNumber = arguments[1].value
-    local myTrackNumber = getTrackNumber()
     
-    if not myTrackNumber or msgTrackNumber ~= myTrackNumber then
+    if msgTrackNumber ~= trackNumber then
         return false
     end
     
@@ -261,8 +271,8 @@ function onReceiveOSC(message, connections)
     end
     
     if shouldLog then
-        log(string.format("Track %d: %s (meter: %.4f)%s", 
-            myTrackNumber, formatDB(db_value), meter_level,
+        log(string.format("%s track %d: %s (meter: %.4f)%s", 
+            trackType, trackNumber, formatDB(db_value), meter_level,
             db_value > 0 and " [CLIPPING]" or ""))
     end
     
