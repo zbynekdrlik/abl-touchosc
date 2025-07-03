@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.14.0
+-- Version: 1.14.1
 -- Auto-detects regular vs return tracks
 
 -- Version constant
-local SCRIPT_VERSION = "1.14.0"
+local SCRIPT_VERSION = "1.14.1"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -15,6 +15,7 @@ local trackNumber = nil
 local trackMapped = false
 local lastEnabledState = nil
 local trackType = nil  -- "track" or "return"
+local listenersActive = false  -- Track if listeners are active
 
 -- Activity tracking
 local lastSendTime = 0
@@ -95,7 +96,7 @@ local function updateStatusIndicator()
     local timeSinceReceive = currentTime - lastReceiveTime
     
     -- Check if mapped
-    if trackMapped and trackNumber then
+    if trackMapped and trackNumber ~= nil then
         indicator.visible = true
         
         -- Determine current state based on activity
@@ -125,6 +126,11 @@ local function updateStatusIndicator()
         -- Not mapped - red
         indicator.visible = true
         indicator.color = Color(1, 0, 0, 1)
+    end
+    
+    -- Force visual update
+    if indicator.update then
+        indicator:update()
     end
 end
 
@@ -174,7 +180,7 @@ local function setGroupEnabled(enabled, silent)
         end
     end
     
-    -- Update status indicator
+    -- Update status indicator immediately when enabling/disabling
     updateStatusIndicator()
     
     -- Only log if not silent
@@ -194,7 +200,7 @@ end
 
 -- Clear all OSC listeners for safety
 local function clearListeners()
-    if trackNumber and trackMapped then
+    if trackNumber ~= nil and trackMapped and listenersActive then
         local targetConnections = buildConnectionTable(connectionIndex)
         
         -- Stop listeners based on track type
@@ -205,6 +211,7 @@ local function clearListeners()
         sendOSC(oscPrefix .. 'stop_listen/mute', trackNumber, targetConnections)
         sendOSC(oscPrefix .. 'stop_listen/panning', trackNumber, targetConnections)
         
+        listenersActive = false
         log("Stopped listeners for " .. trackType .. " " .. trackNumber)
     end
 end
@@ -251,6 +258,9 @@ function init()
         end
     end
     
+    -- Initialize status indicator
+    updateStatusIndicator()
+    
     log("Ready - waiting for refresh")
 end
 
@@ -284,7 +294,7 @@ function onReceiveOSC(message, connections)
     local path = message[1]
     
     -- Check for meter or volume data (activity detection)
-    if trackMapped and trackNumber and trackType then
+    if trackMapped and trackNumber ~= nil and trackType then
         local oscPrefix = trackType == "return" and "/live/return/" or "/live/track/"
         
         -- Check for meter data
@@ -330,6 +340,9 @@ function onReceiveOSC(message, connections)
                             
                             setGroupEnabled(true)
                             
+                            -- Force immediate status update
+                            updateStatusIndicator()
+                            
                             -- Store combined info in tag
                             self.tag = instance .. ":" .. trackNumber .. ":track"
                             
@@ -345,6 +358,8 @@ function onReceiveOSC(message, connections)
                             sendOSC('/live/track/start_listen/output_meter_level', trackNumber, targetConnections)
                             sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
                             sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
+                            
+                            listenersActive = true
                             
                             return true
                         end
@@ -382,6 +397,9 @@ function onReceiveOSC(message, connections)
                             
                             setGroupEnabled(true)
                             
+                            -- Force immediate status update
+                            updateStatusIndicator()
+                            
                             -- Store combined info in tag
                             self.tag = instance .. ":" .. trackNumber .. ":return"
                             
@@ -398,6 +416,8 @@ function onReceiveOSC(message, connections)
                             sendOSC('/live/return/start_listen/mute', trackNumber, targetConnections)
                             sendOSC('/live/return/start_listen/panning', trackNumber, targetConnections)
                             
+                            listenersActive = true
+                            
                             return true
                         end
                     end
@@ -411,6 +431,9 @@ function onReceiveOSC(message, connections)
                 trackNumber = nil
                 trackType = nil
                 needsRefresh = false
+                
+                -- Force status update to show unmapped state
+                updateStatusIndicator()
                 
                 -- Notify children
                 notifyChildren("track_unmapped", nil)
@@ -429,6 +452,7 @@ function onReceiveNotify(action)
         trackMapped = false
         trackNumber = nil
         trackType = nil
+        listenersActive = false
     end
 end
 
