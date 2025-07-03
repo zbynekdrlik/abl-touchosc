@@ -2,38 +2,41 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Connection verified working (Connection 1)
-- [x] Regular tracks work correctly (0-8 for 9 tracks)
-- [ ] **CRITICAL ISSUE**: AbletonOSC does NOT expose return tracks!
-- [ ] Next: Investigate AbletonOSC source code to understand why
+- [x] Confirmed: AbletonOSC does NOT expose return tracks
+- [x] Root cause found in AbletonOSC source code
+- [ ] **BLOCKED**: Cannot proceed without modifying AbletonOSC
+- [ ] Need to decide on workaround or fork strategy
 
-## CRITICAL DISCOVERY - RETURN TRACKS NOT ACCESSIBLE
-**Test Results:**
-- `/live/song/get/num_tracks` returns 9 (only regular tracks)
-- `/live/song/get/num_return_tracks` - DOES NOT EXIST
-- Track indices 0-8 control the 9 regular tracks ✅
-- Track index 9+ gives "Index out of range" ❌
-- Return Track A exists in Ableton but is NOT accessible via OSC
-
-## The Core Problem
-Despite AbletonOSC documentation claiming it supports "audio, MIDI, return or master track", our testing shows:
-1. Only regular tracks are counted in `num_tracks`
-2. Return tracks are not accessible via extended indexing
-3. No dedicated return track API exists
+## CRITICAL DISCOVERY - ABLETONOSC LIMITATION CONFIRMED
+**Investigation Complete:**
+- AbletonOSC only counts regular tracks in `get_num_tracks`
+- No implementation of `song.return_tracks` access
+- Return tracks exist in Live API but not in AbletonOSC
+- Created/deleted return tracks are inaccessible after creation
 
 ## Implementation Status
 - Phase: 1 - Core Implementation
-- Step: BLOCKED - AbletonOSC limitation discovered
-- Status: Need to investigate AbletonOSC source code
+- Step: **CANNOT PROCEED** - External dependency issue
+- Status: Need to fork AbletonOSC or find alternative
 
-## Next Actions
-1. **Search AbletonOSC public repository**
-2. **Find why return tracks aren't exposed**
-3. **Determine if this is a bug or missing feature**
-4. **Look for workarounds or alternative approaches**
+## Root Cause Analysis
+From AbletonOSC source (`song.py` line 138):
+```python
+self.osc_server.add_handler("/live/song/get/num_tracks", 
+    lambda _: (len(self.song.tracks),))
+```
+This only returns regular tracks, not `self.song.return_tracks`.
 
-## Test Scripts Status
-All test scripts confirmed the issue - AbletonOSC doesn't expose return tracks as expected.
+## Options Moving Forward
+1. **Fork AbletonOSC** - Add return track support
+2. **File bug report** - Wait for official fix
+3. **Alternative OSC solution** - Find different implementation
+4. **Workaround** - Use regular tracks as returns
 
-## Key Learning
-Our initial assumption based on API documentation was wrong. The track API description mentions return tracks, but they're not actually accessible through the standard track indexing system.
+## Documentation Created
+- `docs/abletonosc-return-track-issue.md` - Complete investigation findings
+- All test scripts validated the limitation
+- Root cause identified in source code
+
+## Recommendation
+Cannot implement return track support in TouchOSC without first fixing AbletonOSC. This is an external dependency issue, not a TouchOSC limitation.
