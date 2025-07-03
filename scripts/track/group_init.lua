@@ -1,9 +1,10 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.14.3
+-- Version: 1.14.4
 -- Auto-detects regular vs return tracks
+-- Fixed: Track label now shows full track name instead of first word only
 
 -- Version constant
-local SCRIPT_VERSION = "1.14.3"
+local SCRIPT_VERSION = "1.14.4"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -242,15 +243,10 @@ function init()
     -- Update connection label if it exists
     updateConnectionLabel()
     
-    -- Initialize track label with the expected track name
+    -- Initialize track label with the full track name
     if self.children and self.children["track_label"] then
-        -- Use pattern match that captures only word characters
-        local displayName = trackName:match("(%w+)")
-        if displayName then
-            self.children["track_label"].values.text = displayName
-        else
-            self.children["track_label"].values.text = trackName
-        end
+        -- Just use the full track name, no pattern matching
+        self.children["track_label"].values.text = trackName
     end
     
     -- Initialize status indicator
