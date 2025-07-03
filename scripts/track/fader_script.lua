@@ -1,11 +1,12 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.3.5
+-- Version: 2.4.0
+-- Added: Return track support using parent's trackType
 -- Fixed: Never change fader position based on assumptions
 -- Added: Centralized logging and multi-connection routing
 -- Preserved: ALL original fader functionality
 
 -- Version constant
-local VERSION = "2.3.5"
+local VERSION = "2.4.0"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -155,28 +156,21 @@ local function buildConnectionTable(index)
     return connections
 end
 
--- Get track number from parent group
-local function getTrackNumber()
-    -- Parent stores combined tag like "band:5"
-    if self.parent and self.parent.tag then
-        local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
-        if trackNum then
-            return tonumber(trackNum)
-        end
+-- Get track number and type from parent group
+local function getTrackInfo()
+    -- Parent stores track number and type
+    if self.parent then
+        local trackNumber = self.parent.trackNumber
+        local trackType = self.parent.trackType or "regular"  -- Default to regular if not set
+        return trackNumber, trackType
     end
-    return nil
+    return nil, nil
 end
 
 -- Check if track is properly mapped
 local function isTrackMapped()
-    -- If parent doesn't have proper tag format, it's not mapped
-    if not self.parent or not self.parent.tag then
-        return false
-    end
-    
-    -- Check for instance:trackNumber format
-    local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
-    return instance ~= nil and trackNum ~= nil
+    local trackNumber, trackType = getTrackInfo()
+    return trackNumber ~= nil
 end
 
 -- ===========================
@@ -478,22 +472,31 @@ end
 -- ===========================
 
 function onReceiveOSC(message, connections)
-  -- THIS WAS THE BUG! The original fader expects arguments[1].value to be the track number
-  -- but we need to handle the original format
   local arguments = message[2]
+  local path = message[1]
   
-  -- For the original fader behavior, it was checking:
-  -- if arguments[1].value == tonumber(self.parent.tag) then
-  -- But now self.parent.tag is "band:39" not "39"
-  
-  -- So we need to extract just the track number from our tag
-  local myTrackNumber = getTrackNumber()
-  if not myTrackNumber then
+  -- Get track info from parent
+  local trackNumber, trackType = getTrackInfo()
+  if not trackNumber then
     return false
   end
   
-  -- Check if this message is for our track
-  if arguments[1].value == myTrackNumber then
+  -- Check if this message is for us based on path and track type
+  local isVolumeMessage = false
+  local receivedTrackNumber = nil
+  
+  if trackType == "return" and path == "/live/return/get/volume" then
+    -- Return track volume message
+    isVolumeMessage = true
+    receivedTrackNumber = arguments[1].value
+  elseif trackType == "regular" and path == "/live/track/get/volume" then
+    -- Regular track volume message
+    isVolumeMessage = true
+    receivedTrackNumber = arguments[1].value
+  end
+  
+  -- Process if it's our track
+  if isVolumeMessage and receivedTrackNumber == trackNumber then
     local remote_audio_value = arguments[2].value
     last_osc_audio = remote_audio_value
     
@@ -522,11 +525,10 @@ function onReceiveOSC(message, connections)
   return false  -- Don't block other receivers
 end
 
--- Send OSC with connection routing - FIXED TO INCLUDE ALL PARAMETERS
+-- Send OSC with connection routing
 local function sendOSCRouted(path, track, volume)
   local connectionIndex = getConnectionIndex()
   local connections = buildConnectionTable(connectionIndex)
-  -- CRITICAL FIX: Must send track AND volume as separate parameters
   sendOSC(path, track, volume, connections)
 end
 
@@ -557,9 +559,10 @@ function update()
           double_tap_animation_active = false
           debugPrint("*** DOUBLE-TAP ANIMATION COMPLETE (Already at target) ***")
           local final_audio = use_log_curve and linearToLog(double_tap_target_position) or double_tap_target_position
-          local trackNumber = getTrackNumber()
+          local trackNumber, trackType = getTrackInfo()
           if trackNumber then
-            sendOSCRouted('/live/track/set/volume', trackNumber, final_audio)
+            local path = trackType == "return" and '/live/return/set/volume' or '/live/track/set/volume'
+            sendOSCRouted(path, trackNumber, final_audio)
           end
           return
       end
@@ -576,9 +579,10 @@ function update()
           double_tap_animation_active = false
           debugPrint("*** DOUBLE-TAP ANIMATION COMPLETE (Snapped to target) ***")
           local final_audio = use_log_curve and linearToLog(double_tap_target_position) or double_tap_target_position
-          local trackNumber = getTrackNumber()
+          local trackNumber, trackType = getTrackInfo()
           if trackNumber then
-            sendOSCRouted('/live/track/set/volume', trackNumber, final_audio)
+            local path = trackType == "return" and '/live/return/set/volume' or '/live/track/set/volume'
+            sendOSCRouted(path, trackNumber, final_audio)
           end
       else
           -- Move towards target with constant speed
@@ -587,9 +591,10 @@ function update()
           
           -- Send OSC update
           local new_audio = use_log_curve and linearToLog(proposed_new_position) or proposed_new_position
-          local trackNumber = getTrackNumber()
+          local trackNumber, trackType = getTrackInfo()
           if trackNumber then
-            sendOSCRouted('/live/track/set/volume', trackNumber, new_audio)
+            local path = trackType == "return" and '/live/return/set/volume' or '/live/track/set/volume'
+            sendOSCRouted(path, trackNumber, new_audio)
           end
           
           debugPrint("*** DOUBLE-TAP ANIMATION (Constant Speed) ***")
@@ -720,13 +725,14 @@ function onValueChanged()
   end
   last_logged_position = scaled_fader_position
   
-  -- Send OSC with routing - FIXED TO SEND BOTH TRACK AND VOLUME
-  local trackNumber = getTrackNumber()
+  -- Send OSC with routing based on track type
+  local trackNumber, trackType = getTrackInfo()
   if trackNumber then
-    sendOSCRouted('/live/track/set/volume', trackNumber, audio_value)
+    local path = trackType == "return" and '/live/return/set/volume' or '/live/track/set/volume'
+    sendOSCRouted(path, trackNumber, audio_value)
     
     -- Volume change log ONLY in debug mode
-    debugPrint(string.format("Volume change for track %d: %.3f", trackNumber, scaled_fader_position))
+    debugPrint(string.format("Volume change for %s track %d: %.3f", trackType, trackNumber, scaled_fader_position))
   end
   
   -- TOUCH DETECTION WITH DEBUG
