@@ -1,9 +1,10 @@
 -- mute_button.lua
--- Version: 1.9.0
+-- Version: 1.9.1
+-- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
 -- Use root:notify for logger output
 
-local VERSION = "1.9.0"
+local VERSION = "1.9.1"
 
 -- Logging
 local function log(message)
@@ -21,11 +22,12 @@ end
 
 -- Get track number and type from parent group
 local function getTrackInfo()
-    -- Parent stores track number and type
-    if self.parent then
-        local trackNumber = self.parent.trackNumber
-        local trackType = self.parent.trackType or "regular"  -- Default to regular if not set
-        return trackNumber, trackType
+    -- Parent stores track info in tag as "instance:trackNumber:trackType"
+    if self.parent and self.parent.tag then
+        local instance, trackNum, trackType = self.parent.tag:match("^(%w+):(%d+):(%w+)$")
+        if trackNum and trackType then
+            return tonumber(trackNum), trackType
+        end
     end
     return nil, nil
 end
@@ -33,7 +35,7 @@ end
 -- Get expected connection index
 local function getConnectionIndex()
     if self.parent and self.parent.tag then
-        local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
+        local instance = self.parent.tag:match("^(%w+):")
         if instance then
             -- Find configuration
             local configObj = root:findByName("configuration", true)
@@ -81,7 +83,7 @@ function onReceiveOSC(message, connections)
     local isMuteMessage = false
     if trackType == "return" and path == '/live/return/get/mute' then
         isMuteMessage = true
-    elseif trackType == "regular" and path == '/live/track/get/mute' then
+    elseif (trackType == "regular" or trackType == "track") and path == '/live/track/get/mute' then
         isMuteMessage = true
     end
     
