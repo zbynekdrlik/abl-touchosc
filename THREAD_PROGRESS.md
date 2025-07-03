@@ -5,22 +5,29 @@
 - [x] Fixed AbletonOSC fork - listeners now fully implemented!
 - [x] Group init script v1.14.3 working perfectly
 - [x] Status indicators turn GREEN for both track types
-- [ ] Need user to reinstall AbletonOSC and test listeners
-- [ ] Ready to update child scripts after confirmation
+- [x] User confirmed AbletonOSC listeners work (no more errors!)
+- [x] All child scripts updated to support return tracks
+- [ ] Ready for full system testing with return tracks
 
-## Major Update: Fixed AbletonOSC Fork!
+## Major Update: ALL SCRIPTS UPDATED! 🎉
 
-### What I Fixed in AbletonOSC:
-1. **Added dedicated return track listener methods** that send responses to correct OSC paths
-2. **Fixed response addresses** - now uses `/live/return/get/*` instead of `/live/track/get/*`
-3. **Separated listener keys** to avoid conflicts between regular and return tracks
-4. **Full implementation** of all return track listeners (volume, pan, mute, meter, etc.)
+### What Was Just Completed:
+1. **Updated ALL child scripts to v2.4.0+** with return track support:
+   - fader_script.lua (v2.4.0) - Volume control with return track support
+   - meter_script.lua (v2.3.0) - Meter display with return track support
+   - mute_button.lua (v1.9.0) - Mute control with return track support
+   - pan_control.lua (v1.4.0) - Pan control with return track support
+   - db_meter_label.lua (v2.5.0) - dBFS display with return track support
+
+2. **All scripts now check parent's trackType** to determine regular vs return
+3. **All scripts route to correct OSC paths** based on track type
+4. **Unified approach maintained** - same connection, auto-detection works
 
 ### Next Steps for User:
-1. **Pull latest changes** from https://github.com/zbynekdrlik/AbletonOSC (feature/return-tracks-support branch)
-2. **Reinstall AbletonOSC** in Ableton
-3. **Restart Ableton Live**
-4. **Test return track listeners** - they should work without "Observer not connected" errors!
+1. **Test the complete system** with return tracks
+2. **Verify all controls work** - fader, meter, mute, pan, dB display
+3. **Check real-time updates** - parameters should update when changed in Ableton
+4. **Report any issues** with specific controls
 
 ## Current Status
 
@@ -28,27 +35,46 @@
 1. **Visual feedback** - Status indicators turn green when mapped
 2. **Track detection** - Both regular and return tracks detected correctly
 3. **Track mapping** - Both types map to correct indices
-4. **AbletonOSC fork** - Now has full return track support with listeners!
+4. **AbletonOSC fork** - Full return track support with listeners!
+5. **All control scripts** - Updated with return track support
 
-### 🔧 Needs Testing:
-1. **Return track listeners** - Should now work after AbletonOSC update
-2. **Real-time updates** - Faders/meters should update when changed in Ableton
+### 🔧 Ready for Testing:
+1. **Complete return track functionality** - All controls should work
+2. **Real-time parameter sync** - Faders/meters/mute/pan should update
+3. **Multi-instance support** - Multiple TouchOSC instances with returns
 
 ## Implementation Status
-- Phase: ABLETONOSC FIXED - READY FOR CHILD SCRIPT UPDATES
-- Step: Waiting for user to test updated AbletonOSC
-- Status: Core functionality complete, listeners fixed
+- Phase: FULL IMPLEMENTATION COMPLETE
+- Step: Ready for comprehensive testing
+- Status: All scripts updated, awaiting user testing
 
 ## Code Status
 
 ### ✅ Completed:
-1. **group_init.lua v1.14.3** - Fully working
+1. **group_init.lua v1.14.3** - Fully working with return tracks
 2. **AbletonOSC fork** - Return track listeners implemented
+3. **fader_script.lua v2.4.0** - Return track volume control
+4. **meter_script.lua v2.3.0** - Return track meter display
+5. **mute_button.lua v1.9.0** - Return track mute control
+6. **pan_control.lua v1.4.0** - Return track pan control
+7. **db_meter_label.lua v2.5.0** - Return track dBFS display
 
-### 🔧 Next After Testing:
-1. Update child scripts for return track support
-2. Remove old return track implementation
-3. Update documentation
+### 📝 Documentation Updates Needed:
+1. Update README with return track support announcement
+2. Document the unified approach (no separate scripts needed)
+3. Add return track setup instructions
+
+## Technical Details
+
+### How Return Tracks Work:
+1. **Parent group stores trackType** - "regular" or "return"
+2. **Child scripts check trackType** to determine OSC paths
+3. **Same connection used** - band/master instance determines connection
+4. **Auto-detection** - Group script queries both track types and maps correctly
+
+### OSC Path Differences:
+- Regular tracks: `/live/track/get/*` and `/live/track/set/*`
+- Return tracks: `/live/return/get/*` and `/live/return/set/*`
 
 ## Summary
-I've successfully fixed the AbletonOSC fork to properly support return track listeners. The "Observer not connected" errors should be gone once you update your AbletonOSC installation. After confirming this works, we can proceed with updating the child scripts.
+The return track implementation is now COMPLETE! All scripts have been updated to support both regular and return tracks using a unified approach. The AbletonOSC fork has been fixed with proper listener support. The system is ready for comprehensive testing with return tracks in a real Ableton Live session.
