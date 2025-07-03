@@ -3,53 +3,56 @@
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
 - [x] Created test scripts for return track discovery
-- [ ] Currently debugging: OSC timeout - fader not receiving responses
-- [ ] Waiting for: User to check connection settings and OSC receive patterns
-- [ ] Next: Fix connection issue, then test return track discovery
+- [x] Connection verified working (Connection 1)
+- [ ] Currently debugging: Index 9 gives "out of range" but user has Return Track A
+- [ ] Waiting for: User to run track_discovery_debug.lua
+- [ ] Next: Find why AbletonOSC doesn't see return tracks beyond index 8
 
 ## Implementation Status
 - Phase: 1 - Core Implementation
-- Step: Testing basic return track control
-- Status: BLOCKED - Debugging connection issue
+- Step: Debugging AbletonOSC track indexing
+- Status: INVESTIGATING - Return tracks not accessible at expected indices
+
+## NEW DISCOVERY - CRITICAL ISSUE
+User has:
+- 9 regular tracks (indices 0-8)
+- Return Track A exists in Ableton
+- BUT: Index 9 gives "Index out of range" error
+- This suggests AbletonOSC might not be exposing return tracks as expected
 
 ## Test Scripts Created
 1. **return_track_test_fader.lua v1.0.1**
    - Auto-discovers Return Track A
    - Extensive logging
-   - Double-tap to retry discovery
-   - **Issue**: Timeout - no OSC responses received
+   - ✅ Connection works, but needs correct index
 
-2. **connection_test.lua v1.0.0**
+2. **connection_test.lua v1.0.0** / **v2.0.0**
    - Tests connections 1-10 sequentially
-   - Tap to cycle through connections
-   - Shows which connection receives responses
+   - ✅ Confirmed Connection 1 works
 
 3. **simple_return_test.lua v1.0.0**
    - Direct control without discovery
    - Assumes Return A at index 6
-   - No waiting for responses
+   - Needs correct index to work
 
-## User Log Shows
+4. **track_discovery_debug.lua v1.0.0** (NEW)
+   - Queries total track count
+   - Lists all track names
+   - Will reveal actual track structure
+
+## User Test Results
 ```
-09:54:41.366 | Script version 1.0.0 loaded
-09:54:41.367 | Sending OSC: /live/song/get/num_tracks (connection 1)
-09:54:43.368 | WARNING: Query timeout - no response from Ableton
+Connection 1: ✅ WORKING
+Track indices 0-8: Control regular tracks 1-9
+Track index 9: ❌ "Index out of range" error
+Return Track A: Exists but index unknown
 ```
 
-## Troubleshooting Steps
-1. **Check OSC Receive Patterns** in TouchOSC Editor:
-   - `/live/song/get/num_tracks`
-   - `/live/track/get/name`
-   - `/live/track/get/volume`
-   - `/live/track/volume`
-
-2. **Test Connection Index**:
-   - Use connection_test.lua to find working connection
-   - Check configuration object for correct settings
-
-3. **Verify AbletonOSC**:
-   - Ensure AbletonOSC is running in Ableton
-   - Check Ableton preferences for OSC settings
+## Troubleshooting Progress
+1. ✅ OSC Connection verified working
+2. ✅ AbletonOSC is running and responding
+3. ❌ Return tracks not at expected indices
+4. ⏳ Need to run track_discovery_debug.lua
 
 ## Feature: Add Send/Return Track Control
 Enable control of Ableton's send/return tracks in addition to regular audio/MIDI tracks.
@@ -59,65 +62,43 @@ Enable control of Ableton's send/return tracks in addition to regular audio/MIDI
 - [x] 0.2 Test Script Development
 - [x] 0.3 Source Code Analysis - CONFIRMED: Extended indexing approach
 
-### Source Code Analysis Results
-1. **AbletonOSC DOES support return tracks**
-   - Track API explicitly mentions "audio, MIDI, return or master track"
-   - APIs exist: `/live/song/create_return_track` and `/live/song/delete_return_track`
-   
-2. **Return tracks use extended indexing**
-   - Same `/live/track/` commands as regular tracks
-   - Indices continue after regular tracks
-   - Example: 6 regular tracks (0-5), 2 returns (6-7), master (8)
-
-3. **Identification methods**
-   - Track names often contain "Return"
-   - Missing certain properties (input_routing_channel)
-   - Position in track list (after regular, before master)
-
-### Phase 1 In Progress
+### Phase 1 In Progress - BLOCKED
 - [x] Created test scripts
-- [ ] Debugging connection/routing issue
-- [ ] Waiting for user to verify OSC settings
-- [ ] Next: Test return track discovery once connection works
+- [x] Connection verified
+- [ ] **ISSUE**: Return tracks not accessible at expected indices
+- [ ] Investigating AbletonOSC behavior
+
+## Possible Explanations
+1. AbletonOSC might only report regular tracks in `/live/song/get/num_tracks`
+2. Return tracks might need different API calls
+3. There might be a configuration setting in AbletonOSC
+4. Bug in AbletonOSC with return track indexing
 
 ## Testing Status Matrix
 | Component | Created | Tested | Issue | Resolution |
 |-----------|---------|--------|-------|------------|
-| return_track_test_fader.lua v1.0.1 | ✅ | ❌ | OSC timeout | Pending |
-| connection_test.lua v1.0.0 | ✅ | ⏳ | - | Testing |
-| simple_return_test.lua v1.0.0 | ✅ | ⏳ | - | Testing |
-
-## Documentation Created
-- `docs/return-tracks-analysis.md` - Initial research findings
-- `docs/return-tracks-implementation-plan.md` - Technical implementation approach
-- `docs/return-tracks-phases.md` - Comprehensive 7-phase implementation plan
-
-## Scripts Created
-- `return_track_test.py` - Discovery script (no longer needed)
-- TouchOSC test functions - For manual testing if needed
+| Connection test | ✅ | ✅ | - | Connection 1 works |
+| Direct fader test | ✅ | ✅ | Index 9 out of range | Need correct index |
+| track_discovery_debug | ✅ | ⏳ | - | Waiting to run |
 
 ## Next Immediate Actions
-1. **User needs to:**
-   - Check OSC receive patterns are set in TouchOSC editor
-   - Run connection_test.lua to find working connection
-   - Verify AbletonOSC is running
+1. **User needs to run track_discovery_debug.lua**
+   - Will show total track count from AbletonOSC
+   - Will list all accessible track names
+   - Will reveal the actual structure
 
-2. **Once connection works:**
-   - Test return track discovery
-   - Verify volume control works
-   - Move to implementing in group_init.lua
+2. **Based on results, we'll either:**
+   - Find the correct index for return tracks
+   - Discover a different API for return tracks
+   - Identify a limitation in AbletonOSC
 
-## User Context
-User wants to control send/return tracks in Ableton. Created test scripts but hit connection issue - fader sends OSC but receives no responses.
-
-## Key Code Insights
-- Return tracks are part of the standard track list
-- No separate `/live/return/` namespace (unlike old LiveOSC)
-- All track commands work on return tracks
-- Track indices are continuous: regular → return → master
+## Key Discovery
+- Connection works ✅
+- Regular tracks work ✅
+- Return tracks exist but aren't where expected ❌
 
 ## Thread Handoff Notes
-- Test scripts created but blocked by connection issue
-- Need user to verify OSC setup
-- Once connection works, can proceed with discovery testing
-- Implementation approach confirmed: extended indexing
+- Connection issue resolved
+- New issue: Return tracks not at expected indices
+- track_discovery_debug.lua created to investigate
+- Waiting for debug results to determine next steps
