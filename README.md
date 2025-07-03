@@ -1,6 +1,6 @@
 # ABL TouchOSC Control Surface
 
-A professional TouchOSC control surface for Ableton Live with advanced multi-instance routing capabilities. Control multiple Ableton Live instances from a single interface with automatic track discovery and professional-grade controls.
+A professional TouchOSC control surface for Ableton Live with advanced multi-instance routing capabilities and full return track support. Control multiple Ableton Live instances from a single interface with automatic track discovery and professional-grade controls.
 
 ## 🎯 Key Features
 
@@ -9,6 +9,12 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 - **Automatic Track Discovery**: Tracks are discovered and mapped automatically on startup
 - **Dynamic Group Management**: Track groups auto-unfold based on configuration
 - **Complete Isolation**: Each instance operates independently without interference
+
+### Return Track Support (NEW!)
+- **Full Return Track Control**: Complete support for Ableton Live return tracks
+- **All Controls Available**: Volume, mute, pan, and metering for return tracks
+- **Automatic Discovery**: Return tracks are mapped by name just like regular tracks
+- **Requires**: [Forked AbletonOSC](https://github.com/zbynekdrlik/AbletonOSC/tree/feature/return-tracks-support) with return track support
 
 ### Professional Controls
 
@@ -46,26 +52,35 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 
 ### Prerequisites
 - TouchOSC (latest version)
-- Ableton Live with [AbletonOSC](https://github.com/ideoforms/AbletonOSC) installed
+- Ableton Live with AbletonOSC installed
+  - For return track support: Use the [forked version](https://github.com/zbynekdrlik/AbletonOSC/tree/feature/return-tracks-support)
 - Network connections configured in TouchOSC
 
 ### Installation
 
-1. **Download the TouchOSC template** from the releases page
-2. **Import into TouchOSC** via the editor
-3. **Configure your connections** in the configuration text control:
+1. **For Return Track Support** (optional):
+   - Download the [forked AbletonOSC](https://github.com/zbynekdrlik/AbletonOSC/tree/feature/return-tracks-support)
+   - Replace your existing AbletonOSC installation
+   - Restart Ableton Live
+
+2. **Download the TouchOSC template** from the releases page
+
+3. **Import into TouchOSC** via the editor
+
+4. **Configure your connections** in the configuration text control:
 
 ```yaml
 # Connection mapping
 connection_band: 2      # Band controls → Ableton instance on connection 2
 connection_master: 3    # Master controls → Ableton instance on connection 3
+connection_return: 1    # Return tracks → Ableton instance on connection 1
 
 # Auto-unfold groups
 unfold_band: 'Band'     # Unfold 'Band' group in band instance
 unfold_master: 'Master' # Unfold 'Master' group in master instance
 ```
 
-4. **Run the template** - tracks will be discovered automatically after 1 second!
+5. **Run the template** - tracks will be discovered automatically after 1 second!
 
 ## 📖 User Guide
 
@@ -78,6 +93,14 @@ Each track group contains:
 - **Level Meter**: Real-time level display
 - **Mute Button**: Toggle track mute
 - **Pan Control**: Stereo positioning
+
+### Return Track Controls
+
+Return track groups work identically to regular track groups but:
+- Use `return_` prefix in group names (e.g., `return_A-Reverb`)
+- Map to Ableton's return tracks by exact name matching
+- Support all the same controls as regular tracks
+- Use the `/live/return/` OSC namespace
 
 ### Automatic Features
 
@@ -103,19 +126,23 @@ The configuration text control accepts these parameters:
 | unfold_[instance] | Auto-unfold group name for instance | `unfold_band: 'Band'` |
 | unfold | Legacy: unfold on all connections | `unfold: 'Drums'` |
 
-### Advanced Setup
+### Return Track Setup
 
-For production use with multiple groups:
-1. Duplicate the track group in TouchOSC
-2. Rename with your desired identifier
-3. Groups will auto-map to available tracks
+1. Create a group with name `return_YourReturnTrackName`
+2. Add the return track scripts to controls:
+   - Group: `scripts/return/group_init.lua`
+   - Fader: `scripts/return/fader_script.lua`
+   - Mute: `scripts/return/mute_button.lua`
+   - Pan: `scripts/return/pan_control.lua`
+3. Configure connection: `connection_return: 1`
 
 ### Multi-Instance Example
 
 ```yaml
-# Two separate Ableton instances
+# Three separate connections
 connection_band: 2      # Band mix Ableton
 connection_master: 3    # Master mix Ableton
+connection_return: 1    # Main Ableton with returns
 
 # Different unfold groups per instance  
 unfold_band: 'Band'
@@ -130,6 +157,7 @@ The system uses a distributed script architecture:
 - **Document Script**: Central configuration and logging
 - **Group Scripts**: Track discovery and mapping
 - **Control Scripts**: Individual control behavior
+- **Return Scripts**: Specialized scripts for return track control
 - **Complete Isolation**: No shared variables between scripts
 
 ### Script Versions
@@ -138,12 +166,31 @@ The system uses a distributed script architecture:
 |--------|----------------|---------|
 | document_script.lua | 2.7.1 | Configuration, logging, auto-refresh |
 | group_init.lua | 1.9.6 | Track group management |
+| return/group_init.lua | 1.0.0 | Return track group management |
 | fader_script.lua | 2.3.5 | Volume control with scaling |
+| return/fader_script.lua | 1.0.0 | Return track volume control |
 | meter_script.lua | 2.2.2 | Level metering with calibration |
 | mute_button.lua | 1.8.0 | Mute state management |
+| return/mute_button.lua | 1.0.0 | Return track mute control |
 | pan_control.lua | 1.3.2 | Pan control with feedback |
+| return/pan_control.lua | 1.0.0 | Return track pan control |
 | db_label.lua | 1.0.1 | dB value display |
 | global_refresh_button.lua | 1.4.0 | Manual refresh trigger |
+
+### Return Track OSC Messages
+
+The forked AbletonOSC adds these endpoints:
+
+**Query Messages:**
+- `/live/song/get/num_return_tracks` - Get return track count
+- `/live/song/get/return_track_names` - Get return track names
+- `/live/song/get/return_track_data` - Get detailed return data
+
+**Control Messages:**
+- `/live/return/get/[property] [index]` - Get return track property
+- `/live/return/set/[property] [index] [value]` - Set return track property
+- `/live/return/start_listen/[property] [index]` - Start property listener
+- `/live/return/stop_listen/[property] [index]` - Stop property listener
 
 ### Key Technical Features
 
@@ -152,10 +199,16 @@ The system uses a distributed script architecture:
 - **Connection Filtering**: OSC messages filtered by connection
 - **State Machine Design**: Robust state tracking for all controls
 - **Professional dB Scaling**: Exact match to Ableton's fader curve
+- **Return Track Support**: Full control over Ableton's return tracks
 
-## 🛠️ Troubleshooting
+## 🔧 Troubleshooting
 
 ### Common Issues
+
+**Return tracks not working:**
+- Install the [forked AbletonOSC](https://github.com/zbynekdrlik/AbletonOSC/tree/feature/return-tracks-support)
+- Check return track names match exactly
+- Verify with: `/live/song/get/num_return_tracks`
 
 **Controls not responding:**
 - Check connection numbers in configuration
@@ -197,10 +250,11 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 - Built for professional audio workflows
 - Inspired by the need for sophisticated multi-instance control
+- Return track support added to fill a gap in AbletonOSC
 - Thanks to the TouchOSC and AbletonOSC communities
 
 ---
 
-**Current Status**: Production ready with automatic startup refresh and all core controls working perfectly. Ready for scaling to multiple track groups.
+**Current Status**: Production ready with automatic startup refresh, all core controls working perfectly, and full return track support. Ready for scaling to multiple track groups including returns.
 
 For development documentation and future plans, see the [docs](docs/) directory.
