@@ -2,6 +2,56 @@
 
 All notable changes to the ABL TouchOSC project are documented here.
 
+## [1.2.0] - 2025-07-03
+### Return Track Support Release 🎚️
+
+This release adds complete return track support to ABL TouchOSC, made possible by forking AbletonOSC to expose return tracks.
+
+### Major Changes
+
+#### AbletonOSC Fork Created
+- **Repository**: https://github.com/zbynekdrlik/AbletonOSC
+- **Branch**: feature/return-tracks-support
+- **PR**: https://github.com/zbynekdrlik/AbletonOSC/pull/2
+- Added complete return track support to AbletonOSC
+- New OSC endpoints for return track control
+
+#### Return Track Scripts Added
+- **return/group_init.lua [1.0.0]**: Return track group management
+- **return/fader_script.lua [1.0.0]**: Return track volume control
+- **return/mute_button.lua [1.0.0]**: Return track mute control
+- **return/pan_control.lua [1.0.0]**: Return track pan control
+
+#### Documentation
+- Added comprehensive return track documentation
+- Created template examples for return track setup
+- Updated README with return track support information
+
+### Features
+- **Full Return Track Control**: Volume, mute, pan, and metering
+- **Automatic Discovery**: Return tracks mapped by name matching
+- **Complete Integration**: Works with existing multi-instance routing
+- **All OSC Commands**: Query and control messages for return tracks
+
+### OSC Endpoints Added
+```
+/live/song/get/num_return_tracks
+/live/song/get/return_track_names
+/live/song/get/return_track_data
+/live/return/get/[property] [index]
+/live/return/set/[property] [index] [value]
+/live/return/start_listen/[property] [index]
+/live/return/stop_listen/[property] [index]
+```
+
+### Testing Results
+- ✅ Return tracks successfully discovered and mapped
+- ✅ All controls working (volume, mute, pan)
+- ✅ OSC communication verified
+- ✅ Multi-connection routing supported
+
+---
+
 ## [1.1.0] - 2025-06-29
 ### Enhancement Release
 
@@ -36,7 +86,7 @@ This is the first production release of ABL TouchOSC with complete multi-instanc
 
 ### Final Script Versions
 | Script | Version | Purpose |
-|--------|---------|---------|
+|--------|---------|---------|  
 | document_script.lua | 2.7.1 | Central management + auto refresh |
 | group_init.lua | 1.10.0 | Track group management |
 | fader_script.lua | 2.3.5 | Professional fader control |
@@ -100,6 +150,9 @@ This is the first production release of ABL TouchOSC with complete multi-instanc
 
 ## Key Technical Achievements
 
+### Return Track Support
+Successfully added return track support by forking AbletonOSC and implementing complete OSC control.
+
 ### Multi-Connection Architecture
 Successfully implemented routing to control multiple Ableton instances from one TouchOSC interface with complete isolation.
 
@@ -119,10 +172,11 @@ Implemented principle that controls never change position based on assumptions.
 ### Planned Enhancements
 - Additional track groups for full production scaling
 - Solo and record arm controls
-- Send level controls (A-D)
+- Send level controls (A-D) for both tracks and returns
 - Device parameter mapping
 - Scene launching capabilities
 - Debug level system for logging
+- Submit return track PR to upstream AbletonOSC
 
 ---
 
