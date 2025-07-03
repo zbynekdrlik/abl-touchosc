@@ -3,152 +3,116 @@
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
 - [x] Group init script updated with auto-detection (v1.14.0)
-- [ ] Currently working on: TESTING group auto-detection
-- [ ] Waiting for: Test results from group script
-- [ ] Blocked by: Need to verify auto-detection works before updating child scripts
+- [x] Currently testing group auto-detection
+- [x] Regular tracks working (go green when mapped)
+- [ ] Return tracks NOT working (stay red)
+- [ ] Waiting for: Debug logs to diagnose return track issue
+
+## Testing Results So Far
+
+### ✅ What Works:
+1. **Regular track detection** - `master_CG #` successfully maps and goes green
+2. **OSC patterns** - Group requires explicit patterns (no wildcards)
+3. **Track label** - Shows parsed track name from group name
+
+### ❌ What Doesn't Work:
+1. **Return track detection** - `master_Repro LR #` stays red, not mapping
+2. **TouchOSC wildcards** - `/live/*/get/*` pattern doesn't work
+
+## Key Findings
+
+### TouchOSC Pattern Requirements
+- **No wildcard support** in receive patterns
+- Must define explicit patterns
+- Required patterns for group (6 total):
+  ```
+  /live/song/get/track_names
+  /live/song/get/return_track_names
+  /live/track/get/output_meter_level
+  /live/track/get/volume
+  /live/return/get/output_meter_level
+  /live/return/get/volume
+  ```
+
+### Current Issue: Return Track Not Mapping
+**Symptoms:**
+- Regular track `master_CG #` → Maps correctly, goes green
+- Return track `master_Repro LR #` → Doesn't map, stays red
+
+**Possible Causes:**
+1. **Name mismatch** - Return track name in Ableton might be different
+2. **AbletonOSC fork** - Original version might be running instead of fork
+3. **OSC response** - `/live/song/get/return_track_names` might be empty
+4. **Script parsing** - Special characters in name might cause issues
+
+## Debug Steps Needed
+
+1. **Check exact return track name in Ableton**
+   - Often named like "A-Reverb" or "Return A"
+   - Must match exactly (case sensitive)
+
+2. **Verify in TouchOSC console:**
+   - Outgoing: `/live/song/get/return_track_names`
+   - Incoming: Should contain return track names
+   - Log messages from script
+
+3. **Verify AbletonOSC fork is installed:**
+   - Should be from: https://github.com/zbynekdrlik/AbletonOSC
+   - Branch: feature/return-tracks-support
+
+4. **Check for script errors:**
+   - Any errors in TouchOSC console
+   - Script version message
 
 ## Implementation Status
-- Phase: TESTING GROUP SCRIPT
-- Step: Testing auto-detection in group_init.lua
-- Status: Need test results before proceeding
+- Phase: TESTING AND DEBUGGING
+- Step: Diagnosing return track detection issue
+- Status: Regular tracks work, return tracks need fixing
 
-## Testing Instructions for Group Script
-
-### Setup Required:
-1. Install forked AbletonOSC with return track support
-2. Create an Ableton project with:
-   - Regular tracks (e.g., "Drums", "Bass", "Lead")
-   - Return tracks (e.g., "Reverb", "Delay")
-3. Update TouchOSC template with new group_init.lua v1.14.0
-
-### Test Cases:
-
-#### Test 1: Regular Track Detection
-1. Create group named `band_Drums` (or any regular track name)
-2. Press refresh button
-3. **Expected logs:**
-   ```
-   Refreshing track mapping with auto-detection
-   Mapped to Regular Track [number]
-   ```
-4. **Expected behavior:**
-   - Status indicator turns green
-   - Controls enabled
-   - Tag shows: "band:[number]:track"
-
-#### Test 2: Return Track Detection  
-1. Create group named `band_Reverb` (or any return track name)
-2. Press refresh button
-3. **Expected logs:**
-   ```
-   Refreshing track mapping with auto-detection
-   Mapped to Return Track [number]
-   ```
-4. **Expected behavior:**
-   - Status indicator turns green
-   - Controls enabled
-   - Tag shows: "band:[number]:return"
-
-#### Test 3: Non-Existent Track
-1. Create group named `band_NonExistent`
-2. Press refresh button
-3. **Expected logs:**
-   ```
-   ERROR: Track not found: 'NonExistent' (checked both regular and return tracks)
-   ```
-4. **Expected behavior:**
-   - Status indicator stays red
-   - Controls remain disabled
-
-#### Test 4: Multiple Instances
-1. Create groups for both regular and return tracks
-2. Use different connections (band/master)
-3. Verify each maps to correct track type
-
-### What to Check:
-1. **OSC Messages** - Check TouchOSC console for:
-   - `/live/song/get/track_names` sent
-   - `/live/song/get/return_track_names` sent
-   - Correct listeners started (`/live/track/` vs `/live/return/`)
-
-2. **Visual Feedback**:
-   - Status indicators (red = unmapped, green = mapped)
-   - Track labels show correct names
-   - Controls enable/disable properly
-
-3. **Potential Issues to Watch**:
-   - Timing issues between queries
-   - Name matching problems
-   - Connection routing errors
-
-### Debug Tips:
-- Enable logging in TouchOSC console
-- Check for any script errors
-- Monitor OSC traffic to verify correct paths
-
-## Implementation Progress
+## Code Status
 
 ### ✅ Completed:
-1. **Updated group_init.lua (v1.14.0)**:
-   - Added trackType variable
-   - Queries both track lists
-   - Auto-detection logic
-   - Dynamic OSC paths
-   - getTrackType() function
+1. **group_init.lua v1.14.0**:
+   - Auto-detection logic implemented
+   - Queries both track types
+   - Dynamic OSC routing
+   - Regular tracks working
 
-### 🔄 Current Testing Focus:
-- Verify auto-detection works correctly
-- Check both regular and return tracks
-- Ensure proper OSC routing
-- Test error cases
+### 🔧 Needs Investigation:
+- Why return track detection fails
+- OSC response for return track names
+- Exact name matching logic
 
-### ❌ Pending (DO NOT START YET):
-- Update child scripts
-- Remove old return implementation
-- Update documentation
-
-## Code to Monitor
-
-Key sections in group_init.lua to watch:
-
-```lua
--- Line ~311: Regular track detection
-if path == '/live/song/get/track_names' then
-    -- Should find regular tracks here
-
--- Line ~360: Return track detection  
-if path == '/live/song/get/return_track_names' then
-    -- Should find return tracks here
-
--- Line ~275: OSC listener setup
--- Should use correct prefix based on trackType
-local oscPrefix = trackType == "return" and "/live/return/" or "/live/track/"
-```
+### ❌ Pending:
+- Child script updates (waiting until group works)
+- Old return implementation removal
+- Documentation updates
 
 ## Last User Action
-- Date/Time: 2025-07-03 11:30
-- Action: Requested to test group script first
-- Result: Ready for testing
-- Next Required: Test results and any needed fixes
+- Date/Time: 2025-07-03 12:15
+- Action: Tested group with regular and return tracks
+- Result: Regular works, return doesn't
+- Next Required: Check debug logs and exact return track names
 
-## Next Steps
-1. **Test the group script thoroughly**
-2. **Fix any issues found**
-3. **Save state once working**
-4. **Then update child scripts**
+## Next Debugging Steps
+1. **Enable TouchOSC console logging**
+2. **Press refresh on return track group**
+3. **Capture:**
+   - Exact OSC messages sent/received
+   - Script log output
+   - Any error messages
+4. **Verify exact return track name in Ableton**
 
-## Notes for Testing
-- The script should be completely transparent
-- No special configuration needed
-- Just name groups normally
-- Auto-detection should "just work"
+## Technical Notes
+- Track label comes from group name (not OSC)
+- Pattern `(%w+)` in label parsing excludes special chars
+- Script should log track type when mapped
+- Status indicator: Red = unmapped, Green = mapped
 
-## Expected Test Results
-Please provide:
-1. Log output from each test case
-2. Any error messages
-3. Observed behavior vs expected
-4. Any timing or sync issues
-5. OSC message flow
+## Questions to Answer
+1. What does `/live/song/get/return_track_names` return?
+2. Is the return track name exactly `Repro LR #`?
+3. Are there any script errors in the console?
+4. Is the forked AbletonOSC definitely installed?
 
-Once testing confirms the auto-detection works properly, we'll save this state and proceed with updating the child scripts.
+Once we resolve the return track detection issue, we can proceed with updating child scripts.
