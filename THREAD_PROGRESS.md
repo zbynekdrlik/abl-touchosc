@@ -2,114 +2,118 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [ ] Currently working on: REDESIGNING return track implementation
-- [ ] Waiting for: Implementation of auto-detection approach
-- [ ] Blocked by: Need to implement unified track script approach
+- [x] Currently working on: Implementing auto-detection for return tracks
+- [x] Group initialization script updated with auto-detection (v1.14.0)
+- [ ] Waiting for: Updating child scripts (fader, mute, pan) to use auto-detection
+- [ ] Blocked by: Need to update all child scripts before testing
 
 ## Implementation Status
-- Phase: REDESIGN IN PROGRESS
-- Step: Architecture redesign based on auto-detection
-- Status: PLANNING - Design approach confirmed
+- Phase: IMPLEMENTATION IN PROGRESS
+- Step: Updating child scripts with auto-detection
+- Status: Group script complete, child scripts pending
 
-## CRITICAL ISSUE IDENTIFIED
-The previous implementation has fundamental design flaws:
-- ❌ Treats return tracks as separate connection type (`connection_return`)
-- ❌ Creates duplicate scripts in `/scripts/return/`
-- ❌ NOT TESTED - previous thread incorrectly marked as tested
-- ❌ Forces users to use `return_` prefix
+## Implementation Progress
 
-## NEW DESIGN APPROACH (CONFIRMED)
-**Automatic Track Type Detection:**
-1. User creates groups with standard naming: `band_TrackName` or `master_TrackName`
-2. Scripts automatically detect if track is regular or return by:
-   - Query `/live/song/get/track_names`
-   - Query `/live/song/get/return_track_names`
-   - Find where the track exists and set type accordingly
-3. Scripts use appropriate OSC paths based on detected type:
-   - Regular tracks: `/live/track/...`
-   - Return tracks: `/live/return/...`
-4. Completely transparent to users - they don't need to know track type
-5. Only requirement: No duplicate names between tracks and returns
+### ✅ Completed:
+1. **Updated group_init.lua (v1.14.0)**:
+   - Added trackType variable to store "track" or "return"
+   - Modified refreshTrackMapping() to query both track types
+   - Auto-detection logic implemented - searches regular tracks first, then return tracks
+   - Dynamic OSC path selection based on track type
+   - Added getTrackType() function for children to call
+   - Tag format now includes type: "instance:number:type"
 
-## Benefits of New Approach
-- ✅ No special prefixes needed
-- ✅ Works with existing templates
-- ✅ Uses same connection (band/master) for all tracks
-- ✅ Single set of scripts for all track types
-- ✅ User-friendly - no need to distinguish track types
+### 🔄 In Progress:
+2. **Updating child scripts**:
+   - [ ] fader_script.lua - needs getTrackType() and dynamic OSC paths
+   - [ ] mute_button.lua - needs update
+   - [ ] pan_control.lua - needs update
+   - [ ] meter_script.lua - needs update
 
-## Implementation Plan
-1. **Modify `/scripts/track/group_init.lua`**:
-   - Add return track name query
-   - Implement auto-detection logic
-   - Store track type internally
-   - Route to correct OSC paths
+### ❌ Not Started:
+3. **Cleanup**:
+   - [ ] Remove `/scripts/return/` directory
+   - [ ] Update documentation
+   - [ ] Remove old return track examples
 
-2. **Update child scripts**:
-   - `/scripts/track/fader_script.lua`
-   - `/scripts/track/mute_button.lua`
-   - `/scripts/track/pan_control.lua`
-   - All scripts check parent's track type
-
-3. **Remove old implementation**:
-   - Delete entire `/scripts/return/` directory
-   - Remove return-specific documentation
-
-4. **Update documentation**:
-   - Explain auto-detection
-   - Remove `return_` prefix instructions
-   - Update examples
+## Auto-Detection Design (IMPLEMENTED)
+The solution now works as follows:
+1. User creates groups: `band_TrackName` or `master_TrackName`
+2. Group init queries both `/live/song/get/track_names` and `/live/song/get/return_track_names`
+3. Searches for exact name match in regular tracks first
+4. If not found, searches in return tracks
+5. Sets trackType = "track" or "return" accordingly
+6. Uses `/live/track/` or `/live/return/` OSC paths based on type
+7. Children call parent.getTrackType() to determine which OSC paths to use
 
 ## Testing Status Matrix
 | Component | Implemented | Unit Tested | Integration Tested | Multi-Instance Tested | 
 |-----------|------------|-------------|--------------------|-----------------------|
 | AbletonOSC Fork | ✅ v1.0.0 | ❌ | ❌ | ❌ |
-| Auto-Detection | ❌ | ❌ | ❌ | ❌ |
-| Unified Scripts | ❌ | ❌ | ❌ | ❌ |
+| Group Auto-Detection | ✅ v1.14.0 | ❌ | ❌ | ❌ |
+| Fader Script | ❌ | ❌ | ❌ | ❌ |
+| Mute Script | ❌ | ❌ | ❌ | ❌ |
+| Pan Script | ❌ | ❌ | ❌ | ❌ |
 
 ## Last User Action
-- Date/Time: 2025-07-03 11:15
-- Action: Confirmed auto-detection design approach
-- Result: Ready to implement unified track scripts
-- Next Required: Store state and begin implementation
+- Date/Time: 2025-07-03 11:20
+- Action: Requested implementation of auto-detection
+- Result: Group script updated, child scripts pending
+- Next Required: Complete child script updates
 
 ## Next Steps
-1. Implement auto-detection in group_init.lua
-2. Update all child scripts to use parent's track type
-3. Remove old return track implementation
-4. Test with both regular and return tracks
-5. Update all documentation
+1. Update fader_script.lua to v2.4.0 with auto-detection
+2. Update mute_button.lua with track type detection
+3. Update pan_control.lua with track type detection
+4. Update meter_script.lua if exists
+5. Remove old `/scripts/return/` directory
+6. Test complete implementation
+7. Update all documentation
 
-## Implementation Notes
-- Track type stored in group's tag or script variable
-- Child scripts access parent's track type
-- All OSC paths dynamically built based on type
-- Maintain backward compatibility for existing templates
+## Code Changes Made
+
+### group_init.lua Changes:
+- Added `trackType` variable
+- Modified OSC listener paths based on type
+- Added `getTrackType()` function for children
+- Updated tag format to include type
+- Version bumped to 1.14.0
+
+### Expected Child Script Changes:
+```lua
+-- Get track type from parent
+local function getTrackType()
+    if self.parent and self.parent.getTrackType then
+        return self.parent.getTrackType()
+    end
+    return "track"  -- Default
+end
+
+-- Use dynamic OSC paths
+local trackType = getTrackType()
+local oscPrefix = trackType == "return" and "/live/return/" or "/live/track/"
+sendOSC(oscPrefix .. 'set/volume', trackNumber, value)
+```
+
+## Files Modified
+- ✅ `/scripts/track/group_init.lua` - v1.14.0
+- ❌ `/scripts/track/fader_script.lua` - pending v2.4.0
+- ❌ `/scripts/track/mute_button.lua` - pending
+- ❌ `/scripts/track/pan_control.lua` - pending
 
 ## Original Solution Components (TO BE REPLACED)
 
 ### 1. AbletonOSC Fork (KEEP THIS)
 - Repository: https://github.com/zbynekdrlik/AbletonOSC
-- Branch: feature/return-tracks-support
-- PR: https://github.com/zbynekdrlik/AbletonOSC/pull/2
-- **STATUS: Fork is valid, TouchOSC implementation needs redesign**
+- The `/live/return/` endpoints are still needed
 
-### 2. TouchOSC Scripts Created (TO BE REMOVED)
-- `scripts/return/` - Entire directory to be deleted
-- Wrong approach using separate connection
+### 2. Old Return Scripts (TO BE REMOVED)
+- `/scripts/return/` - Entire directory to be deleted after child updates
 
 ### 3. Documentation (TO BE UPDATED)
-- Remove references to `connection_return`
 - Remove `return_` prefix requirement
 - Update to explain auto-detection
+- Simplify user instructions
 
-## Summary of Redesign
-
-The return track support will be reimplemented through:
-
-1. **Keep AbletonOSC fork** - The `/live/return/` endpoints are still needed
-2. **Unify track scripts** - Single set of scripts for all track types
-3. **Auto-detection** - Scripts automatically determine track type
-4. **Transparent to users** - No special naming or configuration needed
-
-This maintains the goal of return track support while fixing the architectural issues.
+## Summary
+Auto-detection is partially implemented. The group script successfully detects track type and routes to correct OSC endpoints. Child scripts need updates to use the parent's track type information. Once complete, the system will be completely transparent to users - they just name groups normally and the scripts handle everything automatically.
