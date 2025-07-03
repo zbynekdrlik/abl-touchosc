@@ -2,63 +2,53 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Group init script v1.14.3 - all major issues fixed
-- [x] Status indicators turn GREEN for both track types ✅
-- [x] Both regular and return tracks mapping successfully
-- [x] Fixed db_label naming issue
-- [ ] Ready to update child scripts for return track support
+- [x] Fixed AbletonOSC fork - listeners now fully implemented!
+- [x] Group init script v1.14.3 working perfectly
+- [x] Status indicators turn GREEN for both track types
+- [ ] Need user to reinstall AbletonOSC and test listeners
+- [ ] Ready to update child scripts after confirmation
 
-## Latest Status
+## Major Update: Fixed AbletonOSC Fork!
+
+### What I Fixed in AbletonOSC:
+1. **Added dedicated return track listener methods** that send responses to correct OSC paths
+2. **Fixed response addresses** - now uses `/live/return/get/*` instead of `/live/track/get/*`
+3. **Separated listener keys** to avoid conflicts between regular and return tracks
+4. **Full implementation** of all return track listeners (volume, pan, mute, meter, etc.)
+
+### Next Steps for User:
+1. **Pull latest changes** from https://github.com/zbynekdrlik/AbletonOSC (feature/return-tracks-support branch)
+2. **Reinstall AbletonOSC** in Ableton
+3. **Restart Ableton Live**
+4. **Test return track listeners** - they should work without "Observer not connected" errors!
+
+## Current Status
 
 ### ✅ What's Working:
 1. **Visual feedback** - Status indicators turn green when mapped
 2. **Track detection** - Both regular and return tracks detected correctly
 3. **Track mapping** - Both types map to correct indices
-4. **Core functionality** - Groups enable controls when mapped
+4. **AbletonOSC fork** - Now has full return track support with listeners!
 
-### ⚠️ Minor Issues:
-1. **Observer errors for return tracks** - AbletonOSC fork may not fully support return track listeners yet
-   - This doesn't prevent mapping or basic functionality
-   - May be a limitation of current fork implementation
+### 🔧 Needs Testing:
+1. **Return track listeners** - Should now work after AbletonOSC update
+2. **Real-time updates** - Faders/meters should update when changed in Ableton
 
 ## Implementation Status
-- Phase: GROUP SCRIPT COMPLETE - READY FOR CHILD UPDATES
-- Step: Group auto-detection working, proceed to child scripts
-- Status: Core group functionality complete and tested
+- Phase: ABLETONOSC FIXED - READY FOR CHILD SCRIPT UPDATES
+- Step: Waiting for user to test updated AbletonOSC
+- Status: Core functionality complete, listeners fixed
 
 ## Code Status
 
 ### ✅ Completed:
-1. **group_init.lua v1.14.3**:
-   - Auto-detection working perfectly
-   - Visual indicators working
-   - Fixed all script errors
-   - Ready for production
+1. **group_init.lua v1.14.3** - Fully working
+2. **AbletonOSC fork** - Return track listeners implemented
 
-### 🔧 Next: Update Child Scripts
-Need to update these scripts to support return tracks:
-1. **fader_script.lua** - Add return track OSC paths
-2. **meter_script.lua** - Add return track meter support
-3. **mute_button.lua** - Add return track mute support
-4. **pan_control.lua** - Add return track pan support
-5. **db_label.lua** - Update for return tracks
-6. **db_meter_label.lua** - Already supports via parent
-
-## Version History
-- v1.14.0 - Initial auto-detection implementation
-- v1.14.1 - Fixed Observer errors, added update() calls (regression)
-- v1.14.2 - Fixed regression, removed invalid update() calls
-- v1.14.3 - Fixed db_label naming issue (db_label -> db)
-
-## Next Steps
-1. **Update fader_script.lua** to support return tracks
-2. **Update meter_script.lua** for return track meters
-3. **Update mute_button.lua** for return track mute
-4. **Update pan_control.lua** for return track pan
-5. **Update db_label.lua** for return tracks
-6. **Test all controls with return tracks**
-7. **Remove old return track implementation**
-8. **Update documentation**
+### 🔧 Next After Testing:
+1. Update child scripts for return track support
+2. Remove old return track implementation
+3. Update documentation
 
 ## Summary
-Group script is now fully functional. Status indicators turn green for both track types. Ready to proceed with updating child scripts to complete return track support.
+I've successfully fixed the AbletonOSC fork to properly support return track listeners. The "Observer not connected" errors should be gone once you update your AbletonOSC installation. After confirming this works, we can proceed with updating the child scripts.
