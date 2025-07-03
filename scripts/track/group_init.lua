@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.14.2
+-- Version: 1.14.3
 -- Auto-detects regular vs return tracks
 
 -- Version constant
-local SCRIPT_VERSION = "1.14.2"
+local SCRIPT_VERSION = "1.14.3"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -163,8 +163,8 @@ local function setGroupEnabled(enabled, silent)
     
     local childCount = 0
     
-    -- Only check for controls we know exist
-    local controlsToCheck = {"fader", "mute", "pan", "meter", "track_label", "db_label"}
+    -- Only check for controls we know exist (fixed db_label -> db)
+    local controlsToCheck = {"fader", "mute", "pan", "meter", "track_label", "db"}
     
     for _, name in ipairs(controlsToCheck) do
         local child = getChild(self, name)
@@ -213,8 +213,8 @@ end
 
 -- Notify specific children about events
 local function notifyChildren(event, value)
-    -- Notify specific children we know about
-    local childrenToNotify = {"fader", "mute", "pan", "meter", "db_label"}
+    -- Notify specific children we know about (fixed db_label -> db)
+    local childrenToNotify = {"fader", "mute", "pan", "meter", "db"}
     
     for _, name in ipairs(childrenToNotify) do
         local child = getChild(self, name)
