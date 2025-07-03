@@ -1,12 +1,13 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.4.0
+-- Version: 2.4.1
+-- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
 -- Fixed: Never change fader position based on assumptions
 -- Added: Centralized logging and multi-connection routing
 -- Preserved: ALL original fader functionality
 
 -- Version constant
-local VERSION = "2.4.0"
+local VERSION = "2.4.1"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -115,9 +116,9 @@ end
 
 -- Get connection configuration (read directly from config text)
 local function getConnectionIndex()
-    -- Check if parent has tag with instance:trackNumber format
+    -- Check if parent has tag with instance:trackNumber:trackType format
     if self.parent and self.parent.tag then
-        local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
+        local instance = self.parent.tag:match("^(%w+):")
         if instance then
             -- Find configuration object
             local configObj = root:findByName("configuration", true)
@@ -158,11 +159,12 @@ end
 
 -- Get track number and type from parent group
 local function getTrackInfo()
-    -- Parent stores track number and type
-    if self.parent then
-        local trackNumber = self.parent.trackNumber
-        local trackType = self.parent.trackType or "regular"  -- Default to regular if not set
-        return trackNumber, trackType
+    -- Parent stores track info in tag as "instance:trackNumber:trackType"
+    if self.parent and self.parent.tag then
+        local instance, trackNum, trackType = self.parent.tag:match("^(%w+):(%d+):(%w+)$")
+        if trackNum and trackType then
+            return tonumber(trackNum), trackType
+        end
     end
     return nil, nil
 end
@@ -489,7 +491,7 @@ function onReceiveOSC(message, connections)
     -- Return track volume message
     isVolumeMessage = true
     receivedTrackNumber = arguments[1].value
-  elseif trackType == "regular" and path == "/live/track/get/volume" then
+  elseif (trackType == "regular" or trackType == "track") and path == "/live/track/get/volume" then
     -- Regular track volume message
     isVolumeMessage = true
     receivedTrackNumber = arguments[1].value
