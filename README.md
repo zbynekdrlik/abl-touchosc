@@ -47,6 +47,7 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 - Reliable state tracking with feedback prevention
 - Visual-only state indication (no text)
 - Touch detection for responsive control
+- **Note**: Requires OSC receive patterns in template (see Troubleshooting)
 
 #### Pan Control
 - Smooth panning with visual feedback
@@ -58,6 +59,7 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 - Shows current fader position in dB
 - Displays "-inf" at minimum
 - Shows "-" when track unmapped
+- Continuous updates with volume listener
 
 ## 🚀 Quick Start
 
@@ -102,6 +104,7 @@ Each track group contains:
 - **Volume Fader**: Professional fader with dB scaling
 - **dB Display**: Current volume in dB
 - **Level Meter**: Real-time level display with peak colors
+- **dBFS Display**: Peak meter values in dBFS
 - **Mute Button**: Toggle track mute
 - **Pan Control**: Stereo positioning
 
@@ -180,19 +183,19 @@ The system uses a unified script architecture:
 - **Complete Isolation**: No shared variables between scripts
 - **Performance Optimized**: Scheduled updates instead of continuous polling
 
-### Script Versions
+### Script Versions (v1.3.1)
 
-| Script | Current Version | Purpose | Optimization |
-|--------|----------------|---------|--------------|
-| document_script.lua | 2.7.2 | Configuration, auto-refresh | Logger removed |
-| group_init.lua | 1.15.1 | Track group with auto-detection | 100ms scheduled updates |
-| fader_script.lua | 2.5.3 | Volume control for all track types | Position stability fix |
-| meter_script.lua | 2.4.0 | Level metering unified | 50ms scheduled updates |
-| mute_button.lua | 1.9.1 | Mute control unified | - |
-| pan_control.lua | 1.4.2 | Pan control unified | Position stability fix |
-| db_label.lua | 1.2.0 | dB display unified | - |
-| db_meter_label.lua | 2.5.1 | Peak meter unified | - |
-| global_refresh_button.lua | 1.4.0 | Manual refresh trigger | - |
+| Script | Current Version | Purpose | Latest Fix |
+|--------|----------------|---------|------------|
+| document_script.lua | 2.7.4 | Configuration, auto-refresh | - |
+| group_init.lua | 1.15.9 | Track group with auto-detection | - |
+| fader_script.lua | 2.6.0 | Volume control for all track types | Sync delay removed |
+| meter_script.lua | 2.5.6 | Level metering unified | OSC format fix |
+| mute_button.lua | 2.0.2 | Mute control unified | Added notify handler |
+| pan_control.lua | 1.4.2 | Pan control unified | - |
+| db_label.lua | 1.3.2 | dB display unified | Volume listener added |
+| db_meter_label.lua | 2.6.1 | Peak meter unified | OSC format fix |
+| global_refresh_button.lua | 1.5.1 | Manual refresh trigger | - |
 
 ### Performance Improvements (v1.3.0)
 
@@ -256,6 +259,14 @@ The forked AbletonOSC adds these endpoints:
 
 ### Common Issues
 
+**Mute buttons not syncing from Ableton (v1.3.1):**
+- The template needs OSC receive patterns configured for mute buttons
+- In TouchOSC Editor, select each mute button:
+  - Add receive pattern: `/live/track/get/mute` (regular tracks)
+  - Add receive pattern: `/live/return/get/mute` (return tracks)
+- Save and reload the template
+- This is a one-time template configuration
+
 **Controls jumping to wrong positions:**
 - Fixed in v1.3.0 - update to latest scripts
 - Faders no longer jump to 0 when disconnected
@@ -315,6 +326,6 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 ---
 
-**Current Status**: v1.3.0 - Production ready with full return track support and performance optimizations. Controls maintain position stability when disconnected.
+**Current Status**: v1.3.1 - Production ready with full return track support and performance optimizations. All controls stable except mute buttons need OSC patterns configured in template (see Troubleshooting).
 
 For development documentation and future plans, see the [docs](docs/) directory.
