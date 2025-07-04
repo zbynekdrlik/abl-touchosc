@@ -1,13 +1,13 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.8.0
+-- Version: 2.8.1
 -- Purpose: Main document script with configuration and track management
--- Changed: Removed centralized logging - each script logs independently
+-- Changed: Standardized DEBUG flag (uppercase) and disabled by default
 
-local VERSION = "2.8.0"
+local VERSION = "2.8.1"
 local SCRIPT_NAME = "Document Script"
 
 -- Debug flag - set to 1 to enable logging
-local debug = 1
+local DEBUG = 0
 
 -- Configuration storage
 local config = {
@@ -25,7 +25,7 @@ local STARTUP_DELAY_FRAMES = 60  -- Wait 1 second (60 frames at 60fps)
 
 -- === LOCAL LOGGING FUNCTION ===
 local function log(message)
-    if debug == 1 then
+    if DEBUG == 1 then
         print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. ": " .. message)
     end
 end
