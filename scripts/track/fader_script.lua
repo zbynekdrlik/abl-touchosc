@@ -1,18 +1,17 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.6.4
--- Fixed: All boolean concat errors in debug logging
--- Fixed: Don't send volume changes during onValueChanged - breaks feedback loop
--- Based on main branch v2.4.1 with performance optimizations
+-- Version: 2.7.0
+-- Performance optimizations: Removed logging overhead, scheduled updates, proper debug guards
+-- Based on v2.6.4 with Phase 1 optimizations implemented
 
 -- Version constant
-local VERSION = "2.6.4"
+local VERSION = "2.7.0"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
 -- ===========================
 
 -- DEBUG CONTROL: Set to 1 to enable all logging, 0 to disable completely
-local DEBUG = 1  -- Enabled for testing
+local DEBUG = 0  -- Disabled for production performance
 
 -- GRADUAL FIRST MOVEMENT SCALING SETTINGS
 local ENABLE_FIRST_MOVEMENT_SCALING = true
@@ -51,6 +50,10 @@ local log_exponent = 0.515
 -- OSC SYNC SETTINGS
 local delay = 1000                       -- Delay before syncing to OSC position after touch release
 
+-- PERFORMANCE: Scheduled update settings
+local UPDATE_INTERVAL = 100             -- Update interval in milliseconds (10 Hz instead of 60 Hz)
+local last_update_time = 0              -- Track last update time
+
 -- State variables (do not modify)
 local touched = false
 local last_osc_x = 0
@@ -81,35 +84,30 @@ local double_tap_target_position = 0
 local double_tap_start_position = 0
 
 -- ===========================
--- CENTRALIZED LOGGING
+-- OPTIMIZED LOGGING
 -- ===========================
 
--- Centralized logging through document script
-local function log(message)
+-- PERFORMANCE: Proper debug guard with early return
+local function debugPrint(...)
+    -- EARLY RETURN - no work if DEBUG is off
+    if DEBUG ~= 1 then return end
+    
+    -- Only do string operations if debug is enabled
+    local args = {...}
+    local msg = ""
+    for i, v in ipairs(args) do
+        if i > 1 then msg = msg .. " " end
+        msg = msg .. tostring(v)
+    end
+    
     -- Get parent name for context
     local context = "FADER"
     if self.parent and self.parent.name then
         context = "FADER(" .. self.parent.name .. ")"
     end
     
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
-    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
-end
-
--- DEBUG PRINT FUNCTION (modified to use centralized logging)
-function debugPrint(...)
-  if DEBUG == 1 then
-    local args = {...}
-    local msg = ""
-    for i, v in ipairs(args) do
-        if i > 1 then msg = msg .. " " end
-        msg = msg .. tostring(v)  -- Convert everything to string, including booleans
-    end
-    log(msg)
-  end
+    -- PERFORMANCE: Only print to console, no notify() overhead
+    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. msg)
 end
 
 -- ===========================
@@ -537,6 +535,18 @@ local function sendOSCRouted(path, track, volume)
 end
 
 function update()
+  -- PERFORMANCE: Early exit if nothing to update
+  if not double_tap_animation_active and synced then
+    return  -- Nothing to do
+  end
+  
+  -- PERFORMANCE: Scheduled updates instead of every frame
+  local current_time = getMillis()
+  if current_time - last_update_time < UPDATE_INTERVAL then
+    return  -- Not time to update yet
+  end
+  last_update_time = current_time
+  
   -- Handle double-tap animation (only if enabled)
   if ENABLE_DOUBLE_TAP and double_tap_animation_active then
     if self.values.touch then
@@ -571,7 +581,8 @@ function update()
           return
       end
 
-      local step_size = DOUBLE_TAP_ANIMATION_SPEED
+      -- PERFORMANCE: Adjust step size for scheduled updates
+      local step_size = DOUBLE_TAP_ANIMATION_SPEED * (UPDATE_INTERVAL / 16.67)  -- Scale for update rate
       local proposed_new_position = current_pos + (direction * step_size)
 
       -- Check if the proposed new position overshoots the target
@@ -860,16 +871,17 @@ end
 
 -- VERIFICATION
 function init()
-  -- Log version with centralized logging
-  log("Script v" .. VERSION .. " loaded")
+  -- Log version (console only when DEBUG=1)
+  print("[" .. os.date("%H:%M:%S") .. "] FADER: Script v" .. VERSION .. " loaded")
   
   -- Log parent info
   if self.parent and self.parent.name then
-    log("Initialized for parent: " .. self.parent.name)
+    print("[" .. os.date("%H:%M:%S") .. "] FADER: Initialized for parent: " .. self.parent.name)
   end
   
-  debugPrint("=== PROFESSIONAL FADER WITH IMMEDIATE 0.1dB RESPONSE ===")
+  debugPrint("=== PROFESSIONAL FADER WITH PERFORMANCE OPTIMIZATIONS ===")
   debugPrint("DEBUG MODE:", DEBUG == 1 and "ENABLED" or "DISABLED")
+  debugPrint("Update rate:", UPDATE_INTERVAL, "ms (", 1000/UPDATE_INTERVAL, "Hz)")
   debugPrint("Gradual movement scaling:", ENABLE_FIRST_MOVEMENT_SCALING and "ENABLED" or "DISABLED")
   if ENABLE_FIRST_MOVEMENT_SCALING then
     debugPrint("- Scaled movements count:", SCALED_MOVEMENTS_COUNT)
