@@ -1,10 +1,8 @@
 -- TouchOSC Meter Script with Multi-Connection Support
--- Version: 2.3.1
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Added: Return track support using parent's trackType
--- Fixed: Debug mode off, removed connection index logging issue
+-- Version: 2.3.2
+-- Changed: Removed centralized logging - using local print only
 
-local VERSION = "2.3.1"
+local VERSION = "2.3.2"
 
 -- DEBUG MODE
 local DEBUG = 0  -- Set to 1 to see meter values and conversions in console
@@ -49,10 +47,6 @@ local function log(message)
         context = "METER(" .. self.parent.name .. ")"
     end
     
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 

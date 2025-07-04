@@ -1,13 +1,9 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.5.1
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Added: Return track support using parent's trackType
--- Shows actual peak dBFS level from track output meter
--- Accurately calibrated to match Ableton Live's display
--- Multi-connection routing support
+-- Version: 2.5.2
+-- Changed: Removed centralized logging - using local print only
 
 -- Version constant
-local VERSION = "2.5.1"
+local VERSION = "2.5.2"
 
 -- State variables
 local lastDB = -70.0
@@ -52,7 +48,7 @@ local METER_DB_CALIBRATION = {
 }
 
 -- ===========================
--- CENTRALIZED LOGGING
+-- LOCAL LOGGING
 -- ===========================
 
 local function log(message)
@@ -62,10 +58,6 @@ local function log(message)
         context = "dBFS(" .. self.parent.name .. ")"
     end
     
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 

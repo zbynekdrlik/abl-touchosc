@@ -1,13 +1,9 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.4.1
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Added: Return track support using parent's trackType
--- Fixed: Never change fader position based on assumptions
--- Added: Centralized logging and multi-connection routing
--- Preserved: ALL original fader functionality
+-- Version: 2.4.2
+-- Changed: Removed centralized logging - using local print only
 
 -- Version constant
-local VERSION = "2.4.1"
+local VERSION = "2.4.2"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -83,10 +79,10 @@ local double_tap_target_position = 0
 local double_tap_start_position = 0
 
 -- ===========================
--- CENTRALIZED LOGGING
+-- LOCAL LOGGING
 -- ===========================
 
--- Centralized logging through document script
+-- Local logging
 local function log(message)
     -- Get parent name for context
     local context = "FADER"
@@ -94,14 +90,10 @@ local function log(message)
         context = "FADER(" .. self.parent.name .. ")"
     end
     
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
--- DEBUG PRINT FUNCTION (modified to use centralized logging)
+-- DEBUG PRINT FUNCTION (modified to use local logging)
 function debugPrint(...)
   if DEBUG == 1 then
     local args = {...}
@@ -838,7 +830,7 @@ end
 
 -- VERIFICATION
 function init()
-  -- Log version with centralized logging
+  -- Log version with local logging
   log("Script v" .. VERSION .. " loaded")
   
   -- Log parent info

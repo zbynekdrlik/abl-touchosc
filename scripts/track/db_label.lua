@@ -1,18 +1,15 @@
 -- TouchOSC dB Value Label Display
--- Version: 1.2.0
--- Added: Return track support using parent's trackType
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Shows the current fader value in dB
--- Multi-connection routing support
+-- Version: 1.2.1
+-- Changed: Removed centralized logging - using local print only
 
 -- Version constant
-local VERSION = "1.2.0"
+local VERSION = "1.2.1"
 
 -- State variable (must be local, not on self)
 local lastDB = -math.huge
 
 -- ===========================
--- CENTRALIZED LOGGING
+-- LOCAL LOGGING
 -- ===========================
 
 local function log(message)
@@ -22,10 +19,6 @@ local function log(message)
         context = "DB_LABEL(" .. self.parent.name .. ")"
     end
     
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
