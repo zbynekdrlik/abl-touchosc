@@ -1,13 +1,14 @@
 -- TouchOSC Meter Script - Audio Level Display
--- Version: 2.5.4
+-- Version: 2.5.5
 -- Purpose: Display audio levels from Ableton Live
+-- Fixed: Setup connections AFTER receiving track info (not during init)
 -- Fixed: Removed ALL pcall usage (not supported in TouchOSC)
 -- Fixed: Use simple connection detection like main branch
 -- Optimized: Event-driven updates only - no continuous polling!
 -- Changed: DEBUG = 1 for troubleshooting
 
 -- Version constant
-local VERSION = "2.5.4"
+local VERSION = "2.5.5"
 
 -- Debug mode
 local DEBUG = 1  -- Enable debug for troubleshooting
@@ -98,7 +99,7 @@ local function findParentGroup()
 end
 
 -- ===========================
--- CONNECTION MANAGEMENT (Simplified like main branch)
+-- CONNECTION MANAGEMENT
 -- ===========================
 
 local function getConnectionIndex()
@@ -235,6 +236,9 @@ function onReceiveNotify(key, value)
         trackNumber = value
         debug("Track number updated to: " .. tostring(trackNumber))
         
+        -- CRITICAL: Setup connections NOW that we have track info
+        setupConnections()
+        
         -- Reset meter when track changes
         currentLevelL = 0.0
         currentLevelR = 0.0
@@ -271,8 +275,8 @@ function init()
         return
     end
     
-    -- Setup connections
-    setupConnections()
+    -- DO NOT setup connections here - wait for track info!
+    -- The parent's tag won't have the instance info until track discovery
     
     -- Initialize meter to zero
     self.values.x = 0.0
