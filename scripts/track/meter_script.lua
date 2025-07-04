@@ -1,12 +1,13 @@
 -- TouchOSC Meter Script with Multi-Connection Support
--- Version: 2.3.1
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Added: Return track support using parent's trackType
--- Fixed: Debug mode off, removed connection index logging issue
+-- Version: 2.4.0
+-- Changed: Local logging, reduced verbosity
 
-local VERSION = "2.3.1"
+local VERSION = "2.4.0"
 
--- DEBUG MODE
+-- Debug flag - set to 1 to enable logging
+local debug = 1
+
+-- DEBUG MODE - separate from main debug
 local DEBUG = 0  -- Set to 1 to see meter values and conversions in console
 
 -- COLOR THRESHOLDS (in dB) - PRESERVED FROM ORIGINAL
@@ -43,17 +44,13 @@ local log_exponent = 0.515
 -- ===========================
 
 local function log(message)
-    -- Get parent name for context
-    local context = "METER"
-    if self.parent and self.parent.name then
-        context = "METER(" .. self.parent.name .. ")"
+    if debug == 1 then
+        local context = "METER"
+        if self.parent and self.parent.name then
+            context = "METER(" .. self.parent.name .. ")"
+        end
+        print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
     end
-    
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
-    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
 function debugPrint(...)
@@ -314,20 +311,6 @@ function init()
   
   -- Initialize meter at minimum
   self.values.x = 0
-  
-  log("=== METER SCRIPT WITH MULTI-CONNECTION ===")
-  log("Using hardcoded calibration points from your tests")
-  log("Multi-connection routing enabled")
-  
-  -- Log parent info
-  if self.parent then
-    if self.parent.name then
-      log("Attached to parent: " .. self.parent.name)
-    end
-    if self.parent.tag then
-      log("Parent tag: " .. tostring(self.parent.tag))
-    end
-  end
 end
 
 init()
