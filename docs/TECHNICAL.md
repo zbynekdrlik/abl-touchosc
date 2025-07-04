@@ -5,13 +5,12 @@ This document provides detailed technical information about the ABL TouchOSC con
 ## System Architecture
 
 ### Overview
-The ABL TouchOSC system uses a distributed script architecture where each control operates independently while sharing a common configuration and logging system.
+The ABL TouchOSC system uses a distributed script architecture where each control operates independently with its own local logging.
 
 ```
 TouchOSC Runtime
 ├── Document Script (Central Management)
 │   ├── Configuration Parser
-│   ├── Logger System
 │   └── Auto-Refresh Timer
 ├── Track Groups
 │   ├── Group Script (Track Discovery)
@@ -28,14 +27,14 @@ TouchOSC Runtime
 ## Core Components
 
 ### Document Script (`document_script.lua`)
-**Version:** 2.7.1  
-**Purpose:** Central configuration management, logging, and automatic refresh
+**Version:** 2.8.0  
+**Purpose:** Central configuration management and automatic refresh
 
 **Key Features:**
 - Parses configuration from text control
-- Provides centralized logging via notify system
 - Implements automatic startup refresh (1 second delay)
 - Frame-based timing for reliability
+- Local debug logging
 
 **Configuration Format:**
 ```yaml
@@ -46,7 +45,7 @@ unfold_master: 'Master'
 ```
 
 ### Group Script (`group_init.lua`)
-**Version:** 1.9.6  
+**Version:** 1.15.0  
 **Purpose:** Track discovery and control management
 
 **Key Features:**
@@ -55,12 +54,12 @@ unfold_master: 'Master'
 - Manages control enable/disable states
 - Preserves visual design (no color/style changes)
 
-**Tag Format:** `instance:trackNumber` (e.g., "band:39")
+**Tag Format:** `instance:trackNumber:trackType` (e.g., "band:39:regular")
 
 ### Control Scripts
 
 #### Fader Script (`fader_script.lua`)
-**Version:** 2.3.5  
+**Version:** 2.5.1  
 **Features:**
 - Professional movement scaling algorithm
 - 0.1dB minimum movement detection
@@ -74,7 +73,7 @@ unfold_master: 'Master'
 - Frame-based animation for double-tap
 
 #### Meter Script (`meter_script.lua`)
-**Version:** 2.2.2  
+**Version:** 2.4.1  
 **Features:**
 - Calibrated response matching Ableton
 - Color thresholds at -12dB and -3dB
@@ -83,31 +82,37 @@ unfold_master: 'Master'
 
 **Calibration Points:**
 ```lua
-{-60, 0}, {-50, 0.0168}, {-40, 0.075}, {-30, 0.18}, 
-{-20, 0.345}, {-12, 0.486}, {-6, 0.625}, {-3, 0.71},
-{0, 0.82}, {3, 0.9}, {6, 1.0}
+{0.0, 0.0}, {0.3945, 0.027}, {0.6839, 0.169}, 
+{0.7629, 0.313}, {0.8399, 0.5}, {0.9200, 0.729}, {1.0, 1.0}
 ```
 
 #### Mute Button Script (`mute_button.lua`)
-**Version:** 1.8.0  
+**Version:** 2.0.0  
 **Features:**
 - State tracking with feedback prevention
 - Visual-only indication (buttons have no text property)
 - Touch detection for immediate response
 
 #### Pan Control Script (`pan_control.lua`)
-**Version:** 1.3.2  
+**Version:** 1.5.0  
 **Features:**
 - Double-tap to center (0.5)
 - Color feedback for position
 - Simple, efficient implementation
 
 #### dB Label Script (`db_label.lua`)
-**Version:** 1.0.1  
+**Version:** 1.3.0  
 **Features:**
 - Real-time dB value display
-- Shows "-inf" for minimum values
+- Shows "-∞ dBFS" for minimum values
 - Shows "-" when track unmapped
+
+#### dB Meter Label Script (`db_meter_label.lua`)
+**Version:** 2.6.0  
+**Features:**
+- Meter level to dBFS conversion
+- Calibrated response matching meters
+- Shows "-∞ dBFS" for silence
 
 ## Communication Architecture
 
@@ -118,24 +123,24 @@ Ableton Live → AbletonOSC → Network → TouchOSC Connection → Script Filte
 
 ### Connection Routing
 Each script independently:
-1. Reads parent tag to get instance:track
+1. Reads parent tag to get instance:track:type
 2. Looks up connection index from configuration
 3. Filters incoming OSC by connection
 4. Sends OSC only to configured connection
 
 **Example:**
 ```lua
-local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
+local instance, trackNum, trackType = self.parent.tag:match("^(%w+):(%d+):(%w+)$")
 local connectionIndex = getConnectionIndex(instance)
 sendOSC(path, trackNum, value, buildConnectionTable(connectionIndex))
 ```
 
 ### Script Communication
 Scripts communicate via TouchOSC's notify system:
-- `log_message`: Centralized logging
 - `track_changed`: Track mapping updates
 - `track_unmapped`: Control disabled
 - `control_enabled`: Show/hide controls
+- `refresh_all_groups`: Trigger group refresh
 
 ## Key Technical Concepts
 
@@ -178,21 +183,40 @@ local configText = configObj.values.text
 
 ## Logging System
 
-### Log Levels
-Currently uses simple logging, planned debug levels:
-- Production: User actions only
-- Debug: Detailed technical information
+### Local Script Logging
+Each script implements its own logging with debug control:
+```lua
+-- Debug flag - set to 1 to enable logging
+local debug = 0  -- Default to off for performance
+
+-- Local logging function
+local function log(message)
+    if debug == 1 then
+        local context = "SCRIPTNAME"
+        if self.parent and self.parent.name then
+            context = "SCRIPTNAME(" .. self.parent.name .. ")"
+        end
+        print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
+    end
+end
+```
 
 ### Log Format
 ```
-HH:MM:SS CONTEXT: Message
+[HH:MM:SS] CONTEXT: Message
 ```
 
 Example:
 ```
-06:16:48 FADER(band_CG #): Script v2.3.5 loaded
-06:16:49 CONTROL(band_CG #) Mapped to Track 39
+[06:16:48] FADER(band_CG #): Script v2.5.1 loaded
+[06:16:49] GROUP(band_CG #): Mapped to Track 39
 ```
+
+### Debug Control
+- Each script has its own `debug` flag
+- Set to 1 to enable logging for that script
+- Default is 0 for performance
+- Logs appear in TouchOSC console
 
 ## Auto-Refresh System
 
@@ -222,17 +246,17 @@ end
 ### Adding New Controls
 1. Copy existing control script as template
 2. Update VERSION constant
-3. Implement connection routing
-4. Add logging with context
+3. Implement local logging function
+4. Implement connection routing
 5. Test with multiple connections
 6. Document OSC patterns
 
 ### Debugging
-1. Set `DEBUG = 1` in scripts
-2. Check logger output in TouchOSC
-3. Use console for detailed logs
-4. Verify version numbers in logs
-5. Test connection isolation
+1. Set `debug = 1` in specific scripts
+2. Check console output in TouchOSC
+3. Verify version numbers in logs
+4. Test connection isolation
+5. Monitor performance impact
 
 ### Common Pitfalls
 - Forgetting buttons don't have text property
@@ -251,14 +275,22 @@ end
 - `/live/track/get/panning` - Get pan (-1.0 to 1.0)
 - `/live/track/get/mute` - Get mute state
 - `/live/track/get/solo` - Get solo state
+- `/live/track/get/output_meter_level` - Get meter level
 
 **Set Track Parameters:**
 - `/live/track/set/volume` - Set volume
 - `/live/track/set/panning` - Set pan
 - `/live/track/set/mute` - Toggle mute
 
+**Return Track Messages:**
+- `/live/return/get/volume` - Get return volume
+- `/live/return/set/volume` - Set return volume
+- `/live/return/get/output_meter_level` - Get return meter
+- (Similar patterns for other parameters)
+
 **Track Discovery:**
 - `/live/song/get/num_tracks` - Get track count
+- `/live/song/get/num_return_tracks` - Get return count
 - `/live/song/get/track_data` - Get track details
 
 ### Message Format
@@ -279,7 +311,6 @@ sendOSC('/live/track/set/volume', 39, 0.85, connections)
 - Clip control
 
 ### Technical Improvements
-- Debug level system
 - Performance profiling
 - Memory optimization
 - Extended OSC support
