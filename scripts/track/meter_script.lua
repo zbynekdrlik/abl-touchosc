@@ -1,11 +1,12 @@
 -- TouchOSC Meter Script - Audio Level Display
--- Version: 2.5.6
--- Fixed: Corrected OSC message format to match AbletonOSC output (single normalized value)
+-- Version: 2.5.7
+-- Fixed: Reduced notification spam - only notify on significant changes
+-- Fixed: Added tostring() for potential nil/boolean values in debug
 -- Purpose: Display audio levels from Ableton Live
 -- Optimized: Event-driven updates only - no continuous polling!
 
 -- Version constant
-local VERSION = "2.5.6"
+local VERSION = "2.5.7"
 
 -- Debug mode
 local DEBUG = 1  -- Enable debug for troubleshooting
@@ -51,6 +52,12 @@ local connections = nil
 local isActive = false
 local lastMeterValue = 0
 
+-- NOTIFICATION THROTTLING
+local NOTIFICATION_THRESHOLD = 0.05  -- Only notify if change > 5%
+local lastNotifiedValue = 0
+local lastNotificationTime = 0
+local NOTIFICATION_MIN_INTERVAL = 0.1  -- Minimum 100ms between notifications
+
 -- ===========================
 -- UTILITY FUNCTIONS
 -- ===========================
@@ -59,7 +66,11 @@ local function debug(...)
     if DEBUG == 0 then return end
     
     local args = {...}
-    local msg = table.concat(args, " ")
+    local msg = ""
+    for i, v in ipairs(args) do
+        if i > 1 then msg = msg .. " " end
+        msg = msg .. tostring(v)  -- Convert everything to string
+    end
     print("[" .. os.date("%H:%M:%S") .. "] CONTROL(" .. self.name .. ") " .. msg)
 end
 
@@ -181,7 +192,7 @@ local function findParentGroup()
             if #parts >= 3 then
                 trackNumber = tonumber(parts[2])
                 trackType = parts[3]
-                debug("From parent tag - Track: " .. tostring(trackNumber) .. ", Type: " .. trackType)
+                debug("From parent tag - Track:", trackNumber, "Type:", trackType)
             end
         end
         
@@ -241,7 +252,7 @@ local function setupConnections()
         connections[i] = (i == connectionIndex)
     end
     
-    debug("Connection index: " .. connectionIndex)
+    debug("Connection index:", connectionIndex)
     return true
 end
 
@@ -297,7 +308,7 @@ function onReceiveOSC(message, connections)
         local smoothed = smoothColor(target_color)
         self.color = Color(smoothed[1], smoothed[2], smoothed[3], smoothed[4])
         
-        -- Debug logging
+        -- Debug logging (with proper string conversion)
         debug("=== METER UPDATE ===")
         debug("Track Type:", trackType, "Track:", trackNumber, "Connection:", myConnection)
         debug("AbletonOSC normalized:", string.format("%.4f", normalized_meter))
@@ -313,9 +324,19 @@ function onReceiveOSC(message, connections)
         -- Track activity state
         isActive = fader_position > 0.01
         
-        -- Notify parent of activity (for group fade feature)
+        -- FIXED: Only notify parent on SIGNIFICANT changes
         if parentGroup and parentGroup.notify and isActive then
-            parentGroup:notify("value_changed", "meter")
+            local now = os.clock()
+            local valueDelta = math.abs(normalized_meter - lastNotifiedValue)
+            local timeDelta = now - lastNotificationTime
+            
+            -- Only notify if change is significant AND enough time has passed
+            if valueDelta > NOTIFICATION_THRESHOLD and timeDelta > NOTIFICATION_MIN_INTERVAL then
+                parentGroup:notify("value_changed", "meter")
+                lastNotifiedValue = normalized_meter
+                lastNotificationTime = now
+                debug("Notified parent - significant change:", string.format("%.2f%%", valueDelta * 100))
+            end
         end
         
         lastMeterValue = normalized_meter
@@ -331,11 +352,11 @@ end
 -- ===========================
 
 function onReceiveNotify(key, value)
-    debug("Received notify: " .. key .. " = " .. tostring(value))
+    debug("Received notify:", key, "=", value)
     
     if key == "track_changed" then
         trackNumber = value
-        debug("Track number updated to: " .. tostring(trackNumber))
+        debug("Track number updated to:", trackNumber)
         
         -- CRITICAL: Setup connections NOW that we have track info
         setupConnections()
@@ -345,10 +366,12 @@ function onReceiveNotify(key, value)
         current_color = {COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4]}
         self.color = Color(current_color[1], current_color[2], current_color[3], current_color[4])
         lastMeterValue = 0
+        lastNotifiedValue = 0
+        lastNotificationTime = 0
         
     elseif key == "track_type" then
         trackType = value
-        debug("Track type updated to: " .. tostring(trackType))
+        debug("Track type updated to:", trackType)
         
     elseif key == "connection_changed" then
         setupConnections()
@@ -385,9 +408,11 @@ function init()
     self.values.x = 0.0
     
     debug("Initialization complete")
-    debug("Parent: " .. tostring(parentGroup and parentGroup.name or "none"))
-    debug("Track: " .. tostring(trackNumber) .. " Type: " .. tostring(trackType))
+    debug("Parent:", parentGroup and parentGroup.name or "none")
+    debug("Track:", trackNumber, "Type:", trackType)
     debug("Using calibrated meter conversion")
+    debug("Notification threshold:", string.format("%.0f%%", NOTIFICATION_THRESHOLD * 100))
+    debug("Min notification interval:", NOTIFICATION_MIN_INTERVAL, "seconds")
 end
 
 -- Note: No update() function needed - fully event-driven!
