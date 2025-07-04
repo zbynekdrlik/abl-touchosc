@@ -1,12 +1,12 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.15.0
--- Changed: Local logging, significantly reduced log verbosity
+-- Version: 1.15.1
+-- Changed: Standardized DEBUG flag (uppercase) and disabled by default
 
 -- Version constant
-local SCRIPT_VERSION = "1.15.0"
+local SCRIPT_VERSION = "1.15.1"
 
 -- Debug flag - set to 1 to enable logging
-local debug = 1
+local DEBUG = 0
 
 -- Script-level variables to store group data
 local instance = nil
@@ -27,7 +27,7 @@ local lastFaderValue = nil
 
 -- Local logging function
 local function log(message)
-    if debug == 1 then
+    if DEBUG == 1 then
         print("[" .. os.date("%H:%M:%S") .. "] GROUP(" .. self.name .. "): " .. message)
     end
 end
