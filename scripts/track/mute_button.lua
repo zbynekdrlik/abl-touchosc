@@ -1,22 +1,23 @@
 -- mute_button.lua
--- Version: 1.9.1
+-- Version: 2.0.0
+-- Performance optimized - removed centralized logging, added DEBUG guards
 -- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
--- Use root:notify for logger output
 
-local VERSION = "1.9.1"
+local VERSION = "2.0.0"
 
--- Logging
-local function log(message)
+-- Debug mode (set to 1 for debug output)
+local DEBUG = 0
+
+-- Debug logging
+local function debug(message)
+    if DEBUG == 0 then return end
+    
     local context = "MUTE"
     if self.parent and self.parent.name then
         context = "MUTE(" .. self.parent.name .. ")"
     end
     
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
@@ -103,7 +104,9 @@ function onReceiveOSC(message, connections)
                 self.values.x = 1  -- Unmuted = released
             end
             
-            log("Received mute state: " .. (arguments[2].value and "MUTED" or "UNMUTED"))
+            if DEBUG == 1 then
+                debug("Received mute state: " .. (arguments[2].value and "MUTED" or "UNMUTED"))
+            end
         end
     end
     
@@ -126,10 +129,13 @@ function onValueChanged(key)
             local path = trackType == "return" and "/live/return/set/mute" or "/live/track/set/mute"
             
             sendOSC(path, trackNumber, muteState, connections)
-            log("Sent mute " .. (muteState and "ON" or "OFF") .. " for " .. trackType .. " track " .. trackNumber)
+            
+            if DEBUG == 1 then
+                debug("Sent mute " .. (muteState and "ON" or "OFF") .. " for " .. trackType .. " track " .. trackNumber)
+            end
         end
     end
 end
 
 -- Initialize
-log("Script v" .. VERSION .. " loaded")
+print("[" .. os.date("%H:%M:%S") .. "] MUTE: Script v" .. VERSION .. " loaded")
