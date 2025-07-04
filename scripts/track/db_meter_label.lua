@@ -1,19 +1,19 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.6.0
--- Performance optimized - removed centralized logging, removed empty update()
+-- Version: 2.6.1
+-- Fixed: Corrected OSC message format to match AbletonOSC (single normalized value)
 -- Shows actual peak dBFS level from track output meter
 -- Accurately calibrated to match Ableton Live's display
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "2.6.0"
+local VERSION = "2.6.1"
 
 -- State variables
 local lastDB = -70.0
 local lastMeterValue = 0
 
 -- Debug mode
-local DEBUG = 0  -- Set to 1 for detailed logging
+local DEBUG = 1  -- Set to 1 for detailed logging
 
 -- ===========================
 -- DEBUG LOGGING
@@ -244,7 +244,8 @@ function onReceiveOSC(message, connections)
         return false
     end
     
-    -- Get meter level and calculate dB
+    -- CRITICAL FIX: AbletonOSC sends a single normalized meter value
+    -- NOT stereo L/R values as the previous version expected
     local meter_level = arguments[2].value
     local db_value = meterToDB(meter_level)
     
