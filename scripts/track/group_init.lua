@@ -1,5 +1,6 @@
 -- TouchOSC Track Group Initialization Script
--- Version: 1.15.9
+-- Version: 1.16.0
+-- Performance: Added early return debug guard for zero overhead when DEBUG != 1
 -- Fixed: Removed _G usage in debounce function (not supported in TouchOSC)
 -- Fixed: Added initial tag = "trackGroup" for document script to find groups
 -- Fixed: Added back track discovery mechanism (was completely missing!)
@@ -7,13 +8,12 @@
 -- Fixed: Schedule method not available - using time-based update checks
 -- Fixed: Parse tag for track info to support both regular and return tracks
 -- Added: Return track type support
--- Changed: DEBUG = 1 for troubleshooting
 
 -- Version constant
-local VERSION = "1.15.9"
+local VERSION = "1.16.0"
 
 -- Debug mode (set to 1 for debug output)
-local DEBUG = 1  -- Enable debug for troubleshooting
+local DEBUG = 0  -- Set to 0 for production (zero overhead)
 
 -- Global debounce settings (in seconds)
 local GLOBAL_DEBOUNCE_TIME = 0.05    -- 50ms debounce for all controls
@@ -33,7 +33,8 @@ local debounceTimers = {}
 -- ===========================
 
 local function debug(...)
-    if DEBUG == 0 then return end
+    -- Performance guard: early return for zero overhead when DEBUG != 1
+    if DEBUG ~= 1 then return end
     
     local args = {...}
     local msg = table.concat(args, " ")
