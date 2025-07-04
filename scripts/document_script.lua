@@ -1,17 +1,16 @@
 -- TouchOSC Document Script
--- Version: 2.8.2
--- FIXED: Removed root property assignments (not allowed in TouchOSC)
--- FIXED: Removed ALL centralized logging functionality
--- Purpose: Manage document configuration ONLY
+-- Version: 2.8.3
+-- FIXED: Restored root property assignments - ONLY removed centralized logging
+-- Purpose: Manage document configuration and refresh
 
-local VERSION = "2.8.2"
+local VERSION = "2.8.3"
 
 -- Debug mode (set to 1 to enable logging)
 local DEBUG = 0
 
 -- Timer for automatic refresh
-local AUTO_REFRESH_DELAY = 1.0  -- 1 second after load (in seconds for os.clock)
-local startup_time = 0
+local AUTO_REFRESH_DELAY = 1000  -- 1 second after load
+local last_refresh_time = 0
 local startup_refresh_done = false
 
 -- Configuration state
@@ -175,8 +174,8 @@ end
 function update()
     -- Check for automatic startup refresh
     if not startup_refresh_done then
-        local elapsed = os.clock() - startup_time
-        if elapsed > AUTO_REFRESH_DELAY then
+        local now = getMillis()
+        if now - last_refresh_time > AUTO_REFRESH_DELAY then
             log("=== AUTOMATIC STARTUP REFRESH ===")
             refreshAllGroups()
             startup_refresh_done = true
@@ -204,14 +203,20 @@ function init()
         log("WARNING: No configuration control found!")
     end
     
-    -- FIXED: Removed root property assignments - not allowed in TouchOSC
-    -- Scripts must read configuration directly from the configuration control
+    -- RESTORED: Register with root for global access (this was working!)
+    root.documentScript = self
+    root.configuration = configuration
+    log("Config registered")
+    
+    -- Verify registration
+    if root.configuration then
+        log("Config parsed - " .. #configuration.connections .. " connections, " .. #configuration.unfold_tracks .. " unfolds")
+    end
     
     -- Schedule automatic refresh
-    startup_time = os.clock()
+    last_refresh_time = getMillis()
     log("Ready - automatic refresh scheduled...")
-    log("CRITICAL FIX: Removed ALL centralized logging functionality")
-    log("CRITICAL FIX: Removed root property assignments")
+    log("CRITICAL FIX: Removed ONLY centralized logging - kept everything else!")
 end
 
 init()
