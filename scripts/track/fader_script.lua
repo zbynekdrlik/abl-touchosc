@@ -1,14 +1,13 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.5.1
--- Performance optimized: Fixed debug overhead, optimized update() function
--- Removed: Centralized logging - using direct print only when DEBUG=1
+-- Version: 2.5.2
+-- Performance optimized: Removed centralized logging, debug prints only when DEBUG=1
 -- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
 -- Fixed: Never change fader position based on assumptions
 -- Preserved: ALL original fader functionality
 
 -- Version constant
-local VERSION = "2.5.1"
+local VERSION = "2.5.2"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -847,18 +846,8 @@ end
 
 -- VERIFICATION
 function init()
-  -- VERSION LOGGING - Always log version at startup regardless of DEBUG setting
-  if DEBUG == 1 then
-    -- Debug mode - include parent info
-    local parent_info = ""
-    if self.parent and self.parent.name then
-      parent_info = " for parent: " .. self.parent.name
-    end
-    print("[" .. os.date("%H:%M:%S") .. "] FADER: Script v" .. VERSION .. " loaded" .. parent_info)
-  else
-    -- Non-debug mode - minimal version log
-    print("Fader v" .. VERSION)
-  end
+  -- VERSION LOGGING - Always log version at startup
+  print("Fader v" .. VERSION)
   
   -- PERFORMANCE OPTIMIZATION: Schedule sync checking at 50ms intervals
   -- Only runs when needed (needs_sync_check flag)
