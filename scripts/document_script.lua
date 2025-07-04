@@ -1,10 +1,10 @@
 -- TouchOSC Document Script
--- Version: 2.8.1
--- FIXED: Changed getMillis() to os.clock() for timing
+-- Version: 2.8.2
+-- FIXED: Removed root property assignments (not allowed in TouchOSC)
 -- FIXED: Removed ALL centralized logging functionality
 -- Purpose: Manage document configuration ONLY
 
-local VERSION = "2.8.1"
+local VERSION = "2.8.2"
 
 -- Debug mode (set to 1 to enable logging)
 local DEBUG = 0
@@ -204,20 +204,14 @@ function init()
         log("WARNING: No configuration control found!")
     end
     
-    -- Register with root for global access
-    root.documentScript = self
-    root.configuration = configuration
-    log("Config registered")
-    
-    -- Verify registration
-    if root.configuration then
-        log("Config parsed - " .. #configuration.connections .. " connections, " .. #configuration.unfold_tracks .. " unfolds")
-    end
+    -- FIXED: Removed root property assignments - not allowed in TouchOSC
+    -- Scripts must read configuration directly from the configuration control
     
     -- Schedule automatic refresh
     startup_time = os.clock()
     log("Ready - automatic refresh scheduled...")
     log("CRITICAL FIX: Removed ALL centralized logging functionality")
+    log("CRITICAL FIX: Removed root property assignments")
 end
 
 init()
