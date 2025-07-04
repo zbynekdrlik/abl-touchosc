@@ -1,15 +1,12 @@
 -- TouchOSC Fader Script - Advanced Volume and Send Control
--- Version: 2.5.7
--- Fixed: Removed pcall (not available in TouchOSC)
--- Removed: All logger references and centralized logging
--- Optimized: Time-based position sync instead of schedule()
--- Fixed: TouchOSC doesn't have schedule() method
--- Fixed: Removed has_valid_position check - fader works immediately
--- Added: Support for both track volume and send controls
+-- Version: 2.5.8
+-- Fixed: Removed ALL pcall and _G references (not supported in TouchOSC)
+-- Fixed: Use simple connection detection like main branch
+-- Optimized: Event-driven updates, no continuous polling
 -- Changed: DEBUG = 1 for troubleshooting
 
 -- Version constant
-local VERSION = "2.5.7"
+local VERSION = "2.5.8"
 
 -- Debug mode (set to 1 for debug output)
 local DEBUG = 1  -- Enable debug for troubleshooting
@@ -144,63 +141,49 @@ local function findParentGroup()
 end
 
 -- ===========================
--- CONNECTION MANAGEMENT
+-- CONNECTION MANAGEMENT (Simplified like main branch)
 -- ===========================
 
+local function getConnectionIndex()
+    -- Default to connection 1 if can't determine
+    local defaultConnection = 1
+    
+    -- Check parent tag for instance name
+    if not parentGroup or not parentGroup.tag then
+        return defaultConnection
+    end
+    
+    -- Extract instance name from tag
+    local instance = parentGroup.tag:match("^(%w+):")
+    if not instance then
+        return defaultConnection
+    end
+    
+    -- Find and read configuration
+    local configObj = root:findByName("configuration", true)
+    if not configObj or not configObj.values or not configObj.values.text then
+        debug("No configuration found, using default connection")
+        return defaultConnection
+    end
+    
+    -- Parse configuration to find connection for this instance
+    local configText = configObj.values.text
+    local searchKey = "connection_" .. instance .. ":"
+    
+    for line in configText:gmatch("[^\r\n]+") do
+        line = line:match("^%s*(.-)%s*$")  -- Trim whitespace
+        if line:sub(1, #searchKey) == searchKey then
+            local value = line:sub(#searchKey + 1):match("^%s*(.-)%s*$")
+            return tonumber(value) or defaultConnection
+        end
+    end
+    
+    debug("No connection found for instance:", instance)
+    return defaultConnection
+end
+
 local function setupConnections()
-    if not parentGroup then return false end
-    
-    -- Direct checks without pcall (TouchOSC doesn't have pcall)
-    local result = nil
-    
-    -- Check if parent has getConnectionIndex method
-    if parentGroup and parentGroup.getConnectionIndex then
-        result = parentGroup:getConnectionIndex()
-    elseif _G.getConnectionIndex then
-        local instance = parentGroup.name:match("^(%w+)_")
-        if instance then
-            result = _G.getConnectionIndex(instance)
-        end
-    end
-    
-    if result then
-        connectionIndex = result
-    else
-        -- Try to find connection from document script
-        local docScript = root:findByName("document_script", true)
-        if docScript and docScript.getConnectionForInstance then
-            local instance = parentGroup.name:match("^(%w+)_")
-            if instance then
-                connectionIndex = docScript:getConnectionForInstance(instance)
-            end
-        end
-    end
-    
-    if not connectionIndex then
-        -- Read configuration directly (as per TouchOSC rules - each script reads its own config)
-        local configObj = root:findByName("configuration", true)
-        if configObj and configObj.values and configObj.values.text then
-            local instance = parentGroup.name:match("^(%w+)_")
-            if instance then
-                local configText = configObj.values.text
-                local searchKey = "connection_" .. instance .. ":"
-                
-                for line in configText:gmatch("[^\r\n]+") do
-                    line = line:match("^%s*(.-)%s*$")
-                    if line:sub(1, #searchKey) == searchKey then
-                        local value = line:sub(#searchKey + 1):match("^%s*(.-)%s*$")
-                        connectionIndex = tonumber(value) or 1
-                        break
-                    end
-                end
-            end
-        end
-    end
-    
-    if not connectionIndex then
-        log("Warning: Could not determine connection index, using default (1)")
-        connectionIndex = 1
-    end
+    connectionIndex = getConnectionIndex()
     
     -- Build connection table
     connections = {}
