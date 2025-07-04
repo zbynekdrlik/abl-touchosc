@@ -1,31 +1,30 @@
 -- TouchOSC dB Value Label Display
--- Version: 1.2.0
--- Added: Return track support using parent's trackType
--- Fixed: Parse parent tag for track info instead of accessing properties
+-- Version: 1.3.0
+-- Performance optimized - removed centralized logging, added DEBUG guards
 -- Shows the current fader value in dB
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "1.2.0"
+local VERSION = "1.3.0"
+
+-- Debug mode (set to 1 for debug output)
+local DEBUG = 0
 
 -- State variable (must be local, not on self)
 local lastDB = -math.huge
 
 -- ===========================
--- CENTRALIZED LOGGING
+-- DEBUG LOGGING
 -- ===========================
 
-local function log(message)
-    -- Get parent name for context
+local function debug(message)
+    if DEBUG == 0 then return end
+    
     local context = "DB_LABEL"
     if self.parent and self.parent.name then
         context = "DB_LABEL(" .. self.parent.name .. ")"
     end
     
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
@@ -125,8 +124,8 @@ function onReceiveOSC(message, connections)
         self.values.text = formatDB(db_value)
         
         -- Only log significant changes to reduce spam
-        if not lastDB or math.abs(db_value - lastDB) > 0.5 then
-            log(string.format("%s track %d: %s dB", trackType, trackNumber, formatDB(db_value)))
+        if DEBUG == 1 and (not lastDB or math.abs(db_value - lastDB) > 0.5) then
+            debug(string.format("%s track %d: %s dB", trackType, trackNumber, formatDB(db_value)))
             lastDB = db_value
         end
     end
@@ -144,12 +143,12 @@ function onReceiveNotify(key, value)
         -- Clear the display when track changes
         self.values.text = "-inf"
         lastDB = -math.huge
-        log("Track changed - display reset")
+        debug("Track changed - display reset")
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
         self.values.text = "-"
         lastDB = nil
-        log("Track unmapped - display shows dash")
+        debug("Track unmapped - display shows dash")
     elseif key == "control_enabled" then
         -- Show/hide based on track mapping status
         self.values.visible = value
@@ -162,7 +161,7 @@ end
 
 function init()
     -- Log version
-    log("Script v" .. VERSION .. " loaded")
+    print("[" .. os.date("%H:%M:%S") .. "] DB_LABEL: Script v" .. VERSION .. " loaded")
     
     -- Set initial text
     if isTrackMapped() then
@@ -171,9 +170,8 @@ function init()
         self.values.text = "-"
     end
     
-    -- Log parent info
-    if self.parent and self.parent.name then
-        log("Initialized for parent: " .. self.parent.name)
+    if DEBUG == 1 then
+        debug("Initialized for parent: " .. (self.parent and self.parent.name or "unknown"))
     end
 end
 
