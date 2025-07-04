@@ -1,10 +1,11 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.7.1
--- Performance optimizations: Fixed jumpy double-tap animation with faster update rate
--- Based on v2.7.0 with animation smoothness fix
+-- Version: 2.7.2
+-- Fixed: Double-tap animation overshoot at 0dB
+-- Fixed: Respect DEBUG flag for version logging
+-- Based on v2.7.1 with animation precision fix
 
 -- Version constant
-local VERSION = "2.7.1"
+local VERSION = "2.7.2"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -41,7 +42,8 @@ local EMERGENCY_MOVEMENT_THRESHOLD = 0.03  -- Movement > 3% is considered emerge
 local ENABLE_DOUBLE_TAP = true          -- Set to false to disable double-tap functionality
 local DOUBLE_TAP_MAX_TIME = 250         -- Maximum time between taps in milliseconds
 local DOUBLE_TAP_MIN_TIME = 50          -- Minimum time between taps to avoid accidental triggers
-local DOUBLE_TAP_ANIMATION_SPEED = 0.005 -- Speed of animated movement (0.005 units per update)
+local DOUBLE_TAP_ANIMATION_SPEED = 0.003 -- REDUCED speed to prevent overshoot (was 0.005)
+local DOUBLE_TAP_SLOW_ZONE = 0.02       -- Slow down when within 2% of target
 
 -- CURVE SETTINGS FOR -6dB AT 50%
 local use_log_curve = true
@@ -108,6 +110,13 @@ local function debugPrint(...)
     
     -- PERFORMANCE: Only print to console, no notify() overhead
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. msg)
+end
+
+-- Version logging that respects DEBUG flag
+local function logVersion()
+    if DEBUG == 1 then
+        print("[" .. os.date("%H:%M:%S") .. "] FADER: Script v" .. VERSION .. " loaded")
+    end
 end
 
 -- ===========================
@@ -557,6 +566,7 @@ function update()
       -- Continue animation
       local current_pos = self.values.x
       local distance_to_target = double_tap_target_position - current_pos
+      local abs_distance = math.abs(distance_to_target)
       
       -- Determine direction
       local direction = 0
@@ -566,12 +576,12 @@ function update()
           direction = -1
       end
 
-      -- If already at target or no distance to cover, stop animation
-      if direction == 0 then
+      -- If already at target or very close, stop animation
+      if abs_distance < 0.0001 then
           self.values.x = double_tap_target_position
           last_position = double_tap_target_position
           double_tap_animation_active = false
-          debugPrint("*** DOUBLE-TAP ANIMATION COMPLETE (Already at target) ***")
+          debugPrint("*** DOUBLE-TAP ANIMATION COMPLETE (At target) ***")
           local final_audio = use_log_curve and linearToLog(double_tap_target_position) or double_tap_target_position
           local trackNumber, trackType = getTrackInfo()
           if trackNumber then
@@ -581,14 +591,23 @@ function update()
           return
       end
 
-      -- PERFORMANCE: Use fixed step size for 60Hz updates
-      local step_size = DOUBLE_TAP_ANIMATION_SPEED  -- No scaling needed at 60Hz
+      -- FIXED: Variable step size to prevent overshoot
+      local step_size
+      if abs_distance < DOUBLE_TAP_SLOW_ZONE then
+          -- Close to target - use proportional speed to prevent overshoot
+          step_size = abs_distance * 0.3  -- Take 30% of remaining distance
+          debugPrint("*** SLOW ZONE - Distance:", string.format("%.4f", abs_distance))
+      else
+          -- Normal speed when far from target
+          step_size = DOUBLE_TAP_ANIMATION_SPEED
+      end
+      
       local proposed_new_position = current_pos + (direction * step_size)
 
-      -- Check if the proposed new position overshoots the target
+      -- FIXED: More precise overshoot prevention
       if (direction > 0 and proposed_new_position >= double_tap_target_position) or
          (direction < 0 and proposed_new_position <= double_tap_target_position) then
-          -- Snap to target
+          -- Snap exactly to target
           self.values.x = double_tap_target_position
           last_position = double_tap_target_position
           double_tap_animation_active = false
@@ -600,7 +619,7 @@ function update()
             sendOSCRouted(path, trackNumber, final_audio)
           end
       else
-          -- Move towards target with constant speed
+          -- Move towards target
           self.values.x = proposed_new_position
           last_position = proposed_new_position
           
@@ -612,12 +631,12 @@ function update()
             sendOSCRouted(path, trackNumber, new_audio)
           end
           
-          debugPrint("*** DOUBLE-TAP ANIMATION (Constant Speed) ***")
-          -- Progress calculation assuming linear movement
+          debugPrint("*** DOUBLE-TAP ANIMATION ***")
+          -- Progress calculation
           if double_tap_target_position ~= double_tap_start_position then
-            debugPrint("Progress:", string.format("%.1f%%", ((proposed_new_position - double_tap_start_position) / (double_tap_target_position - double_tap_start_position)) * 100))
-          else
-            debugPrint("Progress: 100% (target is start)")
+            local total_distance = math.abs(double_tap_target_position - double_tap_start_position)
+            local covered_distance = math.abs(proposed_new_position - double_tap_start_position)
+            debugPrint("Progress:", string.format("%.1f%%", (covered_distance / total_distance) * 100))
           end
           debugPrint("Current:", string.format("%.1f%%", proposed_new_position * 100), "Target:", string.format("%.1f%%", double_tap_target_position * 100))
       end
@@ -872,10 +891,10 @@ end
 -- VERIFICATION
 function init()
   -- Log version (console only when DEBUG=1)
-  print("[" .. os.date("%H:%M:%S") .. "] FADER: Script v" .. VERSION .. " loaded")
+  logVersion()
   
-  -- Log parent info
-  if self.parent and self.parent.name then
+  -- Log parent info only in debug mode
+  if DEBUG == 1 and self.parent and self.parent.name then
     print("[" .. os.date("%H:%M:%S") .. "] FADER: Initialized for parent: " .. self.parent.name)
   end
   
@@ -900,7 +919,8 @@ function init()
     debugPrint("Double-tap timing:")
     debugPrint("- Maximum time between taps:", DOUBLE_TAP_MAX_TIME, "ms")
     debugPrint("- Minimum time between taps:", DOUBLE_TAP_MIN_TIME, "ms")
-    debugPrint("- Animation speed:", DOUBLE_TAP_ANIMATION_SPEED * 100, "% of full range per update (constant speed)") -- Reflects change in interpretation
+    debugPrint("- Animation speed:", DOUBLE_TAP_ANIMATION_SPEED * 100, "% of full range per update")
+    debugPrint("- Slow zone threshold:", DOUBLE_TAP_SLOW_ZONE * 100, "% from target")
   end
   debugPrint("")
   debugPrint("Curve verification:")
