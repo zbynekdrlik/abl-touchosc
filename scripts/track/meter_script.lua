@@ -1,10 +1,10 @@
 -- TouchOSC Meter Script with Multi-Connection Support
--- Version: 2.3.1
+-- Version: 2.3.2
+-- Performance optimized: Removed centralized logging, debug prints only when DEBUG=1
 -- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
--- Fixed: Debug mode off, removed connection index logging issue
 
-local VERSION = "2.3.1"
+local VERSION = "2.3.2"
 
 -- DEBUG MODE
 local DEBUG = 0  -- Set to 1 to see meter values and conversions in console
@@ -39,29 +39,25 @@ local use_log_curve = true
 local log_exponent = 0.515
 
 -- ===========================
--- LOGGING
+-- DEBUG PRINT FUNCTION
 -- ===========================
 
-local function log(message)
-    -- Get parent name for context
-    local context = "METER"
-    if self.parent and self.parent.name then
-        context = "METER(" .. self.parent.name .. ")"
-    end
-    
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
-    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
-end
-
 function debugPrint(...)
-  if DEBUG == 1 then
-    local args = {...}
-    local msg = table.concat(args, " ")
-    log("[DEBUG] " .. msg)
+  -- Early return if debug disabled - no string operations!
+  if DEBUG ~= 1 then return end
+  
+  -- Only do expensive operations if debug is enabled
+  local args = {...}
+  local msg = table.concat(args, " ")
+  
+  -- Get parent name for context
+  local context = "METER"
+  if self.parent and self.parent.name then
+    context = "METER(" .. self.parent.name .. ")"
   end
+  
+  -- Direct print to console
+  print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. msg)
 end
 
 -- ===========================
@@ -306,8 +302,8 @@ end
 
 -- Initialize
 function init()
-  -- Log version
-  log("Script v" .. VERSION .. " loaded")
+  -- VERSION LOGGING - Always log version at startup
+  print("Meter v" .. VERSION)
   
   -- Set initial color to green
   self.color = Color(COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4])
@@ -315,17 +311,17 @@ function init()
   -- Initialize meter at minimum
   self.values.x = 0
   
-  log("=== METER SCRIPT WITH MULTI-CONNECTION ===")
-  log("Using hardcoded calibration points from your tests")
-  log("Multi-connection routing enabled")
+  debugPrint("=== METER SCRIPT WITH MULTI-CONNECTION ===")
+  debugPrint("Using hardcoded calibration points from your tests")
+  debugPrint("Multi-connection routing enabled")
   
   -- Log parent info
   if self.parent then
     if self.parent.name then
-      log("Attached to parent: " .. self.parent.name)
+      debugPrint("Attached to parent: " .. self.parent.name)
     end
     if self.parent.tag then
-      log("Parent tag: " .. tostring(self.parent.tag))
+      debugPrint("Parent tag: " .. tostring(self.parent.tag))
     end
   end
 end
