@@ -1,11 +1,15 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.15.0
+-- Version: 1.15.1
 -- Performance optimized: Replaced continuous update() with scheduled updates
+-- Removed: Centralized logging - using direct print only when DEBUG=1
 -- Auto-detects regular vs return tracks
 -- Fixed: Track label shows first word, skipping return track prefixes (A-, B-, etc.)
 
 -- Version constant
-local SCRIPT_VERSION = "1.15.0"
+local SCRIPT_VERSION = "1.15.1"
+
+-- DEBUG MODE
+local DEBUG = 0  -- Set to 1 to enable console logging
 
 -- Script-level variables to store group data
 local instance = nil
@@ -24,23 +28,24 @@ local lastSendTime = 0
 local lastReceiveTime = 0
 local lastFaderValue = nil
 
--- Centralized logging through document script
-local function log(message)
-    -- Add context to identify which control sent the log
-    local fullMessage = "CONTROL(" .. self.name .. ") " .. message
-    
-    -- Send to document script for proper logging
-    root:notify("log_message", fullMessage)
-    
-    -- Also print to console for immediate feedback during development
-    print("[" .. os.date("%H:%M:%S") .. "] " .. fullMessage)
+-- Debug print function
+local function debugPrint(...)
+  -- Early return if debug disabled - no string operations!
+  if DEBUG ~= 1 then return end
+  
+  -- Only do expensive operations if debug is enabled
+  local args = {...}
+  local msg = table.concat(args, " ")
+  
+  -- Direct print to console
+  print("[" .. os.date("%H:%M:%S") .. "] CONTROL(" .. self.name .. "): " .. msg)
 end
 
 -- Get connection configuration
 local function getConnectionIndex(inst)
     local configObj = root:findByName("configuration", true)
     if not configObj or not configObj.values or not configObj.values.text then
-        log("Warning: No configuration found, using default connection 1")
+        debugPrint("Warning: No configuration found, using default connection 1")
         return 1
     end
     
@@ -55,7 +60,7 @@ local function getConnectionIndex(inst)
         end
     end
     
-    log("Warning: No config for " .. inst .. " - using default (1)")
+    debugPrint("Warning: No config for " .. inst .. " - using default (1)")
     return 1
 end
 
@@ -182,7 +187,7 @@ local function setGroupEnabled(enabled, silent)
     
     -- Only log if not silent
     if not silent then
-        log("controls " .. (enabled and "ENABLED" or "DISABLED") .. " (" .. childCount .. " controls)")
+        debugPrint("controls " .. (enabled and "ENABLED" or "DISABLED") .. " (" .. childCount .. " controls)")
     end
 end
 
@@ -191,7 +196,7 @@ local function updateConnectionLabel()
     local label = getChild(self, "connection_label")
     if label then
         label.values.text = instance  -- Will show "band" or "master"
-        log("Connection label set to: " .. instance)
+        debugPrint("Connection label set to: " .. instance)
     end
 end
 
@@ -209,7 +214,7 @@ local function clearListeners()
         sendOSC(oscPrefix .. 'stop_listen/panning', trackNumber, targetConnections)
         
         listenersActive = false
-        log("Stopped listeners for " .. trackType .. " " .. trackNumber)
+        debugPrint("Stopped listeners for " .. trackType .. " " .. trackNumber)
     end
 end
 
@@ -234,9 +239,10 @@ function init()
     instance, trackName = parseGroupName(self.name)
     connectionIndex = getConnectionIndex(instance)
     
-    -- Log initialization
-    log("Group init v" .. SCRIPT_VERSION .. " loaded")
-    log("Config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
+    -- Version logging - always log version at startup
+    print("Group v" .. SCRIPT_VERSION)
+    
+    debugPrint("Config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
     
     -- SAFETY: Disable all controls until properly mapped
     setGroupEnabled(false, true)  -- Silent
@@ -272,7 +278,7 @@ function init()
     -- Run monitoring every 100ms instead of every frame (60-120Hz)
     self:schedule(100)
     
-    log("Ready - waiting for refresh (scheduled monitoring @ 100ms)")
+    debugPrint("Ready - waiting for refresh (scheduled monitoring @ 100ms)")
 end
 
 -- PERFORMANCE OPTIMIZATION: Use onSchedule instead of update()
@@ -283,7 +289,7 @@ function onSchedule()
 end
 
 function refreshTrackMapping()
-    log("Refreshing track mapping with auto-detection")
+    debugPrint("Refreshing track mapping with auto-detection")
     
     -- SAFETY: Clear any existing listeners and disable controls
     clearListeners()
@@ -348,7 +354,7 @@ function onReceiveOSC(message, connections)
                             trackMapped = true
                             needsRefresh = false  -- Found it, stop searching
                             
-                            log("Mapped to Regular Track " .. trackNumber)
+                            debugPrint("Mapped to Regular Track " .. trackNumber)
                             
                             setGroupEnabled(true)
                             
@@ -402,7 +408,7 @@ function onReceiveOSC(message, connections)
                             trackMapped = true
                             needsRefresh = false
                             
-                            log("Mapped to Return Track " .. trackNumber)
+                            debugPrint("Mapped to Return Track " .. trackNumber)
                             
                             setGroupEnabled(true)
                             
@@ -432,7 +438,7 @@ function onReceiveOSC(message, connections)
             
             -- If we've checked both regular and return tracks and didn't find it
             if needsRefresh then
-                log("ERROR: Track not found: '" .. trackName .. "' (checked both regular and return tracks)")
+                debugPrint("ERROR: Track not found: '" .. trackName .. "' (checked both regular and return tracks)")
                 setGroupEnabled(false)
                 trackNumber = nil
                 trackType = nil
