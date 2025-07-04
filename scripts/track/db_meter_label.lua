@@ -1,26 +1,28 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.6.1
+-- Version: 2.6.2
+-- Performance: Added early return debug guard for zero overhead when DEBUG != 1
 -- Fixed: Corrected OSC message format to match AbletonOSC (single normalized value)
 -- Shows actual peak dBFS level from track output meter
 -- Accurately calibrated to match Ableton Live's display
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "2.6.1"
+local VERSION = "2.6.2"
 
 -- State variables
 local lastDB = -70.0
 local lastMeterValue = 0
 
 -- Debug mode
-local DEBUG = 1  -- Set to 1 for detailed logging
+local DEBUG = 0  -- Set to 0 for production (zero overhead)
 
 -- ===========================
 -- DEBUG LOGGING
 -- ===========================
 
 local function debug(message)
-    if DEBUG == 0 then return end
+    -- Performance guard: early return for zero overhead when DEBUG != 1
+    if DEBUG ~= 1 then return end
     
     local context = "dBFS"
     if self.parent and self.parent.name then
@@ -165,10 +167,8 @@ function meterToDB(meter_normalized)
                 local interpolation_ratio = meter_offset / meter_range
                 local db_value = point1[2] + (db_range * interpolation_ratio)
                 
-                if DEBUG == 1 then
-                    debug(string.format("Meter: %.4f → Between %.4f (%.1f dB) and %.4f (%.1f dB) → %.1f dB", 
-                        meter_normalized, point1[1], point1[2], point2[1], point2[2], db_value))
-                end
+                debug(string.format("Meter: %.4f → Between %.4f (%.1f dB) and %.4f (%.1f dB) → %.1f dB", 
+                    meter_normalized, point1[1], point1[2], point2[1], point2[2], db_value))
                 
                 return db_value
             end
@@ -318,12 +318,10 @@ function init()
         self.values.text = "-"
     end
     
-    if DEBUG == 1 then
-        debug("Initialized for parent: " .. (self.parent and self.parent.name or "unknown"))
-        debug("Peak dBFS meter - accurately calibrated to match Ableton Live")
-        debug("Range: -∞ to +6 dBFS (32-bit float headroom)")
-        debug("DEBUG MODE ENABLED")
-    end
+    debug("Initialized for parent: " .. (self.parent and self.parent.name or "unknown"))
+    debug("Peak dBFS meter - accurately calibrated to match Ableton Live")
+    debug("Range: -∞ to +6 dBFS (32-bit float headroom)")
+    debug("DEBUG MODE ENABLED")
 end
 
 init()
