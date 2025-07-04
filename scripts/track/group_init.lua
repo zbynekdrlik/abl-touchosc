@@ -1,5 +1,6 @@
 -- TouchOSC Track Group Initialization Script
--- Version: 1.15.3
+-- Version: 1.15.4
+-- Fixed: Use 'locked' property instead of 'enabled' for controls
 -- Fixed: Removed child control handler modification that caused errors
 -- Fixed: Schedule method not available - using time-based update checks
 -- Optimized: Replaced continuous update() with time-based activity monitoring
@@ -8,7 +9,7 @@
 -- Fixed: Debug guard early return for zero overhead
 
 -- Version constant
-local VERSION = "1.15.3"
+local VERSION = "1.15.4"
 
 -- Debug mode (set to 1 for debug output)
 local DEBUG = 0
@@ -126,10 +127,10 @@ local function updateTrackMapping()
         if trackNumber then
             debug(string.format("Track mapped: %s track %d", trackType, trackNumber))
             
-            -- Enable all child controls
+            -- Enable all child controls (using 'locked' property)
             for _, control in ipairs(childControls) do
-                if control.name ~= "mute" then  -- Mute button visibility controlled separately
-                    control.values.enabled = true
+                if control.name ~= "mute" and control.values then  -- Mute button visibility controlled separately
+                    control.values.locked = false  -- Unlock to enable
                 end
             end
             
@@ -139,10 +140,10 @@ local function updateTrackMapping()
         else
             debug("Track unmapped")
             
-            -- Disable interactive controls
+            -- Disable interactive controls (using 'locked' property)
             for _, control in ipairs(childControls) do
-                if control.name == "fader" or control.name == "pan" then
-                    control.values.enabled = false
+                if (control.name == "fader" or control.name == "pan") and control.values then
+                    control.values.locked = true  -- Lock to disable
                 end
             end
             
@@ -329,17 +330,17 @@ function init()
     lastActivityTime = os.clock()
     lastActivityCheck = getMillis()
     
-    -- Set initial enabled state
+    -- Set initial enabled state (using 'locked' property)
     if trackNumber then
         for _, control in ipairs(childControls) do
-            if control.name ~= "mute" then
-                control.values.enabled = true
+            if control.name ~= "mute" and control.values then
+                control.values.locked = false  -- Unlock to enable
             end
         end
     else
         for _, control in ipairs(childControls) do
-            if control.name == "fader" or control.name == "pan" then
-                control.values.enabled = false
+            if (control.name == "fader" or control.name == "pan") and control.values then
+                control.values.locked = true  -- Lock to disable
             end
         end
     end
