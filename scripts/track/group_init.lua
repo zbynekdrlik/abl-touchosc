@@ -1,5 +1,6 @@
 -- TouchOSC Track Group Initialization Script
--- Version: 1.15.8
+-- Version: 1.15.9
+-- Fixed: Removed _G usage in debounce function (not supported in TouchOSC)
 -- Fixed: Added initial tag = "trackGroup" for document script to find groups
 -- Fixed: Added back track discovery mechanism (was completely missing!)
 -- Optimized: Time-based activity monitoring instead of continuous updates
@@ -9,7 +10,7 @@
 -- Changed: DEBUG = 1 for troubleshooting
 
 -- Version constant
-local VERSION = "1.15.8"
+local VERSION = "1.15.9"
 
 -- Debug mode (set to 1 for debug output)
 local DEBUG = 1  -- Enable debug for troubleshooting
@@ -23,6 +24,9 @@ local INACTIVITY_TIMEOUT = 4         -- 4 seconds until fade starts
 local FADE_DURATION = 1              -- 1 second to fade out
 local ACTIVITY_CHECK_INTERVAL = 100  -- Check every 100ms
 local FADE_ALPHA = 0.6               -- Fade to 60% opacity
+
+-- Debounce timers table (local to this script)
+local debounceTimers = {}
 
 -- ===========================
 -- DEBUG LOGGING
@@ -127,22 +131,19 @@ local function buildConnectionTable(connIndex)
 end
 
 -- ===========================
--- DEBOUNCE HELPER
+-- DEBOUNCE HELPER (Fixed - no _G)
 -- ===========================
 
 local function debounce(key, delay)
     local now = os.clock()
-    if not _G.debounceTimers then
-        _G.debounceTimers = {}
-    end
     
-    if _G.debounceTimers[key] then
-        if now - _G.debounceTimers[key] < delay then
+    if debounceTimers[key] then
+        if now - debounceTimers[key] < delay then
             return true  -- Still in debounce period
         end
     end
     
-    _G.debounceTimers[key] = now
+    debounceTimers[key] = now
     return false  -- Not debounced
 end
 
