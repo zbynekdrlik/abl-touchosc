@@ -1,10 +1,10 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.7.0
--- Performance optimizations: Removed logging overhead, scheduled updates, proper debug guards
--- Based on v2.6.4 with Phase 1 optimizations implemented
+-- Version: 2.7.1
+-- Performance optimizations: Fixed jumpy double-tap animation with faster update rate
+-- Based on v2.7.0 with animation smoothness fix
 
 -- Version constant
-local VERSION = "2.7.0"
+local VERSION = "2.7.1"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -51,7 +51,7 @@ local log_exponent = 0.515
 local delay = 1000                       -- Delay before syncing to OSC position after touch release
 
 -- PERFORMANCE: Scheduled update settings
-local UPDATE_INTERVAL = 100             -- Update interval in milliseconds (10 Hz instead of 60 Hz)
+local UPDATE_INTERVAL = 16              -- Update interval in milliseconds (60 Hz for smooth animation)
 local last_update_time = 0              -- Track last update time
 
 -- State variables (do not modify)
@@ -581,8 +581,8 @@ function update()
           return
       end
 
-      -- PERFORMANCE: Adjust step size for scheduled updates
-      local step_size = DOUBLE_TAP_ANIMATION_SPEED * (UPDATE_INTERVAL / 16.67)  -- Scale for update rate
+      -- PERFORMANCE: Use fixed step size for 60Hz updates
+      local step_size = DOUBLE_TAP_ANIMATION_SPEED  -- No scaling needed at 60Hz
       local proposed_new_position = current_pos + (direction * step_size)
 
       -- Check if the proposed new position overshoots the target
