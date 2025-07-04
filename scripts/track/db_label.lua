@@ -1,14 +1,15 @@
 -- TouchOSC dB Value Label Display
--- Version: 1.3.0
+-- Version: 1.3.1
 -- Performance optimized - removed centralized logging, added DEBUG guards
+-- Fixed: Set DEBUG = 1 for troubleshooting
 -- Shows the current fader value in dB
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "1.3.0"
+local VERSION = "1.3.1"
 
 -- Debug mode (set to 1 for debug output)
-local DEBUG = 0
+local DEBUG = 1  -- Enable debug for troubleshooting
 
 -- State variable (must be local, not on self)
 local lastDB = -math.huge
@@ -172,6 +173,7 @@ function init()
     
     if DEBUG == 1 then
         debug("Initialized for parent: " .. (self.parent and self.parent.name or "unknown"))
+        debug("DEBUG MODE ENABLED")
     end
 end
 
