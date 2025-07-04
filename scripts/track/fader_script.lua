@@ -1,19 +1,18 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.4.1
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Added: Return track support using parent's trackType
--- Fixed: Never change fader position based on assumptions
--- Added: Centralized logging and multi-connection routing
--- Preserved: ALL original fader functionality
+-- Version: 2.5.0
+-- Changed: Local logging, significantly reduced verbosity
 
 -- Version constant
-local VERSION = "2.4.1"
+local VERSION = "2.5.0"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
 -- ===========================
 
--- DEBUG CONTROL: Set to 1 to enable all logging, 0 to disable completely
+-- Debug flag - set to 1 to enable logging
+local debug = 1
+
+-- DEBUG CONTROL: Set to 1 to enable verbose logging, 0 to disable
 local DEBUG = 0
 
 -- GRADUAL FIRST MOVEMENT SCALING SETTINGS
@@ -83,30 +82,26 @@ local double_tap_target_position = 0
 local double_tap_start_position = 0
 
 -- ===========================
--- CENTRALIZED LOGGING
+-- LOCAL LOGGING
 -- ===========================
 
--- Centralized logging through document script
+-- Local logging function
 local function log(message)
-    -- Get parent name for context
-    local context = "FADER"
-    if self.parent and self.parent.name then
-        context = "FADER(" .. self.parent.name .. ")"
+    if debug == 1 then
+        local context = "FADER"
+        if self.parent and self.parent.name then
+            context = "FADER(" .. self.parent.name .. ")"
+        end
+        print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
     end
-    
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
-    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
--- DEBUG PRINT FUNCTION (modified to use centralized logging)
+-- DEBUG PRINT FUNCTION (verbose logging)
 function debugPrint(...)
   if DEBUG == 1 then
     local args = {...}
     local msg = table.concat(args, " ")
-    log(msg)
+    log("[DEBUG] " .. msg)
   end
 end
 
@@ -123,7 +118,6 @@ local function getConnectionIndex()
             -- Find configuration object
             local configObj = root:findByName("configuration", true)
             if not configObj or not configObj.values or not configObj.values.text then
-                debugPrint("Warning: No configuration found, using default connection 1")
                 return 1
             end
             
@@ -139,7 +133,6 @@ local function getConnectionIndex()
                 end
             end
             
-            debugPrint("Warning: No config for " .. instance .. " - using default (1)")
             return 1
         end
     end
@@ -694,7 +687,7 @@ function onValueChanged()
     touch_event_count = touch_event_count + 1
   end
   
-  -- ENHANCED LOGGING WITH DB VALUES
+  -- ENHANCED LOGGING WITH DB VALUES (only in DEBUG mode)
   debugPrint("=== FADER MOVED ===")
   debugPrint("Fader:", string.format("%.1f%%", scaled_fader_position * 100))
   debugPrint("Audio:", string.format("%.3f", audio_value), string.format("(%.1f%%)", audio_value * 100))
@@ -732,9 +725,6 @@ function onValueChanged()
   if trackNumber then
     local path = trackType == "return" and '/live/return/set/volume' or '/live/track/set/volume'
     sendOSCRouted(path, trackNumber, audio_value)
-    
-    -- Volume change log ONLY in debug mode
-    debugPrint(string.format("Volume change for %s track %d: %.3f", trackType, trackNumber, scaled_fader_position))
   end
   
   -- TOUCH DETECTION WITH DEBUG
@@ -838,47 +828,8 @@ end
 
 -- VERIFICATION
 function init()
-  -- Log version with centralized logging
+  -- Log version
   log("Script v" .. VERSION .. " loaded")
-  
-  -- Log parent info
-  if self.parent and self.parent.name then
-    log("Initialized for parent: " .. self.parent.name)
-  end
-  
-  debugPrint("=== PROFESSIONAL FADER WITH IMMEDIATE 0.1dB RESPONSE ===")
-  debugPrint("DEBUG MODE:", DEBUG == 1 and "ENABLED" or "DISABLED")
-  debugPrint("Gradual movement scaling:", ENABLE_FIRST_MOVEMENT_SCALING and "ENABLED" or "DISABLED")
-  if ENABLE_FIRST_MOVEMENT_SCALING then
-    debugPrint("- Scaled movements count:", SCALED_MOVEMENTS_COUNT)
-    debugPrint("- Initial scale factor:", INITIAL_SCALE_FACTOR, "(", INITIAL_SCALE_FACTOR * 100, "%)")
-    debugPrint("- Final scale factor:", FINAL_SCALE_FACTOR, "(", FINAL_SCALE_FACTOR * 100, "%)")
-    debugPrint("- Minimum dB change:", MINIMUM_DB_CHANGE, "dB (immediate response)")
-    debugPrint("- Reaction compensation:", REACTION_MOVEMENTS, "movements at", REACTION_SCALE_FACTOR * 100, "% to 70% speed")
-    debugPrint("- Emergency movement threshold:", EMERGENCY_MOVEMENT_THRESHOLD * 100, "% (bypasses all scaling)")
-    debugPrint("- Linear range:", formatDB(value2db(LINEAR_RANGE_START)), "to", formatDB(value2db(LINEAR_RANGE_END)))
-    debugPrint("- Extra precision scaling (85%) applied in linear range")
-  end
-  debugPrint("Dead zones (double-tap disabled):")
-  debugPrint("- NONE (Double-tap enabled everywhere including -inf and +6dB)") -- Reflects change
-  debugPrint("Double-tap feature:", ENABLE_DOUBLE_TAP and "ENABLED" or "DISABLED")
-  if ENABLE_DOUBLE_TAP then
-    debugPrint("Double-tap timing:")
-    debugPrint("- Maximum time between taps:", DOUBLE_TAP_MAX_TIME, "ms")
-    debugPrint("- Minimum time between taps:", DOUBLE_TAP_MIN_TIME, "ms")
-    debugPrint("- Animation speed:", DOUBLE_TAP_ANIMATION_SPEED * 100, "% of full range per update (constant speed)") -- Reflects change in interpretation
-  end
-  debugPrint("")
-  debugPrint("Curve verification:")
-  local test_50 = linearToLog(0.5)
-  debugPrint("50% fader:", string.format("%.3f", test_50), "audio", formatDB(value2db(test_50)))
-  debugPrint("Unity position:", string.format("%.1f%%", logToLinear(0.85) * 100), "fader")
-  
-  -- Initialize scaling variables - preserve current position
-  last_position = self.values.x or 0
-  
-  -- REMOVED: Initial color setting
-  -- Let the group script handle interactivity
 end
 
 init()
