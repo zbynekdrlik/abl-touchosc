@@ -1,5 +1,6 @@
 -- TouchOSC Track Group Initialization Script
--- Version: 1.15.7
+-- Version: 1.15.8
+-- Fixed: Added initial tag = "trackGroup" for document script to find groups
 -- Fixed: Added back track discovery mechanism (was completely missing!)
 -- Optimized: Time-based activity monitoring instead of continuous updates
 -- Fixed: Schedule method not available - using time-based update checks
@@ -8,7 +9,7 @@
 -- Changed: DEBUG = 1 for troubleshooting
 
 -- Version constant
-local VERSION = "1.15.7"
+local VERSION = "1.15.8"
 
 -- Debug mode (set to 1 for debug output)
 local DEBUG = 1  -- Enable debug for troubleshooting
@@ -501,6 +502,9 @@ end
 -- ===========================
 
 function init()
+    -- CRITICAL: Set tag programmatically so document script can find us
+    self.tag = "trackGroup"
+    
     -- Log version
     log("Group v" .. VERSION .. " loaded")
     
@@ -545,6 +549,7 @@ function init()
     debug("Activity monitoring: " .. ACTIVITY_CHECK_INTERVAL .. "ms intervals")
     debug("Inactivity timeout: " .. INACTIVITY_TIMEOUT .. "s")
     debug("Fade duration: " .. FADE_DURATION .. "s")
+    debug("Initial tag set to: " .. self.tag)
     
     log("Ready - waiting for refresh")
 end
