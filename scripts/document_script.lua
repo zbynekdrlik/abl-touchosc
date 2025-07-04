@@ -1,12 +1,13 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.7.4
+-- Version: 2.7.5
+-- Performance: Added early return debug guard for zero overhead when DEBUG != 1
 -- Purpose: Main document script with configuration and track management
 -- Fixed: Use original findAllByProperty method for groups
 -- Removed: Custom findGroups function that caused errors
 
-local VERSION = "2.7.4"
+local VERSION = "2.7.5"
 local SCRIPT_NAME = "Document Script"
-local DEBUG = 1  -- Enable debug output
+local DEBUG = 0  -- Set to 0 for production (zero overhead)
 
 -- Configuration storage
 local config = {
@@ -24,7 +25,8 @@ local STARTUP_DELAY_FRAMES = 60  -- Wait 1 second (60 frames at 60fps)
 
 -- Debug logging
 local function debug(...)
-    if DEBUG == 0 then return end
+    -- Performance guard: early return for zero overhead when DEBUG != 1
+    if DEBUG ~= 1 then return end
     local args = {...}
     local msg = table.concat(args, " ")
     print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. " [DEBUG]: " .. msg)
