@@ -1,8 +1,10 @@
 -- TouchOSC Meter Script with Multi-Connection Support
--- Version: 2.2.2
+-- Version: 2.3.1
+-- Fixed: Parse parent tag for track info instead of accessing properties
+-- Added: Return track support using parent's trackType
 -- Fixed: Debug mode off, removed connection index logging issue
 
-local VERSION = "2.2.2"
+local VERSION = "2.3.1"
 
 -- DEBUG MODE
 local DEBUG = 0  -- Set to 1 to see meter values and conversions in console
@@ -66,19 +68,16 @@ end
 -- MULTI-CONNECTION SUPPORT
 -- ===========================
 
--- Get track number from parent group tag
-local function getTrackNumber()
-    -- Handle new tag format "instance:trackNumber"
+-- Get track number and type from parent group
+local function getTrackInfo()
+    -- Parent stores track info in tag as "instance:trackNumber:trackType"
     if self.parent and self.parent.tag then
-        -- Try new format first
-        local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
-        if trackNum then
-            return tonumber(trackNum)
+        local instance, trackNum, trackType = self.parent.tag:match("^(%w+):(%d+):(%w+)$")
+        if trackNum and trackType then
+            return tonumber(trackNum), trackType
         end
-        -- Fallback to old format (just number)
-        return tonumber(self.parent.tag)
     end
-    return nil
+    return nil, nil
 end
 
 -- Get connection index by reading configuration directly
@@ -92,7 +91,7 @@ local function getConnectionIndex()
     end
     
     -- Extract instance name from tag
-    local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
+    local instance = self.parent.tag:match("^(%w+):")
     if not instance then
         return defaultConnection
     end
@@ -219,8 +218,23 @@ end
 -- ===========================
 
 function onReceiveOSC(message, connections)
-  -- Check if this is a meter message
-  if message[1] ~= '/live/track/get/output_meter_level' then
+  local path = message[1]
+  
+  -- Get track info from parent
+  local trackNumber, trackType = getTrackInfo()
+  if not trackNumber then
+    return false
+  end
+  
+  -- Check if this is a meter message for the correct track type
+  local isMeterMessage = false
+  if trackType == "return" and path == '/live/return/get/output_meter_level' then
+    isMeterMessage = true
+  elseif (trackType == "regular" or trackType == "track") and path == '/live/track/get/output_meter_level' then
+    isMeterMessage = true
+  end
+  
+  if not isMeterMessage then
     return false
   end
   
@@ -239,9 +253,8 @@ function onReceiveOSC(message, connections)
   
   -- Check if this message is for our track
   local msgTrackNumber = arguments[1].value
-  local myTrackNumber = getTrackNumber()
   
-  if not myTrackNumber or msgTrackNumber ~= myTrackNumber then
+  if msgTrackNumber ~= trackNumber then
     return false
   end
   
@@ -262,7 +275,7 @@ function onReceiveOSC(message, connections)
   
   -- Debug logging
   debugPrint("=== METER UPDATE ===")
-  debugPrint("Track:", myTrackNumber, "Connection:", myConnection)
+  debugPrint("Track Type:", trackType, "Track:", trackNumber, "Connection:", myConnection)
   debugPrint("AbletonOSC normalized:", string.format("%.4f", normalized_meter))
   debugPrint("→ Fader position:", string.format("%.1f%%", fader_position * 100))
   

@@ -1,9 +1,10 @@
--- TouchOSC Group Initialization Script with Selective Routing
--- Version: 1.13.2
--- Fixed: Correct OSC paths for meter detection
+-- TouchOSC Group Initialization Script with Auto Track Type Detection
+-- Version: 1.14.5
+-- Auto-detects regular vs return tracks
+-- Fixed: Track label shows first word, skipping return track prefixes (A-, B-, etc.)
 
 -- Version constant
-local SCRIPT_VERSION = "1.13.2"
+local SCRIPT_VERSION = "1.14.5"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -13,7 +14,9 @@ local lastVerified = 0
 local needsRefresh = false
 local trackNumber = nil
 local trackMapped = false
-local lastEnabledState = nil  -- Track last state to prevent spam
+local lastEnabledState = nil
+local trackType = nil  -- "track" or "return"
+local listenersActive = false  -- Track if listeners are active
 
 -- Activity tracking
 local lastSendTime = 0
@@ -73,7 +76,7 @@ local function parseGroupName(name)
     end
 end
 
--- Safe child access helper - no pcall, just direct checks
+-- Safe child access helper
 local function getChild(parent, name)
     if parent and parent.children and parent.children[name] then
         return parent.children[name]
@@ -94,7 +97,7 @@ local function updateStatusIndicator()
     local timeSinceReceive = currentTime - lastReceiveTime
     
     -- Check if mapped
-    if trackMapped and trackNumber then
+    if trackMapped and trackNumber ~= nil then
         indicator.visible = true
         
         -- Determine current state based on activity
@@ -137,7 +140,6 @@ monitorActivity = function()
         local currentValue = fader.values.x
         if lastFaderValue and math.abs(currentValue - lastFaderValue) > 0.001 then
             lastSendTime = currentTime
-            -- log("Fader movement detected")
         end
         lastFaderValue = currentValue
     end
@@ -162,8 +164,8 @@ local function setGroupEnabled(enabled, silent)
     
     local childCount = 0
     
-    -- Only check for controls we know exist
-    local controlsToCheck = {"fader", "mute", "pan", "meter", "track_label", "db_label"}
+    -- Only check for controls we know exist (fixed db_label -> db)
+    local controlsToCheck = {"fader", "mute", "pan", "meter", "track_label", "db"}
     
     for _, name in ipairs(controlsToCheck) do
         local child = getChild(self, name)
@@ -174,7 +176,7 @@ local function setGroupEnabled(enabled, silent)
         end
     end
     
-    -- Update status indicator
+    -- Update status indicator immediately when enabling/disabling
     updateStatusIndicator()
     
     -- Only log if not silent
@@ -194,23 +196,26 @@ end
 
 -- Clear all OSC listeners for safety
 local function clearListeners()
-    if trackNumber and trackMapped then
+    if trackNumber ~= nil and trackMapped and listenersActive then
         local targetConnections = buildConnectionTable(connectionIndex)
         
-        -- Stop all listeners for the old track
-        sendOSC('/live/track/stop_listen/volume', trackNumber, targetConnections)
-        sendOSC('/live/track/stop_listen/output_meter_level', trackNumber, targetConnections)
-        sendOSC('/live/track/stop_listen/mute', trackNumber, targetConnections)
-        sendOSC('/live/track/stop_listen/panning', trackNumber, targetConnections)
+        -- Stop listeners based on track type
+        local oscPrefix = trackType == "return" and "/live/return/" or "/live/track/"
         
-        log("Stopped listeners for track " .. trackNumber)
+        sendOSC(oscPrefix .. 'stop_listen/volume', trackNumber, targetConnections)
+        sendOSC(oscPrefix .. 'stop_listen/output_meter_level', trackNumber, targetConnections)
+        sendOSC(oscPrefix .. 'stop_listen/mute', trackNumber, targetConnections)
+        sendOSC(oscPrefix .. 'stop_listen/panning', trackNumber, targetConnections)
+        
+        listenersActive = false
+        log("Stopped listeners for " .. trackType .. " " .. trackNumber)
     end
 end
 
 -- Notify specific children about events
 local function notifyChildren(event, value)
-    -- Notify specific children we know about
-    local childrenToNotify = {"fader", "mute", "pan", "meter", "db_label"}
+    -- Notify specific children we know about (fixed db_label -> db)
+    local childrenToNotify = {"fader", "mute", "pan", "meter", "db"}
     
     for _, name in ipairs(childrenToNotify) do
         local child = getChild(self, name)
@@ -238,16 +243,29 @@ function init()
     -- Update connection label if it exists
     updateConnectionLabel()
     
-    -- Initialize track label with the expected track name (not ???)
+    -- Initialize track label with the first word, skipping return track prefixes
     if self.children and self.children["track_label"] then
-        -- Use pattern match that captures only word characters
-        local displayName = trackName:match("(%w+)")
-        if displayName then
-            self.children["track_label"].values.text = displayName
+        local displayName = trackName
+        
+        -- Check if track name starts with single letter followed by hyphen (return track prefix)
+        -- Pattern: ^%u%- matches uppercase letter followed by hyphen at start
+        if trackName:match("^%u%-") then
+            -- Skip the prefix (e.g., "A-") and get the rest
+            displayName = trackName:sub(3)
+        end
+        
+        -- Now get the first word from the display name
+        local firstWord = displayName:match("(%w+)")
+        if firstWord then
+            self.children["track_label"].values.text = firstWord
         else
-            self.children["track_label"].values.text = trackName
+            -- Fallback to full name if no word found
+            self.children["track_label"].values.text = displayName
         end
     end
+    
+    -- Initialize status indicator
+    updateStatusIndicator()
     
     log("Ready - waiting for refresh")
 end
@@ -259,7 +277,7 @@ function update()
 end
 
 function refreshTrackMapping()
-    log("Refreshing track mapping")
+    log("Refreshing track mapping with auto-detection")
     
     -- SAFETY: Clear any existing listeners and disable controls
     clearListeners()
@@ -267,38 +285,40 @@ function refreshTrackMapping()
     
     needsRefresh = true
     trackMapped = false
-    trackNumber = nil  -- Clear old track number
+    trackNumber = nil
+    trackType = nil
     
     -- Build connection table for our specific connection
     local connections = buildConnectionTable(connectionIndex)
     
-    -- Send track names request to specific connection
+    -- Query both regular tracks and return tracks
     sendOSC('/live/song/get/track_names', connections)
+    sendOSC('/live/song/get/return_track_names', connections)
 end
 
 function onReceiveOSC(message, connections)
     local path = message[1]
     
     -- Check for meter or volume data (activity detection)
-    if trackMapped and trackNumber then
-        -- Check for meter data (correct path)
-        if path == '/live/track/get/output_meter_level' then
+    if trackMapped and trackNumber ~= nil and trackType then
+        local oscPrefix = trackType == "return" and "/live/return/" or "/live/track/"
+        
+        -- Check for meter data
+        if path == oscPrefix .. 'get/output_meter_level' then
             local trackIndex = message[2] and message[2][1] and message[2][1].value
             if trackIndex == trackNumber then
                 lastReceiveTime = getMillis()
-                -- log("Received meter data for track " .. trackIndex)
             end
         -- Check for volume data
-        elseif path == '/live/track/get/volume' then
+        elseif path == oscPrefix .. 'get/volume' then
             local trackIndex = message[2] and message[2][1] and message[2][1].value
             if trackIndex == trackNumber then
                 lastReceiveTime = getMillis()
-                -- log("Received volume data for track " .. trackIndex)
             end
         end
     end
     
-    -- Check if this is track names response
+    -- Check if this is track names response (regular tracks)
     if path == '/live/song/get/track_names' then
         -- Only process if it's from our configured connection
         if not connections[connectionIndex] then 
@@ -306,68 +326,115 @@ function onReceiveOSC(message, connections)
         end
         
         if needsRefresh then
-            needsRefresh = false  -- Clear flag immediately to prevent re-processing
-            
             local arguments = message[2]
             
-            if not arguments then
-                log("ERROR: No track names in response")
-                setGroupEnabled(false)  -- Keep disabled
-                -- Don't change track label - keep showing expected name
-                return true
+            if arguments then
+                for i = 1, #arguments do
+                    if arguments[i] and arguments[i].value then
+                        local trackNameValue = arguments[i].value
+                        
+                        -- EXACT match only for safety
+                        if trackNameValue == trackName then
+                            -- Found our track as a regular track
+                            trackNumber = i - 1
+                            trackType = "track"
+                            lastVerified = getMillis()
+                            trackMapped = true
+                            needsRefresh = false  -- Found it, stop searching
+                            
+                            log("Mapped to Regular Track " .. trackNumber)
+                            
+                            setGroupEnabled(true)
+                            
+                            -- Store combined info in tag
+                            self.tag = instance .. ":" .. trackNumber .. ":track"
+                            
+                            -- Notify children
+                            notifyChildren("track_changed", trackNumber)
+                            notifyChildren("track_type", trackType)
+                            
+                            -- Build connection table for our specific connection
+                            local targetConnections = buildConnectionTable(connectionIndex)
+                            
+                            -- Start listeners for regular track
+                            sendOSC('/live/track/start_listen/volume', trackNumber, targetConnections)
+                            sendOSC('/live/track/start_listen/output_meter_level', trackNumber, targetConnections)
+                            sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
+                            sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
+                            
+                            listenersActive = true
+                            
+                            return true
+                        end
+                    end
+                end
             end
+        end
+    end
+    
+    -- Check if this is return track names response
+    if path == '/live/song/get/return_track_names' then
+        -- Only process if it's from our configured connection
+        if not connections[connectionIndex] then 
+            return true
+        end
+        
+        if needsRefresh then
+            local arguments = message[2]
             
-            local trackFound = false
-            
-            for i = 1, #arguments do
-                if arguments[i] and arguments[i].value then
-                    local trackNameValue = arguments[i].value
-                    
-                    -- EXACT match only for safety
-                    if trackNameValue == trackName then
-                        -- Found our track
-                        trackNumber = i - 1
-                        lastVerified = getMillis()
-                        trackFound = true
-                        trackMapped = true
+            if arguments then
+                for i = 1, #arguments do
+                    if arguments[i] and arguments[i].value then
+                        local returnNameValue = arguments[i].value
                         
-                        log("Mapped to Track " .. trackNumber)
-                        
-                        setGroupEnabled(true)  -- ENABLE controls and show indicator
-                        
-                        -- Store combined info in tag
-                        self.tag = instance .. ":" .. trackNumber
-                        
-                        -- Notify children using safe method
-                        notifyChildren("track_changed", trackNumber)
-                        
-                        -- Build connection table for our specific connection
-                        local targetConnections = buildConnectionTable(connectionIndex)
-                        
-                        -- Start listeners - send only to our configured connection
-                        sendOSC('/live/track/start_listen/volume', trackNumber, targetConnections)
-                        sendOSC('/live/track/start_listen/output_meter_level', trackNumber, targetConnections)
-                        sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
-                        sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
-                        
-                        break
+                        -- EXACT match only for safety
+                        if returnNameValue == trackName then
+                            -- Found our track as a return track
+                            trackNumber = i - 1
+                            trackType = "return"
+                            lastVerified = getMillis()
+                            trackMapped = true
+                            needsRefresh = false
+                            
+                            log("Mapped to Return Track " .. trackNumber)
+                            
+                            setGroupEnabled(true)
+                            
+                            -- Store combined info in tag
+                            self.tag = instance .. ":" .. trackNumber .. ":return"
+                            
+                            -- Notify children
+                            notifyChildren("track_changed", trackNumber)
+                            notifyChildren("track_type", trackType)
+                            
+                            -- Build connection table for our specific connection
+                            local targetConnections = buildConnectionTable(connectionIndex)
+                            
+                            -- Start listeners for return track
+                            sendOSC('/live/return/start_listen/volume', trackNumber, targetConnections)
+                            sendOSC('/live/return/start_listen/output_meter_level', trackNumber, targetConnections)
+                            sendOSC('/live/return/start_listen/mute', trackNumber, targetConnections)
+                            sendOSC('/live/return/start_listen/panning', trackNumber, targetConnections)
+                            
+                            listenersActive = true
+                            
+                            return true
+                        end
                     end
                 end
             end
             
-            -- Handle track not found
-            if not trackFound then
-                log("ERROR: Track not found: '" .. trackName .. "'")
-                setGroupEnabled(false)  -- Keep disabled and hide indicator
-                trackNumber = nil  -- Clear any old track number
+            -- If we've checked both regular and return tracks and didn't find it
+            if needsRefresh then
+                log("ERROR: Track not found: '" .. trackName .. "' (checked both regular and return tracks)")
+                setGroupEnabled(false)
+                trackNumber = nil
+                trackType = nil
+                needsRefresh = false
                 
-                -- Notify children using safe method
+                -- Notify children
                 notifyChildren("track_unmapped", nil)
-                
-                -- Don't change track label - keep showing expected name
             end
-            
-            return true
         end
     end
     
@@ -381,5 +448,12 @@ function onReceiveNotify(action)
         clearListeners()
         trackMapped = false
         trackNumber = nil
+        trackType = nil
+        listenersActive = false
     end
+end
+
+-- Function to get track type (called by children)
+function getTrackType()
+    return trackType
 end

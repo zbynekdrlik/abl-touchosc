@@ -1,11 +1,12 @@
 -- TouchOSC dB Value Label Display
--- Version: 1.0.2
+-- Version: 1.2.0
+-- Added: Return track support using parent's trackType
+-- Fixed: Parse parent tag for track info instead of accessing properties
 -- Shows the current fader value in dB
 -- Multi-connection routing support
--- Fixed: Use local variable instead of self.property
 
 -- Version constant
-local VERSION = "1.0.2"
+local VERSION = "1.2.0"
 
 -- State variable (must be local, not on self)
 local lastDB = -math.huge
@@ -32,26 +33,22 @@ end
 -- CONNECTION HELPERS
 -- ===========================
 
--- Get track number from parent group
-local function getTrackNumber()
-    -- Parent stores combined tag like "band:5"
+-- Get track number and type from parent group
+local function getTrackInfo()
+    -- Parent stores track info in tag as "instance:trackNumber:trackType"
     if self.parent and self.parent.tag then
-        local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
-        if trackNum then
-            return tonumber(trackNum)
+        local instance, trackNum, trackType = self.parent.tag:match("^(%w+):(%d+):(%w+)$")
+        if trackNum and trackType then
+            return tonumber(trackNum), trackType
         end
     end
-    return nil
+    return nil, nil
 end
 
 -- Check if track is properly mapped
 local function isTrackMapped()
-    if not self.parent or not self.parent.tag then
-        return false
-    end
-    
-    local instance, trackNum = self.parent.tag:match("(%w+):(%d+)")
-    return instance ~= nil and trackNum ~= nil
+    local trackNumber, trackType = getTrackInfo()
+    return trackNumber ~= nil
 end
 
 -- ===========================
@@ -97,16 +94,29 @@ end
 -- ===========================
 
 function onReceiveOSC(message, connections)
+    local path = message[1]
     local arguments = message[2]
     
-    -- Get our track number
-    local myTrackNumber = getTrackNumber()
-    if not myTrackNumber then
+    -- Get track info from parent
+    local trackNumber, trackType = getTrackInfo()
+    if not trackNumber then
+        return false
+    end
+    
+    -- Check if this is a volume message for the correct track type
+    local isVolumeMessage = false
+    if trackType == "return" and path == '/live/return/get/volume' then
+        isVolumeMessage = true
+    elseif (trackType == "regular" or trackType == "track") and path == '/live/track/get/volume' then
+        isVolumeMessage = true
+    end
+    
+    if not isVolumeMessage then
         return false
     end
     
     -- Check if this message is for our track
-    if arguments[1].value == myTrackNumber then
+    if arguments[1].value == trackNumber then
         -- Get the volume value and convert to dB
         local audio_value = arguments[2].value
         local db_value = value2db(audio_value)
@@ -116,7 +126,7 @@ function onReceiveOSC(message, connections)
         
         -- Only log significant changes to reduce spam
         if not lastDB or math.abs(db_value - lastDB) > 0.5 then
-            log(string.format("Track %d: %s dB", myTrackNumber, formatDB(db_value)))
+            log(string.format("%s track %d: %s dB", trackType, trackNumber, formatDB(db_value)))
             lastDB = db_value
         end
     end
