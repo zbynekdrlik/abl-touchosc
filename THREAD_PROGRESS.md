@@ -1,19 +1,25 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**⚠️ FADER FIXED - TESTING NEEDED**
-- [x] Currently working on: Fixed fader script v2.6.1
-- [ ] Waiting for: User to test if fader now works
+**⚠️ CRITICAL FADER BUG FIXED - v2.6.2**
+- [x] Currently working on: Fixed critical fader initialization bug
+- [ ] Waiting for: User to test if fader now works properly
 - [ ] Blocked by: Need to verify fader fix before addressing other issues
 
-## Current Status (2025-07-04 14:46 UTC)
+## Current Status (2025-07-04 14:58 UTC)
 
-### JUST FIXED:
-- **Fader Script v2.6.1** - Major fixes applied:
-  - Fixed `onValueChanged()` signature (TouchOSC doesn't support parameters)
-  - Removed send control complexity that was breaking volume
-  - Restored all movement scaling from main branch
-  - Kept performance optimizations (event-driven, no continuous polling)
+### CRITICAL BUG FOUND AND FIXED:
+- **Fader Script v2.6.2** - Critical initialization bug fixed:
+  - **PROBLEM**: Script was setting `self.values.x = 0.0` in init()
+  - **EFFECT**: This caused fader to send 0 position to Ableton on startup
+  - **SOLUTION**: Removed position setting - preserve existing fader position
+  - **KEY INSIGHT**: Main branch NEVER sets initial position in init()
+
+### Previous Fix (v2.6.1):
+- Fixed `onValueChanged()` signature (TouchOSC doesn't support parameters)
+- Removed send control complexity that was breaking volume
+- Restored all movement scaling from main branch
+- Kept performance optimizations (event-driven, no continuous polling)
 
 ### STILL BROKEN (awaiting test results):
 - **Status indicator** - Not working at all (need to identify which script)
@@ -31,7 +37,7 @@
 |--------|---------|--------|-------|
 | document_script.lua | v2.7.4 | ❓ Unknown | - |
 | group_init.lua | v1.15.9 | ❓ Unknown | - |
-| fader_script.lua | v2.6.1 | 🔧 JUST FIXED | Fixed onValueChanged() signature |
+| fader_script.lua | v2.6.2 | 🔧 JUST FIXED | Fixed initialization bug |
 | meter_script.lua | v2.5.6 | ⚠️ Unclear | Behavior unclear |
 | pan_control.lua | v1.4.2 | ✅ Working | - |
 | db_label.lua | v1.3.2 | ✅ OK | - |
@@ -40,27 +46,29 @@
 | global_refresh_button.lua | v1.5.1 | ❓ Unknown | - |
 | status_indicator | ??? | ❌ BROKEN | Script unknown |
 
-## Fader Fix Details
+## Critical Fader Bug Analysis
 
-### Problem Found:
-1. TouchOSC doesn't support `onValueChanged(valueName)` with parameters
-2. Send control detection added unnecessary complexity
-3. Movement scaling was completely removed
+### Root Cause:
+The optimization branch added `self.values.x = 0.0` in init() which caused:
+1. Fader initializes with position = 0
+2. Track gets mapped
+3. Fader immediately sends position 0 to Ableton
+4. Ableton responds with actual position (49.6%)
+5. Fader jumps to correct position
 
-### Solution Applied:
-1. Reverted to `onValueChanged()` without parameters
-2. Removed all send control code
-3. Restored movement scaling from main branch
-4. Kept performance optimizations
+### Why Main Branch Works:
+- NEVER sets initial position in init()
+- Preserves whatever position the fader already has
+- Only requests position FROM Ableton, never sends on startup
 
 ## Next Steps
 
-### 1. Test Fader Fix
-Please test the fader:
-- Does it respond to touch?
-- Does it move smoothly?
-- Does it sync with Ableton?
-- Does double-tap to 0dB work?
+### 1. Test Fader Fix (Critical)
+Please test the fader now:
+- Should NOT move on startup
+- Should sync with Ableton's current position
+- Should respond properly to touch
+- Should work with all movement scaling
 
 ### 2. Identify Status Indicator
 Need to find which script controls the status indicator:
@@ -78,15 +86,15 @@ What exactly is wrong with the meter?
 
 Please reload the template and test:
 ```
-1. Fader movement and response
-2. Check console for version: "FADER Script v2.6.1 loaded"
-3. Note any error messages
-4. Describe status indicator location/purpose
+1. Fader should NOT move on startup
+2. Check console for version: "FADER Script v2.6.2 loaded"
+3. Test fader movement and response
+4. Note any error messages
 ```
 
 ---
 
-## State Saved: 2025-07-04 14:46 UTC
-**Status**: Fader fixed with v2.6.1 - awaiting test results
-**Next Action**: Test fader functionality
-**Key Fix**: Corrected onValueChanged() signature for TouchOSC compatibility
+## State Saved: 2025-07-04 14:58 UTC
+**Status**: Critical fader initialization bug fixed with v2.6.2
+**Next Action**: Test that fader doesn't move on startup
+**Key Fix**: Never set initial position - preserve existing state
