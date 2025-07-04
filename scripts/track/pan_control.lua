@@ -1,11 +1,12 @@
 -- TouchOSC Pan Control Script
--- Version: 1.4.1
+-- Version: 1.4.2
+-- Fixed: Prevent ANY position changes when track is not mapped
 -- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
--- Fixed: Added logger output using root:notify like other scripts
+-- Removed: Logger output
 
 -- Version constant
-local VERSION = "1.4.1"
+local VERSION = "1.4.2"
 
 -- Double-tap configuration
 local delay = 300 -- the maximum elapsed time between taps
@@ -16,21 +17,21 @@ local touch_on_first = false
 local COLOR_CENTERED = Color(0.39, 0.39, 0.39, 1.0)  -- #646464FF when at center
 local COLOR_OFF_CENTER = Color(0.20, 0.76, 0.86, 1.0) -- #34C1DC when out of center
 
+-- CRITICAL: Track whether we have a valid position from Ableton
+local has_valid_position = false
+
 -- ===========================
 -- LOGGING
 -- ===========================
 
--- Logging with both logger object and console output
+-- Simple console logging
 local function log(message)
     local context = "PAN"
     if self.parent and self.parent.name then
         context = "PAN(" .. self.parent.name .. ")"
     end
     
-    -- Send to document script for logger text update (like meter and fader)
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
+    -- Only print to console for development/debugging
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
@@ -111,12 +112,31 @@ local function getTrackInfo()
     return nil, nil
 end
 
+-- Check if track is properly mapped
+local function isTrackMapped()
+    local trackNumber, trackType = getTrackInfo()
+    return trackNumber ~= nil
+end
+
 -- ===========================
 -- MAIN FUNCTIONS
 -- ===========================
 
 -- Handle value changes (touch and movement)
 function onValueChanged()
+    -- CRITICAL FIX: Prevent ANY value changes when track is not mapped
+    if not isTrackMapped() then
+        log("Track not mapped - ignoring value change completely")
+        return
+    end
+    
+    -- CRITICAL FIX: If we haven't received a valid position from Ableton yet, don't process changes
+    -- This prevents the pan from jumping to default positions on startup
+    if not has_valid_position then
+        log("No valid position from Ableton yet - ignoring value change")
+        return
+    end
+    
     local trackNumber, trackType = getTrackInfo()
     if not trackNumber then
         return
@@ -207,10 +227,29 @@ function onReceiveOSC(message, connections)
     -- Get the pan value (-1 to 1 from Ableton)
     local abletonPan = arguments[2].value
     
+    -- Mark that we have received a valid position from Ableton
+    has_valid_position = true
+    
     -- Convert to TouchOSC range (0-1)
     self.values.x = (abletonPan + 1) / 2
     
+    log("Received pan position from Ableton: " .. string.format("%.2f", self.values.x))
+    
     return true
+end
+
+-- Handle notifications from parent group
+function onReceiveNotify(key, value)
+    -- Parent might notify us of track changes
+    if key == "track_changed" then
+        -- Track changed but might still be valid - wait for OSC data
+        -- Don't reset has_valid_position yet - wait for new OSC data
+        log("Track changed - waiting for OSC pan position")
+    elseif key == "track_unmapped" then
+        -- Track is definitely unmapped - mark as invalid
+        has_valid_position = false
+        log("Track unmapped - pan frozen at current position")
+    end
 end
 
 -- ===========================
@@ -221,12 +260,17 @@ function init()
     -- Log version
     log("Script v" .. VERSION .. " loaded")
     
+    -- CRITICAL: Don't assume we have a valid position on startup
+    has_valid_position = false
+    
     -- DO NOT touch self.values.x - preserve current state!
     
     -- Log parent info
     if self.parent and self.parent.name then
         log("Initialized for parent: " .. self.parent.name)
     end
+    
+    log("Waiting for valid position from Ableton...")
 end
 
 -- Initialize on script load
