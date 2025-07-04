@@ -1,11 +1,11 @@
 -- mute_button.lua
--- Version: 2.0.1
--- Performance optimized - removed centralized logging, added DEBUG guards
+-- Version: 2.0.2
+-- Fixed: Added notify handler to request state when track changes
 -- Fixed: Set DEBUG = 1 for troubleshooting
 -- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
 
-local VERSION = "2.0.1"
+local VERSION = "2.0.2"
 
 -- Debug mode (set to 1 for debug output)
 local DEBUG = 1  -- Enable debug for troubleshooting
@@ -68,6 +68,21 @@ local function buildConnectionTable(index)
         connections[i] = (i == index)
     end
     return connections
+end
+
+-- Request current mute state
+local function requestMuteState()
+    local trackNumber, trackType = getTrackInfo()
+    if trackNumber then
+        local connectionIndex = getConnectionIndex()
+        local connections = buildConnectionTable(connectionIndex)
+        local path = trackType == "return" and "/live/return/get/mute" or "/live/track/get/mute"
+        sendOSC(path, trackNumber, connections)
+        
+        if DEBUG == 1 then
+            debug("Requested mute state for " .. trackType .. " track " .. trackNumber)
+        end
+    end
 end
 
 -- Handle incoming OSC
@@ -138,20 +153,36 @@ function onValueChanged(key)
     end
 end
 
+-- Handle notifications from parent group
+function onReceiveNotify(key, value)
+    if DEBUG == 1 then
+        debug("Received notify: " .. key .. " = " .. tostring(value))
+    end
+    
+    if key == "track_changed" then
+        -- Request mute state when track changes
+        requestMuteState()
+    elseif key == "track_type" then
+        -- Track type changed, might need to update
+        if DEBUG == 1 then
+            debug("Track type changed to: " .. tostring(value))
+        end
+    elseif key == "track_unmapped" then
+        -- Reset button to default state when unmapped
+        self.values.x = 1  -- Unmuted state
+        if DEBUG == 1 then
+            debug("Track unmapped - reset to unmuted state")
+        end
+    end
+end
+
 -- Initialize
 print("[" .. os.date("%H:%M:%S") .. "] MUTE: Script v" .. VERSION .. " loaded")
 
 -- Request initial mute state (only works if track is already mapped)
 local trackNumber, trackType = getTrackInfo()
 if trackNumber then
-    local connectionIndex = getConnectionIndex()
-    local connections = buildConnectionTable(connectionIndex)
-    local path = trackType == "return" and "/live/return/get/mute" or "/live/track/get/mute"
-    sendOSC(path, trackNumber, connections)
-    
-    if DEBUG == 1 then
-        debug("Requested initial mute state for " .. trackType .. " track " .. trackNumber)
-    end
+    requestMuteState()
 else
     if DEBUG == 1 then
         debug("No track mapped yet - waiting for parent notification")
