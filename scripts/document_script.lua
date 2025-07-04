@@ -1,11 +1,12 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.7.2
+-- Version: 2.7.3
 -- Purpose: Main document script with configuration and track management
--- Removed: Centralized logging functionality
--- Fixed: Automatic refresh on startup with proper timing
+-- Fixed: Group discovery mechanism to find groups by name pattern
+-- Added: DEBUG = 1 for troubleshooting
 
-local VERSION = "2.7.2"
+local VERSION = "2.7.3"
 local SCRIPT_NAME = "Document Script"
+local DEBUG = 1  -- Enable debug output
 
 -- Configuration storage
 local config = {
@@ -21,6 +22,14 @@ local startupRefreshTime = nil
 local frameCount = 0
 local STARTUP_DELAY_FRAMES = 60  -- Wait 1 second (60 frames at 60fps)
 
+-- Debug logging
+local function debug(...)
+    if DEBUG == 0 then return end
+    local args = {...}
+    local msg = table.concat(args, " ")
+    print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. " [DEBUG]: " .. msg)
+end
+
 -- === CONFIGURATION PARSING ===
 local function parseConfiguration()
     -- Try to find configuration if not registered yet
@@ -29,6 +38,7 @@ local function parseConfiguration()
     end
     
     if not configText or not configText.values.text then
+        debug("No configuration text found")
         return false
     end
     
@@ -51,6 +61,7 @@ local function parseConfiguration()
             if key and value then
                 config.connections[key] = tonumber(value)
                 connectionCount = connectionCount + 1
+                debug("Parsed connection: " .. key .. " -> " .. value)
             end
             
             -- Parse unfold groups with connection prefix
@@ -64,6 +75,7 @@ local function parseConfiguration()
                     group_name = unfold_group
                 })
                 unfoldCount = unfoldCount + 1
+                debug("Parsed unfold: " .. unfold_instance .. " -> " .. unfold_group)
             end
             
             -- Legacy format support (no prefix = unfold on all connections)
@@ -77,12 +89,43 @@ local function parseConfiguration()
                     group_name = unfold_match
                 })
                 unfoldCount = unfoldCount + 1
+                debug("Parsed legacy unfold: all -> " .. unfold_match)
             end
         end
     end
     
     print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. ": Config parsed - " .. connectionCount .. " connections, " .. unfoldCount .. " unfolds")
     return true
+end
+
+-- === FIND GROUPS ===
+local function findGroups()
+    local groups = {}
+    
+    -- Find all controls that match track group pattern
+    -- Groups are named like "master_TrackName" or "band_TrackName"
+    local function checkControl(control)
+        if control.name and (control.name:match("^master_") or control.name:match("^band_")) then
+            -- Check if it has a script (which would make it a group)
+            if control.script and control.script ~= "" then
+                table.insert(groups, control)
+                debug("Found group: " .. control.name)
+            end
+        end
+        
+        -- Recursively check children
+        if control.children then
+            for _, child in ipairs(control.children) do
+                checkControl(child)
+            end
+        end
+    end
+    
+    -- Start from root
+    checkControl(root)
+    
+    debug("Found " .. #groups .. " groups total")
+    return groups
 end
 
 -- === NOTIFY HANDLER ===
@@ -97,6 +140,7 @@ function onReceiveNotify(action, value)
         
     elseif action == "configuration_updated" then
         -- Configuration text has been updated - reparse silently
+        debug("Configuration updated")
         parseConfiguration()
         
     elseif action == "refresh_all_groups" then
@@ -119,17 +163,21 @@ function refreshAllGroups()
         status.values.text = "Refreshing..."
     end
     
-    -- Find all groups with trackGroup tag
-    local groups = root:findAllByProperty("tag", "trackGroup", true)
+    -- Find all groups using name pattern
+    local groups = findGroups()
+    
+    debug("Refreshing " .. #groups .. " groups")
     
     -- Clear all track mappings first
     for _, group in ipairs(groups) do
         -- Notify group to clear its mapping
+        debug("Clearing mapping for group: " .. group.name)
         group:notify("clear_mapping")
     end
     
     -- Trigger refresh on all groups
     for _, group in ipairs(groups) do
+        debug("Refreshing group: " .. group.name)
         group:notify("refresh_tracks")
     end
     
@@ -207,6 +255,8 @@ function onReceiveOSC(message, connections)
             end
         end
         
+        debug("Track names received from connection " .. (sourceConnection or "unknown") .. " (instance: " .. (sourceInstance or "unknown") .. ")")
+        
         -- Count unfolds for this instance
         local unfoldedCount = 0
         
@@ -224,6 +274,7 @@ function onReceiveOSC(message, connections)
                             local targetConnections = createConnectionTable(sourceConnection)
                             sendOSC('/live/track/set/fold_state', track_index, false, targetConnections)
                             unfoldedCount = unfoldedCount + 1
+                            debug("Unfolding track " .. track_index .. ": " .. track_name)
                         end
                     end
                 end
