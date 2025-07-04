@@ -1,32 +1,28 @@
 -- TouchOSC dB Value Label Display
--- Version: 1.2.0
--- Added: Return track support using parent's trackType
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Shows the current fader value in dB
--- Multi-connection routing support
+-- Version: 1.3.0
+-- Changed: Local logging, reduced verbosity
 
 -- Version constant
-local VERSION = "1.2.0"
+local VERSION = "1.3.0"
+
+-- Debug flag - set to 1 to enable logging
+local debug = 1
 
 -- State variable (must be local, not on self)
 local lastDB = -math.huge
 
 -- ===========================
--- CENTRALIZED LOGGING
+-- LOCAL LOGGING
 -- ===========================
 
 local function log(message)
-    -- Get parent name for context
-    local context = "DB_LABEL"
-    if self.parent and self.parent.name then
-        context = "DB_LABEL(" .. self.parent.name .. ")"
+    if debug == 1 then
+        local context = "DB_LABEL"
+        if self.parent and self.parent.name then
+            context = "DB_LABEL(" .. self.parent.name .. ")"
+        end
+        print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
     end
-    
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development
-    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
 -- ===========================
@@ -123,12 +119,7 @@ function onReceiveOSC(message, connections)
         
         -- Update label text
         self.values.text = formatDB(db_value)
-        
-        -- Only log significant changes to reduce spam
-        if not lastDB or math.abs(db_value - lastDB) > 0.5 then
-            log(string.format("%s track %d: %s dB", trackType, trackNumber, formatDB(db_value)))
-            lastDB = db_value
-        end
+        lastDB = db_value
     end
     
     return false  -- Don't block other receivers
@@ -144,12 +135,10 @@ function onReceiveNotify(key, value)
         -- Clear the display when track changes
         self.values.text = "-inf"
         lastDB = -math.huge
-        log("Track changed - display reset")
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
         self.values.text = "-"
         lastDB = nil
-        log("Track unmapped - display shows dash")
     elseif key == "control_enabled" then
         -- Show/hide based on track mapping status
         self.values.visible = value
@@ -169,11 +158,6 @@ function init()
         self.values.text = "-inf"
     else
         self.values.text = "-"
-    end
-    
-    -- Log parent info
-    if self.parent and self.parent.name then
-        log("Initialized for parent: " .. self.parent.name)
     end
 end
 
