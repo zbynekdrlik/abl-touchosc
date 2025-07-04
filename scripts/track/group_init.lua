@@ -1,10 +1,11 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.14.5
+-- Version: 1.15.0
+-- Performance optimized: Replaced continuous update() with scheduled updates
 -- Auto-detects regular vs return tracks
 -- Fixed: Track label shows first word, skipping return track prefixes (A-, B-, etc.)
 
 -- Version constant
-local SCRIPT_VERSION = "1.14.5"
+local SCRIPT_VERSION = "1.15.0"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -267,12 +268,17 @@ function init()
     -- Initialize status indicator
     updateStatusIndicator()
     
-    log("Ready - waiting for refresh")
+    -- PERFORMANCE OPTIMIZATION: Schedule activity monitoring instead of continuous update()
+    -- Run monitoring every 100ms instead of every frame (60-120Hz)
+    self:schedule(100)
+    
+    log("Ready - waiting for refresh (scheduled monitoring @ 100ms)")
 end
 
--- Use update() function instead of schedule for periodic monitoring
-function update()
-    -- Monitor activity periodically
+-- PERFORMANCE OPTIMIZATION: Use onSchedule instead of update()
+-- This runs at controlled intervals instead of every frame
+function onSchedule()
+    -- Monitor activity at scheduled interval
     monitorActivity()
 end
 
