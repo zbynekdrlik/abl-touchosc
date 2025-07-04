@@ -2,74 +2,80 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Currently working on: Fixed meter lag and fader overshoot issues
-- [ ] Waiting for: User to TEST fixes (v2.6.0 meter, v2.7.2 fader)
-- [ ] Blocked by: Need test results before proceeding
+- [x] Currently working on: Meter fluency and status indicator issues
+- [ ] Waiting for: User still not satisfied with meter performance
+- [ ] Blocked by: Need deeper investigation of meter differences
 
-## Current Status (2025-07-04 19:13 UTC)
+## Current Status (2025-07-04 19:30 UTC)
 
 ### ⚠️ PHASE 1 BUG FIXES - PARTIALLY COMPLETE
 
-**Fixes IMPLEMENTED (AWAITING TEST):**
-1. **Meter Lag & Color Issues (v2.6.0)** ✅ FIXED
-   - Problem: Color smoothing too slow (0.3), not responsive
-   - Fix: Increased smoothing to 0.7, instant change for small differences
-   - Also: Reduced notification threshold 5%→2%, interval 100ms→50ms
-   - Also: Fixed version logging to respect DEBUG flag
+**COMPLETED FIXES:**
+1. **Fader Movement (v2.7.2)** ✅ WORKING
+   - Fixed double-tap overshoot at 0dB
+   - User confirmed "Fader movement is ok"
    
-2. **Fader Overshoot at 0dB (v2.7.2)** ✅ FIXED
-   - Problem: Double-tap animation overshooting target
-   - Fix: Reduced speed 0.005→0.003, added slow zone near target
-   - Also: Proportional speed in slow zone, better overshoot detection
-   - Also: Fixed version logging to respect DEBUG flag
-   
-3. **Verbose Logging** ❓ PARTIALLY FIXED
-   - Fixed in: meter_script v2.6.0, fader_script v2.7.2
-   - Still need to fix: Other scripts still use print() for version
-   - Status: **INCOMPLETE - other scripts need fixing**
+2. **Verbose Logging** ✅ FIXED
+   - Fixed in ALL scripts to respect DEBUG flag:
+   - meter_script v2.6.1
+   - fader_script v2.7.2
+   - group_init v1.16.1
+   - db_label v1.3.4
+   - pan_control v1.5.1
+   - db_meter_label v2.6.3
+   - global_refresh_button v1.5.2
+   - document_script v2.7.6
 
-4. **Status Indicator Not Working** ❌ NOT ADDRESSED
-   - User says color changes not visible
-   - Meter logs show color changes happening
-   - May be related to meter lag fix above
+**UNRESOLVED ISSUES:**
+1. **Meter Not Fluent** ❌ STILL NOT GOOD
+   - User says: "still not fluent as in main branch"
+   - v2.6.1 removed throttling but still not satisfactory
+   - Need deeper investigation of differences
+   
+2. **Status Indicator** ❌ NOT WORKING AT ALL
+   - Always brown, no color changes visible
+   - Meter logs show color calculations working
+   - Likely TouchOSC meter doesn't support color property
 
 ### VERSION TRACKING
-| Script | Version | Status | Change Made | Tested? |
-|--------|---------|--------|-------------|---------|
-| fader_script | v2.7.2 | FIXED | Overshoot fix + logging | ❌ NO |
-| meter_script | v2.6.0 | FIXED | Lag fix + logging | ❌ NO |
-| pan_control | v1.5.0 | NEEDS FIX | Verbose logging | ❌ NO |
-| db_label | v1.3.3 | NEEDS FIX | Verbose logging | ❌ NO |
-| mute_button | v2.0.4 | NEEDS FIX | Verbose logging | ❌ NO |
-| db_meter_label | v2.6.2 | NEEDS FIX | Verbose logging | ❌ NO |
-| group_init | v1.16.0 | NEEDS FIX | Verbose logging | ❌ NO |
-| document_script | v2.7.5 | NEEDS FIX | Verbose logging | ❌ NO |
+| Script | Version | Status | Issue |
+|--------|---------|--------|-------|
+| fader_script | v2.7.2 | ✅ WORKING | None |
+| meter_script | v2.6.1 | ❌ NOT FLUENT | Still laggy |
+| All others | Updated | ✅ LOGGING FIXED | None |
 
-### USER'S LAST FEEDBACK (19:04 UTC):
-- ✅ Meter working but laggy, receiving many OSC messages
-- ❌ Fader overshoots 0dB then moves back
-- ❌ Status indicator (meter color) not working visually
-- ❌ Verbose logging even with DEBUG=0
+### KEY DIFFERENCES FOUND (Main vs Feature)
 
-### CHANGES MADE THIS SESSION:
-1. meter_script.lua v2.6.0 - Fixed lag and color responsiveness
-2. fader_script.lua v2.7.2 - Fixed double-tap overshoot
+**Main Branch Meter (v2.3.1):**
+- Simple, direct implementation
+- No deferred connection setup
+- No notification system (parent.notify)
+- Direct color application
+- Uses log() function that prints to console
 
-### NEXT STEPS:
-1. **USER MUST TEST meter v2.6.0 and fader v2.7.2**
-2. If fixes work, proceed to fix verbose logging in remaining scripts
-3. If status indicator still not working, investigate further
+**Feature Branch Meter (v2.6.1):**
+- Complex connection management
+- Deferred setup that might miss messages
+- Parent notification system adds overhead
+- More debug code even when DEBUG=0
+- Different logging approach
 
-### TESTING REQUIRED:
-- [ ] Does meter update smoothly now?
-- [ ] Do meter colors change visibly (green/yellow/red)?
-- [ ] Does fader double-tap stop exactly at 0dB?
-- [ ] Are version logs hidden when DEBUG=0?
+### NEXT INVESTIGATION NEEDED:
+1. **Profile meter performance** - where is the lag?
+2. **Test without parent notifications** completely
+3. **Compare exact OSC message handling timing**
+4. **Try different meter control type** for status
+5. **Consider reverting to main branch meter approach**
+
+### USER'S FEEDBACK TIMELINE:
+- 19:04 UTC: Reported meter laggy, fader overshoot, status not working
+- 19:16 UTC: Fader ok, meter still not fluent, status still brown
+- 19:30 UTC: "Still not happy with meter and status"
 
 ---
 
-## State Saved: 2025-07-04 19:13 UTC
-**Status**: Fixed meter lag and fader overshoot, awaiting test
+## State Saved: 2025-07-04 19:30 UTC
+**Status**: Fader fixed, logging fixed, meter and status still problematic
 **Branch**: feature/performance-optimization  
-**Next Action**: User MUST test meter v2.6.0 and fader v2.7.2
-**Critical**: Still need to fix verbose logging in other scripts
+**Next Action**: Need deeper investigation or consider reverting meter
+**Critical**: User not satisfied with current meter performance
