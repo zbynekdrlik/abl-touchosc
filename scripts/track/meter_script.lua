@@ -1,13 +1,12 @@
 -- TouchOSC Meter Script - Audio Level Display
--- Version: 2.5.8
--- Performance: Added early return debug guard for zero overhead when DEBUG != 1
--- Fixed: Reduced notification spam - only notify on significant changes
--- Fixed: Added tostring() for potential nil/boolean values in debug
+-- Version: 2.5.9
+-- Performance: Fixed connection initialization timing issue
+-- Fixed: Meter now works correctly by deferring connection setup
 -- Purpose: Display audio levels from Ableton Live
 -- Optimized: Event-driven updates only - no continuous polling!
 
 -- Version constant
-local VERSION = "2.5.8"
+local VERSION = "2.5.9"
 
 -- Debug mode
 local DEBUG = 0  -- Set to 0 for production (zero overhead)
@@ -52,6 +51,7 @@ local connectionIndex = nil
 local connections = nil
 local isActive = false
 local lastMeterValue = 0
+local connectionSetupDeferred = false
 
 -- NOTIFICATION THROTTLING
 local NOTIFICATION_THRESHOLD = 0.05  -- Only notify if change > 5%
@@ -276,8 +276,14 @@ function onReceiveOSC(message, connections)
         return false
     end
     
+    -- Setup connections if deferred and not done yet
+    if connectionSetupDeferred and not connectionIndex then
+        setupConnections()
+        connectionSetupDeferred = false
+    end
+    
     -- Get our connection index
-    local myConnection = getConnectionIndex()
+    local myConnection = connectionIndex or getConnectionIndex()
     
     -- Check if this message is from our connection
     if connections and not connections[myConnection] then
@@ -360,8 +366,8 @@ function onReceiveNotify(key, value)
         trackNumber = value
         debug("Track number updated to:", trackNumber)
         
-        -- CRITICAL: Setup connections NOW that we have track info
-        setupConnections()
+        -- FIXED: Defer connection setup until we receive OSC
+        connectionSetupDeferred = true
         
         -- Reset meter when track changes
         self.values.x = 0
@@ -382,6 +388,7 @@ function onReceiveNotify(key, value)
         -- Clear display when track is unmapped
         trackNumber = nil
         trackType = nil
+        connectionIndex = nil
         self.values.x = 0.0
         debug("Track unmapped - meter cleared")
     end
