@@ -1,12 +1,13 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.6.1
+-- Version: 2.6.2
+-- Fixed: Don't set initial fader position - preserve existing position
 -- Based on main branch v2.4.1 with performance optimizations
 -- Fixed: Use correct onValueChanged() signature without parameters
 -- Removed: Send control complexity that was breaking volume control
 -- Optimized: Event-driven updates, removed continuous update() polling
 
 -- Version constant
-local VERSION = "2.6.1"
+local VERSION = "2.6.2"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -883,6 +884,10 @@ function init()
   
   -- Initialize scaling variables - preserve current position
   last_position = self.values.x or 0
+  
+  -- CRITICAL FIX: Don't set initial position - preserve whatever the fader has
+  -- The main branch NEVER sets self.values.x in init()
+  -- Setting it causes the fader to send that position to Ableton!
   
   -- Request initial position
   requestCurrentPosition()
