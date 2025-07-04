@@ -1,18 +1,19 @@
 -- TouchOSC dB Value Label Display
--- Version: 1.3.1
+-- Version: 1.3.2
+-- Fixed: Added notify handler to request volume when track changes
 -- Performance optimized - removed centralized logging, added DEBUG guards
--- Fixed: Set DEBUG = 1 for troubleshooting
 -- Shows the current fader value in dB
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "1.3.1"
+local VERSION = "1.3.2"
 
 -- Debug mode (set to 1 for debug output)
 local DEBUG = 1  -- Enable debug for troubleshooting
 
 -- State variable (must be local, not on self)
 local lastDB = -math.huge
+local hasTrackedStarted = false
 
 -- ===========================
 -- DEBUG LOGGING
@@ -33,6 +34,42 @@ end
 -- CONNECTION HELPERS
 -- ===========================
 
+-- Get connection index
+local function getConnectionIndex()
+    if self.parent and self.parent.tag then
+        local instance = self.parent.tag:match("^(%w+):")
+        if instance then
+            -- Find configuration
+            local configObj = root:findByName("configuration", true)
+            if not configObj or not configObj.values or not configObj.values.text then
+                return 1
+            end
+            
+            local configText = configObj.values.text
+            local searchKey = "connection_" .. instance .. ":"
+            
+            -- Parse configuration
+            for line in configText:gmatch("[^\r\n]+") do
+                line = line:match("^%s*(.-)%s*$")  -- Trim
+                if line:sub(1, #searchKey) == searchKey then
+                    local value = line:sub(#searchKey + 1):match("^%s*(.-)%s*$")
+                    return tonumber(value) or 1
+                end
+            end
+        end
+    end
+    return 1
+end
+
+-- Build connection table
+local function buildConnectionTable(index)
+    local connections = {}
+    for i = 1, 10 do
+        connections[i] = (i == index)
+    end
+    return connections
+end
+
 -- Get track number and type from parent group
 local function getTrackInfo()
     -- Parent stores track info in tag as "instance:trackNumber:trackType"
@@ -49,6 +86,32 @@ end
 local function isTrackMapped()
     local trackNumber, trackType = getTrackInfo()
     return trackNumber ~= nil
+end
+
+-- Request current volume from Ableton
+local function requestVolume()
+    local trackNumber, trackType = getTrackInfo()
+    if trackNumber then
+        local connectionIndex = getConnectionIndex()
+        local connections = buildConnectionTable(connectionIndex)
+        local path = trackType == "return" and "/live/return/get/volume" or "/live/track/get/volume"
+        sendOSC(path, trackNumber, connections)
+        
+        if DEBUG == 1 then
+            debug("Requested volume for " .. trackType .. " track " .. trackNumber)
+        end
+        
+        -- Start volume listening
+        if not hasTrackedStarted then
+            local listenPath = trackType == "return" and "/live/return/start_listen/volume" or "/live/track/start_listen/volume"
+            sendOSC(listenPath, trackNumber, connections)
+            hasTrackedStarted = true
+            
+            if DEBUG == 1 then
+                debug("Started volume listener for " .. trackType .. " track " .. trackNumber)
+            end
+        end
+    end
 end
 
 -- ===========================
@@ -126,7 +189,7 @@ function onReceiveOSC(message, connections)
         
         -- Only log significant changes to reduce spam
         if DEBUG == 1 and (not lastDB or math.abs(db_value - lastDB) > 0.5) then
-            debug(string.format("%s track %d: %s dB", trackType, trackNumber, formatDB(db_value)))
+            debug(string.format("%s track %d: %s dB (audio: %.3f)", trackType, trackNumber, formatDB(db_value), audio_value))
             lastDB = db_value
         end
     end
@@ -139,17 +202,28 @@ end
 -- ===========================
 
 function onReceiveNotify(key, value)
+    if DEBUG == 1 then
+        debug("Received notify: " .. key .. " = " .. tostring(value))
+    end
+    
     -- Handle track changes
     if key == "track_changed" then
         -- Clear the display when track changes
         self.values.text = "-inf"
         lastDB = -math.huge
+        hasTrackedStarted = false
         debug("Track changed - display reset")
+        
+        -- Request volume for new track
+        requestVolume()
+        
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
         self.values.text = "-"
         lastDB = nil
+        hasTrackedStarted = false
         debug("Track unmapped - display shows dash")
+        
     elseif key == "control_enabled" then
         -- Show/hide based on track mapping status
         self.values.visible = value
@@ -167,6 +241,8 @@ function init()
     -- Set initial text
     if isTrackMapped() then
         self.values.text = "-inf"
+        -- Request initial volume
+        requestVolume()
     else
         self.values.text = "-"
     end
