@@ -1,12 +1,13 @@
 -- TouchOSC Meter Script - Audio Level Display
--- Version: 2.5.3
+-- Version: 2.5.4
 -- Purpose: Display audio levels from Ableton Live
--- Fixed: Use 'x' property for horizontal meter (not 'value')
+-- Fixed: Removed ALL pcall usage (not supported in TouchOSC)
+-- Fixed: Use simple connection detection like main branch
 -- Optimized: Event-driven updates only - no continuous polling!
 -- Changed: DEBUG = 1 for troubleshooting
 
 -- Version constant
-local VERSION = "2.5.3"
+local VERSION = "2.5.4"
 
 -- Debug mode
 local DEBUG = 1  -- Enable debug for troubleshooting
@@ -97,38 +98,49 @@ local function findParentGroup()
 end
 
 -- ===========================
--- CONNECTION MANAGEMENT
+-- CONNECTION MANAGEMENT (Simplified like main branch)
 -- ===========================
 
+local function getConnectionIndex()
+    -- Default to connection 1 if can't determine
+    local defaultConnection = 1
+    
+    -- Check parent tag for instance name
+    if not parentGroup or not parentGroup.tag then
+        return defaultConnection
+    end
+    
+    -- Extract instance name from tag
+    local instance = parentGroup.tag:match("^(%w+):")
+    if not instance then
+        return defaultConnection
+    end
+    
+    -- Find and read configuration
+    local configObj = root:findByName("configuration", true)
+    if not configObj or not configObj.values or not configObj.values.text then
+        debug("No configuration found, using default connection")
+        return defaultConnection
+    end
+    
+    -- Parse configuration to find connection for this instance
+    local configText = configObj.values.text
+    local searchKey = "connection_" .. instance .. ":"
+    
+    for line in configText:gmatch("[^\r\n]+") do
+        line = line:match("^%s*(.-)%s*$")  -- Trim whitespace
+        if line:sub(1, #searchKey) == searchKey then
+            local value = line:sub(#searchKey + 1):match("^%s*(.-)%s*$")
+            return tonumber(value) or defaultConnection
+        end
+    end
+    
+    debug("No connection found for instance:", instance)
+    return defaultConnection
+end
+
 local function setupConnections()
-    if not parentGroup then return false end
-    
-    -- Try to get connection index from parent's script functions
-    local success, result = pcall(function()
-        if parentGroup.getConnectionIndex then
-            return parentGroup:getConnectionIndex()
-        elseif _G.getConnectionIndex then
-            local instance = parentGroup.name:match("^(%w+)_")
-            return _G.getConnectionIndex(instance)
-        end
-        return nil
-    end)
-    
-    if success and result then
-        connectionIndex = result
-    else
-        -- Try to find connection from document script
-        local docScript = root:findByName("document_script", true)
-        if docScript and docScript.getConnectionForInstance then
-            local instance = parentGroup.name:match("^(%w+)_")
-            connectionIndex = docScript:getConnectionForInstance(instance)
-        end
-    end
-    
-    if not connectionIndex then
-        debug("Warning: Could not determine connection index, using default (1)")
-        connectionIndex = 1
-    end
+    connectionIndex = getConnectionIndex()
     
     -- Build connection table
     connections = {}
