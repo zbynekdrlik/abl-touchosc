@@ -1,14 +1,11 @@
 -- TouchOSC Meter Script with Multi-Connection Support
--- Version: 2.4.0
--- Changed: Local logging, reduced verbosity
+-- Version: 2.4.1
+-- Changed: Removed debugPrint function
 
-local VERSION = "2.4.0"
+local VERSION = "2.4.1"
 
 -- Debug flag - set to 1 to enable logging
-local debug = 1
-
--- DEBUG MODE - separate from main debug
-local DEBUG = 0  -- Set to 1 to see meter values and conversions in console
+local debug = 0  -- Default to off
 
 -- COLOR THRESHOLDS (in dB) - PRESERVED FROM ORIGINAL
 local COLOR_THRESHOLD_YELLOW = -12    -- Above this = yellow (caution)
@@ -53,14 +50,6 @@ local function log(message)
     end
 end
 
-function debugPrint(...)
-  if DEBUG == 1 then
-    local args = {...}
-    local msg = table.concat(args, " ")
-    log("[DEBUG] " .. msg)
-  end
-end
-
 -- ===========================
 -- MULTI-CONNECTION SUPPORT
 -- ===========================
@@ -96,7 +85,7 @@ local function getConnectionIndex()
     -- Find and read configuration
     local configObj = root:findByName("configuration", true)
     if not configObj or not configObj.values or not configObj.values.text then
-        debugPrint("No configuration found, using default connection")
+        log("No configuration found, using default connection")
         return defaultConnection
     end
     
@@ -106,12 +95,12 @@ local function getConnectionIndex()
         -- Look for connection_instance: number pattern
         local configInstance, connectionNum = line:match("connection_(%w+):%s*(%d+)")
         if configInstance and configInstance == instance then
-            debugPrint("Found connection for", instance, ":", connectionNum)
+            log("Found connection for " .. instance .. ": " .. connectionNum)
             return tonumber(connectionNum) or defaultConnection
         end
     end
     
-    debugPrint("No connection found for instance:", instance)
+    log("No connection found for instance: " .. instance)
     return defaultConnection
 end
 
@@ -270,19 +259,6 @@ function onReceiveOSC(message, connections)
   local smoothed = smoothColor(target_color)
   self.color = Color(smoothed[1], smoothed[2], smoothed[3], smoothed[4])
   
-  -- Debug logging
-  debugPrint("=== METER UPDATE ===")
-  debugPrint("Track Type:", trackType, "Track:", trackNumber, "Connection:", myConnection)
-  debugPrint("AbletonOSC normalized:", string.format("%.4f", normalized_meter))
-  debugPrint("→ Fader position:", string.format("%.1f%%", fader_position * 100))
-  
-  -- Calculate actual dB for display
-  local audio_value = linearToLog(fader_position)
-  local actual_db = value2db(audio_value)
-  debugPrint("→ Actual dB:", string.format("%.1f", actual_db))
-  debugPrint("→ Color:", actual_db >= COLOR_THRESHOLD_RED and "RED" or
-                       actual_db >= COLOR_THRESHOLD_YELLOW and "YELLOW" or "GREEN")
-  
   return true  -- Stop propagation
 end
 
@@ -293,11 +269,11 @@ function onReceiveNotify(key, value)
         self.values.x = 0
         current_color = {COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4]}
         self.color = Color(current_color[1], current_color[2], current_color[3], current_color[4])
-        debugPrint("Track changed - reset meter")
+        log("Track changed - reset meter")
     elseif key == "track_unmapped" then
         -- Disable meter when track is unmapped
         self.values.x = 0
-        debugPrint("Track unmapped - disabled meter")
+        log("Track unmapped - disabled meter")
     end
 end
 
