@@ -1,16 +1,16 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.5.1
--- Changed: Removed debugPrint, reduced logging significantly
+-- Version: 2.5.2
+-- Changed: Standardized DEBUG flag (uppercase) and disabled by default
 
 -- Version constant
-local VERSION = "2.5.1"
+local VERSION = "2.5.2"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
 -- ===========================
 
 -- Debug flag - set to 1 to enable logging
-local debug = 0  -- Default to off for performance
+local DEBUG = 0  -- Default to off for performance
 
 -- GRADUAL FIRST MOVEMENT SCALING SETTINGS
 local ENABLE_FIRST_MOVEMENT_SCALING = true
@@ -84,7 +84,7 @@ local double_tap_start_position = 0
 
 -- Local logging function
 local function log(message)
-    if debug == 1 then
+    if DEBUG == 1 then
         local context = "FADER"
         if self.parent and self.parent.name then
             context = "FADER(" .. self.parent.name .. ")"
@@ -572,7 +572,7 @@ function onValueChanged()
   local raw_fader_position = self.values.x
   
   -- Detect and log suspicious jumps (only if debug enabled)
-  if debug == 1 and last_raw_position > 0 then
+  if DEBUG == 1 and last_raw_position > 0 then
     local raw_jump = math.abs(raw_fader_position - last_raw_position)
     if raw_jump > 0.1 and self.values.touch then  -- 10% jump while touching
       log("Suspicious jump: " .. string.format("%.4f", raw_jump))
