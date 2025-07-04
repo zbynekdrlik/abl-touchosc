@@ -1,12 +1,13 @@
 -- TouchOSC Pan Control Script
--- Version: 1.4.2
+-- Version: 1.5.0
+-- Performance optimization: Scheduled update() at 10Hz instead of 60Hz
 -- Fixed: Prevent ANY position changes when track is not mapped
 -- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
 -- Removed: Logger output
 
 -- Version constant
-local VERSION = "1.4.2"
+local VERSION = "1.5.0"
 
 -- Double-tap configuration
 local delay = 300 -- the maximum elapsed time between taps
@@ -19,6 +20,11 @@ local COLOR_OFF_CENTER = Color(0.20, 0.76, 0.86, 1.0) -- #34C1DC when out of cen
 
 -- CRITICAL: Track whether we have a valid position from Ableton
 local has_valid_position = false
+
+-- Performance optimization: Track update timing
+local SCHEDULED_UPDATE_INTERVAL = 100 -- 10Hz instead of 60Hz
+local last_update_time = 0
+local last_x_value = -1 -- Track last value to avoid redundant updates
 
 -- ===========================
 -- LOGGING
@@ -172,9 +178,27 @@ function onValueChanged()
     sendOSC(path, trackNumber, abletonValue, connections)
 end
 
--- Update visual color based on pan position
+-- Update visual color based on pan position (PERFORMANCE OPTIMIZED)
 function update()
+    local current_time = getMillis()
+    
+    -- Performance optimization: Only update at scheduled intervals
+    if current_time - last_update_time < SCHEDULED_UPDATE_INTERVAL then
+        return
+    end
+    
     local value = self.values.x
+    
+    -- Performance optimization: Skip if value hasn't changed
+    if value == last_x_value then
+        return
+    end
+    
+    -- Update timing and value tracking
+    last_update_time = current_time
+    last_x_value = value
+    
+    -- Update color based on position
     if math.abs(value - 0.5) > 0.01 then
         -- Pan is off-center
         self.color = COLOR_OFF_CENTER
