@@ -1,11 +1,11 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.6.3
--- Fixed: Boolean concat error in debug logging
+-- Version: 2.6.4
+-- Fixed: All boolean concat errors in debug logging
 -- Fixed: Don't send volume changes during onValueChanged - breaks feedback loop
 -- Based on main branch v2.4.1 with performance optimizations
 
 -- Version constant
-local VERSION = "2.6.3"
+local VERSION = "2.6.4"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -668,10 +668,10 @@ function onValueChanged()
       debugPrint("Last raw position:", string.format("%.4f", last_raw_position))
       debugPrint("New raw position:", string.format("%.4f", raw_fader_position))
       debugPrint("Jump size:", string.format("%.4f", raw_jump), string.format("(%.1f%%)", raw_jump * 100))
-      debugPrint("Touch state:", self.values.touch)
-      debugPrint("Synced state:", synced)
-      debugPrint("Touched flag:", touched)
-      debugPrint("Emergency mode:", emergency_mode_active)
+      debugPrint("Touch state:", tostring(self.values.touch))  -- Convert boolean to string
+      debugPrint("Synced state:", tostring(synced))  -- Convert boolean to string
+      debugPrint("Touched flag:", tostring(touched))  -- Convert boolean to string
+      debugPrint("Emergency mode:", tostring(emergency_mode_active))  -- Convert boolean to string
       debugPrint("Last OSC position:", string.format("%.4f", last_osc_x))
     end
   end
@@ -755,6 +755,12 @@ function onValueChanged()
     
     debugPrint("*** TOUCH START - Position:", string.format("%.1f%%", touch_start_position * 100), formatDB(value2db(linearToLog(touch_start_position))))
     
+    -- Send touch notification to parent
+    if self.parent then
+      self.parent:notify("child_touched", self.name)
+      debugPrint("Sent touch ON notification")
+    end
+    
   elseif self.values.touch and touch_started then
     local movement = math.abs(scaled_fader_position - touch_start_position)
     if movement > 0.015 then
@@ -772,6 +778,12 @@ function onValueChanged()
     debugPrint("Total events during touch:", touch_event_count)
     debugPrint("Total movement:", string.format("%.4f", total_movement))
     debugPrint("Touch duration:", touch_duration, "ms")
+    
+    -- Send touch release notification to parent
+    if self.parent then
+      self.parent:notify("child_released", self.name)
+      debugPrint("Sent touch OFF notification")
+    end
     
     local is_tap = (total_movement < 0.01) and 
                    (touch_duration < 200) and 
@@ -832,6 +844,14 @@ function onReceiveNotify(key, value)
     synced = true
     last_position = self.values.x  -- Keep current position
     debugPrint("Track changed - state reset, position preserved")
+    
+    -- Request current position from Ableton
+    local trackNumber, trackType = getTrackInfo()
+    if trackNumber then
+      local path = trackType == "return" and '/live/return/get/volume' or '/live/track/get/volume'
+      sendOSCRouted(path, trackNumber)
+      debugPrint("Requested current position from Ableton")
+    end
   elseif key == "track_unmapped" then
     -- FIXED: Don't change fader position
     debugPrint("Track unmapped - fader position preserved")
