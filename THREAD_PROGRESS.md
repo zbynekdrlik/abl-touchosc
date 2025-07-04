@@ -1,97 +1,101 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**⚠️ ALL FIXES APPLIED - COMPREHENSIVE TESTING NEEDED**
-- [x] Currently working on: Fixed all major issues identified in logs
-- [ ] Waiting for: User to test all fixes thoroughly
-- [ ] Blocked by: Need test results to confirm everything works
+**⚠️ MUTE BUTTON MISSING OSC RECEIVE PATTERNS IN TEMPLATE**
+- [x] Currently working on: Found root cause - mute button has NO OSC receive patterns
+- [ ] Waiting for: User to add OSC patterns in TouchOSC Editor  
+- [ ] Blocked by: Template file configuration issue
 
-## Current Status (2025-07-04 13:40 UTC)
+## Current Status (2025-07-04 14:00 UTC)
 
-### LATEST FIXES APPLIED:
-1. **Fader Script (v2.5.9 → v2.6.0)** - Removed sync delay that was causing fader to jump back
-2. **Mute Button (v2.0.1 → v2.0.2)** - Added notify handler to request state on track changes
-3. **DB Label (v1.3.1 → v1.3.2)** - Added notify handler and volume listener to ensure it gets updates
+### ROOT CAUSE DISCOVERED:
+**The mute button controls have NO OSC receive patterns configured in the TouchOSC template file.** This is why they can send TO Ableton but never receive FROM Ableton.
 
-### ALL FIXES SUMMARY:
-1. **Meter Script (v2.5.5 → v2.5.6)** - Fixed OSC message format to expect single normalized value
-2. **DB Meter Label (v2.6.0 → v2.6.1)** - Fixed OSC message format to match AbletonOSC output
-3. **Fader Script (v2.5.8 → v2.6.0)** - Added double-tap, fixed sync delay issue
-4. **DB Label (v1.3.0 → v1.3.2)** - Added volume request/listener on track change
-5. **Mute Button (v2.0.0 → v2.0.2)** - Added notify handler for track changes
+### REQUIRED FIX:
+In TouchOSC Editor, for EACH mute button control:
+1. Select the mute button control
+2. Go to OSC tab
+3. Add receive patterns:
+   - `/live/track/get/mute` (for regular tracks)
+   - `/live/return/get/mute` (for return tracks)
+4. Save and reload template
 
-### KEY FIXES EXPLAINED:
-- **OSC Format Issue**: AbletonOSC sends meter values as single normalized value, not stereo
-- **Sync Delay**: Removed automatic sync back behavior that was causing fader to jump
-- **Missing Handlers**: Added notify handlers to ensure controls request state on track changes
-- **Volume Listeners**: DB label now starts volume listener to get continuous updates
+### WHAT THIS MEANS:
+- The script code is actually CORRECT (v2.0.2)
+- The issue is in the TouchOSC template configuration
+- This CANNOT be fixed via script changes
+- Must edit the .tosc file in TouchOSC Editor
 
-### CONFIRMED WORKING:
-- ✅ Fader movement (controls volume without jumping back)
-- ✅ Pan control (including double-tap centering)
+### WORKING FEATURES:
+- ✅ Fader movement (no jumping back)
+- ✅ Pan control (including double-tap)
 - ✅ Group discovery and track mapping
 - ✅ Activity fade in/out
-- ✅ Meter display (showing levels correctly)
-- ✅ DB meter label (showing dBFS values)
+- ✅ Meter display (correct levels)
+- ✅ DB meter label (showing dBFS)
+- ✅ DB label (showing fader dB)
 
-### NEEDS TESTING:
-- DB label (should now show fader dB values continuously)
-- Mute button (should initialize and sync with Ableton)
-- Fader double-tap to 0dB
-- All controls syncing properly when changing tracks
+### NOT WORKING:
+- ❌ **Mute button sync from Ableton** - Missing OSC receive patterns in template
 
 ## Current Script Versions
 
-| Script | Version | Status | Changes Made |
-|--------|---------|--------|--------------|
-| document_script.lua | v2.7.4 | ✅ Working | No changes |
-| group_init.lua | v1.15.9 | ✅ Working | No changes |
-| fader_script.lua | v2.6.0 | ✅ Fixed | Removed sync delay, added double-tap |
-| meter_script.lua | v2.5.6 | ✅ Fixed | Corrected OSC format |
-| pan_control.lua | v1.4.2 | ✅ Working | No changes |
-| db_label.lua | v1.3.2 | ✅ Fixed | Added notify handler & listener |
-| db_meter_label.lua | v2.6.1 | ✅ Fixed | Corrected OSC format |
-| mute_button.lua | v2.0.2 | ✅ Fixed | Added notify handler |
-| global_refresh_button.lua | v1.5.1 | ✅ Working | No changes |
+| Script | Version | Status | Issue |
+|--------|---------|--------|-------|
+| document_script.lua | v2.7.4 | ✅ Working | - |
+| group_init.lua | v1.15.9 | ✅ Working | - |
+| fader_script.lua | v2.6.0 | ✅ Fixed | - |
+| meter_script.lua | v2.5.6 | ✅ Fixed | - |
+| pan_control.lua | v1.4.2 | ✅ Working | - |
+| db_label.lua | v1.3.2 | ✅ Fixed | - |
+| db_meter_label.lua | v2.6.1 | ✅ Fixed | - |
+| mute_button.lua | v2.0.2 | ⚠️ Script OK | Template missing OSC patterns |
+| global_refresh_button.lua | v1.5.1 | ✅ Working | - |
 
-## Root Cause Analysis
+## Template Configuration Issue
 
-The performance optimization effort broke functionality by:
-1. **Incorrect OSC format assumptions** - Expected stereo meter values when AbletonOSC sends single value
-2. **Keeping problematic sync behavior** - Fader sync delay was causing jumps
-3. **Missing notify handlers** - Controls weren't requesting state on track changes
-4. **Not starting listeners** - DB label wasn't listening for volume changes
+### To Verify:
+1. Open the .tosc template in TouchOSC Editor
+2. Select any mute button control
+3. Check the OSC tab
+4. Receive patterns will be EMPTY
+
+### To Fix:
+1. For each mute button in regular tracks:
+   - Add receive pattern: `/live/track/get/mute`
+2. For each mute button in return tracks:
+   - Add receive pattern: `/live/return/get/mute`
+3. Save template
+4. Reload in TouchOSC
+
+### Why This Happened:
+- During template creation, OSC patterns were added for faders, meters, etc.
+- Mute buttons were missed - they only have SEND patterns, not RECEIVE
+- Without receive patterns, `onReceiveOSC` is never called
 
 ## Next Steps Required
 
-### User Testing Needed:
-1. Load ALL updated scripts in TouchOSC
-2. Test fader movement - should NOT jump back after release
-3. Test DB label - should show continuous dB values
-4. Test mute button - should sync with Ableton state
-5. Test meter and dBFS display - should show accurate levels
-6. Test fader double-tap - should jump to 0dB
-7. Switch tracks and verify all controls update properly
+### Immediate User Action:
+1. **Open TouchOSC Editor**
+2. **Add OSC receive patterns to ALL mute buttons**
+3. **Save and test**
 
-### After Testing:
-- If all features work: Set DEBUG = 0 in all scripts
-- If issues remain: Analyze DEBUG output
-- Commit final working version
-- Consider merging to main branch
+### After Template Fix:
+- Test mute sync from Ableton
+- Verify all controls work properly
+- Set DEBUG = 0 in all scripts
+- Commit and consider merge to main
 
-## Testing Checklist
-- [ ] Fader moves without jumping back
-- [ ] DB label shows current fader dB value
-- [ ] Mute button syncs with Ableton
-- [ ] Meter shows audio levels
-- [ ] dBFS label shows meter values
-- [ ] Double-tap jumps to 0dB
-- [ ] All controls update when switching tracks
-- [ ] No console errors or warnings
+## Testing Checklist After Template Fix
+- [ ] Mute buttons sync when changed in Ableton
+- [ ] Mute buttons still work when clicked in TouchOSC
+- [ ] All other controls still working
+- [ ] No console errors
 
 ---
 
-## State Saved: 2025-07-04 13:40 UTC
-**Status**: All identified issues fixed
-**Next Action**: Comprehensive testing of all features
-**Debug Mode**: All scripts have DEBUG = 1 for troubleshooting
+## State Saved: 2025-07-04 14:00 UTC
+**Status**: Template configuration issue identified
+**Script Status**: All scripts are correct
+**Next Action**: User must edit template in TouchOSC Editor
+**Note**: This is NOT a script bug - it's a missing template configuration
