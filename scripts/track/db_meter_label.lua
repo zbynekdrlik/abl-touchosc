@@ -1,19 +1,18 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.5.1
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Added: Return track support using parent's trackType
--- Shows actual peak dBFS level from track output meter
--- Accurately calibrated to match Ableton Live's display
--- Multi-connection routing support
+-- Version: 2.6.0
+-- Changed: Local logging, reduced verbosity
 
 -- Version constant
-local VERSION = "2.5.1"
+local VERSION = "2.6.0"
+
+-- Debug flag - set to 1 to enable logging
+local debug = 1
 
 -- State variables
 local lastDB = -70.0
 local lastMeterValue = 0
 
--- Debug mode
+-- Debug mode - separate from main debug
 local DEBUG = 0  -- Set to 1 for detailed logging
 
 -- ===========================
@@ -52,21 +51,17 @@ local METER_DB_CALIBRATION = {
 }
 
 -- ===========================
--- CENTRALIZED LOGGING
+-- LOCAL LOGGING
 -- ===========================
 
 local function log(message)
-    -- Get parent name for context
-    local context = "dBFS"
-    if self.parent and self.parent.name then
-        context = "dBFS(" .. self.parent.name .. ")"
+    if debug == 1 then
+        local context = "dBFS"
+        if self.parent and self.parent.name then
+            context = "dBFS(" .. self.parent.name .. ")"
+        end
+        print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
     end
-    
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development
-    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
 local function debugLog(message)
@@ -259,25 +254,6 @@ function onReceiveOSC(message, connections)
     -- Always update the display for every meter value
     self.values.text = formatDB(db_value)
     
-    -- Enhanced logging for debugging
-    local shouldLog = false
-    
-    -- Always log if value changed significantly
-    if not lastDB or math.abs(db_value - lastDB) > 1.0 then
-        shouldLog = true
-    end
-    
-    -- Log clipping
-    if db_value > 0 and (not lastDB or lastDB <= 0) then
-        shouldLog = true
-    end
-    
-    if shouldLog then
-        log(string.format("%s track %d: %s (meter: %.4f)%s", 
-            trackType, trackNumber, formatDB(db_value), meter_level,
-            db_value > 0 and " [CLIPPING]" or ""))
-    end
-    
     lastDB = db_value
     lastMeterValue = meter_level
     
@@ -303,13 +279,11 @@ function onReceiveNotify(key, value)
         self.values.text = "-∞ dBFS"
         lastDB = -math.huge
         lastMeterValue = 0
-        log("Track changed - display reset")
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
         self.values.text = "-"
         lastDB = nil
         lastMeterValue = nil
-        log("Track unmapped - display shows dash")
     elseif key == "control_enabled" then
         -- Show/hide based on track mapping status
         self.values.visible = value
@@ -329,13 +303,6 @@ function init()
         self.values.text = "-∞ dBFS"
     else
         self.values.text = "-"
-    end
-    
-    -- Log parent info
-    if self.parent and self.parent.name then
-        log("Initialized for parent: " .. self.parent.name)
-        log("Peak dBFS meter - accurately calibrated to match Ableton Live")
-        log("Range: -∞ to +6 dBFS (32-bit float headroom)")
     end
     
     if DEBUG == 1 then
