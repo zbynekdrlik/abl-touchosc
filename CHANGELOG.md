@@ -2,6 +2,39 @@
 
 All notable changes to the ABL TouchOSC project are documented here.
 
+## [1.4.0] - 2025-07-04
+### Critical Performance Fix - Removed Centralized Logging 🚨
+
+This release removes ALL centralized logging to eliminate notification overhead and improve performance.
+
+### Breaking Changes
+
+#### Complete Removal of Centralized Logging
+- **Removed**: All `log_message` notify calls
+- **Removed**: Logger text object functionality
+- **Removed**: Document script log handling
+- **Result**: Each script now prints directly to console
+
+#### Script Updates
+- **db_meter_label.lua [2.9.0]**: Removed centralized logging AND value_changed fallback
+- **document_script.lua [2.8.0]**: Removed ALL logging functionality - now handles configuration ONLY
+- **TouchOSC Rules**: Updated rule #11 to clearly prohibit centralized logging
+
+### Performance Impact
+- **Before**: Scripts → notify → document script → logger object → TEXT UPDATE LAG
+- **After**: Scripts → console.print() → NO OVERHEAD
+
+### Critical Principle for Performance Branch
+**"NO CENTRALIZED LOGGING - Each script handles its own console output!"**
+
+### Migration Notes
+All scripts need updating to:
+1. Remove any `root:notify("log_message", ...)` calls
+2. Use direct `print()` statements instead
+3. Control logging with local DEBUG flags
+
+---
+
 ## [1.3.0] - 2025-07-04
 ### Performance Optimization Fix 🚀
 
