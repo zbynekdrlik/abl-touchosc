@@ -1,10 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.14.5
--- Auto-detects regular vs return tracks
--- Fixed: Track label shows first word, skipping return track prefixes (A-, B-, etc.)
+-- Version: 1.14.6
+-- Changed: Removed centralized logging - using local print only
 
 -- Version constant
-local SCRIPT_VERSION = "1.14.5"
+local SCRIPT_VERSION = "1.14.6"
 
 -- Script-level variables to store group data
 local instance = nil
@@ -23,15 +22,9 @@ local lastSendTime = 0
 local lastReceiveTime = 0
 local lastFaderValue = nil
 
--- Centralized logging through document script
+-- Local logging
 local function log(message)
-    -- Add context to identify which control sent the log
     local fullMessage = "CONTROL(" .. self.name .. ") " .. message
-    
-    -- Send to document script for proper logging
-    root:notify("log_message", fullMessage)
-    
-    -- Also print to console for immediate feedback during development
     print("[" .. os.date("%H:%M:%S") .. "] " .. fullMessage)
 end
 

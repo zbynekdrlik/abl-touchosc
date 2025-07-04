@@ -1,20 +1,16 @@
 -- TouchOSC Global Refresh Button Script
--- Version: 1.4.0
--- Cleaned up with proper centralized logging
+-- Version: 1.4.1
+-- Changed: Removed centralized logging - using local print only
 
-local SCRIPT_VERSION = "1.4.0"
+local SCRIPT_VERSION = "1.4.1"
 
 -- Store last tap time to prevent double triggers
 local lastTapTime = 0
 local colorResetTime = 0
 local needsColorReset = false
 
--- Centralized logging through document script
+-- Local logging
 local function log(message)
-    -- Send to document script for logger text update
-    root:notify("log_message", "REFRESH BUTTON: " .. message)
-    
-    -- Also print to console for development/debugging
     print("[" .. os.date("%H:%M:%S") .. "] REFRESH BUTTON: " .. message)
 end
 

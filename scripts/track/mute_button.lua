@@ -1,22 +1,16 @@
 -- mute_button.lua
--- Version: 1.9.1
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Added: Return track support using parent's trackType
--- Use root:notify for logger output
+-- Version: 1.9.2
+-- Changed: Removed centralized logging - using local print only
 
-local VERSION = "1.9.1"
+local VERSION = "1.9.2"
 
--- Logging
+-- Local logging
 local function log(message)
     local context = "MUTE"
     if self.parent and self.parent.name then
         context = "MUTE(" .. self.parent.name .. ")"
     end
     
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 

@@ -1,11 +1,9 @@
 -- TouchOSC Pan Control Script
--- Version: 1.4.1
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Added: Return track support using parent's trackType
--- Fixed: Added logger output using root:notify like other scripts
+-- Version: 1.4.2
+-- Changed: Removed centralized logging - using local print only
 
 -- Version constant
-local VERSION = "1.4.1"
+local VERSION = "1.4.2"
 
 -- Double-tap configuration
 local delay = 300 -- the maximum elapsed time between taps
@@ -20,17 +18,13 @@ local COLOR_OFF_CENTER = Color(0.20, 0.76, 0.86, 1.0) -- #34C1DC when out of cen
 -- LOGGING
 -- ===========================
 
--- Logging with both logger object and console output
+-- Local logging
 local function log(message)
     local context = "PAN"
     if self.parent and self.parent.name then
         context = "PAN(" .. self.parent.name .. ")"
     end
     
-    -- Send to document script for logger text update (like meter and fader)
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
