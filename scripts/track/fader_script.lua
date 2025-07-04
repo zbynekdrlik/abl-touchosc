@@ -1,5 +1,6 @@
 -- TouchOSC Fader Script - Advanced Volume and Send Control
--- Version: 2.5.6
+-- Version: 2.5.7
+-- Fixed: Removed pcall (not available in TouchOSC)
 -- Removed: All logger references and centralized logging
 -- Optimized: Time-based position sync instead of schedule()
 -- Fixed: TouchOSC doesn't have schedule() method
@@ -8,7 +9,7 @@
 -- Changed: DEBUG = 1 for troubleshooting
 
 -- Version constant
-local VERSION = "2.5.6"
+local VERSION = "2.5.7"
 
 -- Debug mode (set to 1 for debug output)
 local DEBUG = 1  -- Enable debug for troubleshooting
@@ -149,25 +150,50 @@ end
 local function setupConnections()
     if not parentGroup then return false end
     
-    -- Try to get connection index from parent's script functions
-    local success, result = pcall(function()
-        if parentGroup.getConnectionIndex then
-            return parentGroup:getConnectionIndex()
-        elseif _G.getConnectionIndex then
-            local instance = parentGroup.name:match("^(%w+)_")
-            return _G.getConnectionIndex(instance)
-        end
-        return nil
-    end)
+    -- Direct checks without pcall (TouchOSC doesn't have pcall)
+    local result = nil
     
-    if success and result then
+    -- Check if parent has getConnectionIndex method
+    if parentGroup and parentGroup.getConnectionIndex then
+        result = parentGroup:getConnectionIndex()
+    elseif _G.getConnectionIndex then
+        local instance = parentGroup.name:match("^(%w+)_")
+        if instance then
+            result = _G.getConnectionIndex(instance)
+        end
+    end
+    
+    if result then
         connectionIndex = result
     else
         -- Try to find connection from document script
         local docScript = root:findByName("document_script", true)
         if docScript and docScript.getConnectionForInstance then
             local instance = parentGroup.name:match("^(%w+)_")
-            connectionIndex = docScript:getConnectionForInstance(instance)
+            if instance then
+                connectionIndex = docScript:getConnectionForInstance(instance)
+            end
+        end
+    end
+    
+    if not connectionIndex then
+        -- Read configuration directly (as per TouchOSC rules - each script reads its own config)
+        local configObj = root:findByName("configuration", true)
+        if configObj and configObj.values and configObj.values.text then
+            local instance = parentGroup.name:match("^(%w+)_")
+            if instance then
+                local configText = configObj.values.text
+                local searchKey = "connection_" .. instance .. ":"
+                
+                for line in configText:gmatch("[^\r\n]+") do
+                    line = line:match("^%s*(.-)%s*$")
+                    if line:sub(1, #searchKey) == searchKey then
+                        local value = line:sub(#searchKey + 1):match("^%s*(.-)%s*$")
+                        connectionIndex = tonumber(value) or 1
+                        break
+                    end
+                end
+            end
         end
     end
     
