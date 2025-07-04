@@ -1,27 +1,20 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**⚠️ CRITICAL FADER BUG FIXED - v2.6.2**
-- [x] Currently working on: Fixed critical fader initialization bug
-- [ ] Waiting for: User to test if fader now works properly
-- [ ] Blocked by: Need to verify fader fix before addressing other issues
+**⚠️ FADER FIXED - v2.6.4 - Testing Needed**
+- [x] Currently working on: Fixed boolean concat error in fader script
+- [ ] Waiting for: User to test if fader now controls Ableton volume properly
+- [ ] Blocked by: Need to identify status indicator script after fader test
 
-## Current Status (2025-07-04 14:58 UTC)
+## Current Status (2025-07-04 15:20 UTC)
 
-### CRITICAL BUG FOUND AND FIXED:
-- **Fader Script v2.6.2** - Critical initialization bug fixed:
-  - **PROBLEM**: Script was setting `self.values.x = 0.0` in init()
-  - **EFFECT**: This caused fader to send 0 position to Ableton on startup
-  - **SOLUTION**: Removed position setting - preserve existing fader position
-  - **KEY INSIGHT**: Main branch NEVER sets initial position in init()
+### JUST FIXED:
+- **Fader Script v2.6.4** - Fixed boolean concat runtime error:
+  - **PROBLEM**: `in_linear_range` boolean wasn't converted to string in debugPrint
+  - **EFFECT**: Script crashed with "invalid value (boolean) at index 2 in table for 'concat'"
+  - **SOLUTION**: Added `tostring()` for all boolean values in debug output
 
-### Previous Fix (v2.6.1):
-- Fixed `onValueChanged()` signature (TouchOSC doesn't support parameters)
-- Removed send control complexity that was breaking volume
-- Restored all movement scaling from main branch
-- Kept performance optimizations (event-driven, no continuous polling)
-
-### STILL BROKEN (awaiting test results):
+### REMAINING ISSUES:
 - **Status indicator** - Not working at all (need to identify which script)
 - **Meter** - Unclear behavior (need more details)
 
@@ -37,7 +30,7 @@
 |--------|---------|--------|-------|
 | document_script.lua | v2.7.4 | ❓ Unknown | - |
 | group_init.lua | v1.15.9 | ❓ Unknown | - |
-| fader_script.lua | v2.6.2 | 🔧 JUST FIXED | Fixed initialization bug |
+| fader_script.lua | v2.6.4 | 🔧 JUST FIXED | Fixed boolean concat error |
 | meter_script.lua | v2.5.6 | ⚠️ Unclear | Behavior unclear |
 | pan_control.lua | v1.4.2 | ✅ Working | - |
 | db_label.lua | v1.3.2 | ✅ OK | - |
@@ -46,32 +39,35 @@
 | global_refresh_button.lua | v1.5.1 | ❓ Unknown | - |
 | status_indicator | ??? | ❌ BROKEN | Script unknown |
 
-## Critical Fader Bug Analysis
+## Fader Evolution Summary
 
-### Root Cause:
-The optimization branch added `self.values.x = 0.0` in init() which caused:
-1. Fader initializes with position = 0
-2. Track gets mapped
-3. Fader immediately sends position 0 to Ableton
-4. Ableton responds with actual position (49.6%)
-5. Fader jumps to correct position
+### Version History:
+- v2.6.2: Fixed critical initialization bug (removed position setting)
+- v2.6.3: Claimed to fix boolean concat (but missed one instance)
+- v2.6.4: Actually fixed ALL boolean concat errors
 
-### Why Main Branch Works:
-- NEVER sets initial position in init()
-- Preserves whatever position the fader already has
-- Only requests position FROM Ableton, never sends on startup
+### Key Issues Fixed:
+1. **Initialization bug**: Script was setting position to 0 on init
+2. **Boolean concat errors**: Multiple places where booleans weren't converted to strings
+3. **Preserved main branch behavior**: Fader doesn't move on startup
 
 ## Next Steps
 
 ### 1. Test Fader Fix (Critical)
-Please test the fader now:
-- Should NOT move on startup
-- Should sync with Ableton's current position
-- Should respond properly to touch
-- Should work with all movement scaling
+Please reload the template and test:
+```
+1. Check console for: "FADER Script v2.6.4 loaded" 
+2. Move the fader - should control Ableton volume
+3. No runtime errors should appear
+4. Check all fader features work:
+   - Touch detection
+   - Movement scaling  
+   - Double-tap to unity
+   - Sync with Ableton
+```
 
 ### 2. Identify Status Indicator
-Need to find which script controls the status indicator:
+After fader works, need to find which script controls the status indicator:
 - Check template for object name
 - Could be part of group_init.lua
 - Might be a separate script
@@ -82,19 +78,19 @@ What exactly is wrong with the meter?
 - Value accuracy problems?
 - Color changes not working?
 
-## Testing Needed
+## Testing Checklist
 
-Please reload the template and test:
-```
-1. Fader should NOT move on startup
-2. Check console for version: "FADER Script v2.6.2 loaded"
-3. Test fader movement and response
-4. Note any error messages
-```
+- [ ] Fader v2.6.4 loads without errors
+- [ ] Fader controls Ableton volume
+- [ ] No boolean concat runtime errors
+- [ ] Touch detection works
+- [ ] Movement scaling works
+- [ ] Double-tap to unity works
+- [ ] Fader syncs with Ableton position
 
 ---
 
-## State Saved: 2025-07-04 14:58 UTC
-**Status**: Critical fader initialization bug fixed with v2.6.2
-**Next Action**: Test that fader doesn't move on startup
-**Key Fix**: Never set initial position - preserve existing state
+## State Saved: 2025-07-04 15:20 UTC
+**Status**: Fader script v2.6.4 with boolean concat fix deployed
+**Next Action**: Test fader functionality
+**Key Fix**: Added tostring() for all boolean debug output
