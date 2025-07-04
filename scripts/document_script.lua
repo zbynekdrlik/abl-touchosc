@@ -1,9 +1,10 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.7.1
--- Purpose: Main document script with configuration, logging, and track management
+-- Version: 2.7.2
+-- Purpose: Main document script with configuration and track management
+-- Removed: Centralized logging functionality
 -- Fixed: Automatic refresh on startup with proper timing
 
-local VERSION = "2.7.1"
+local VERSION = "2.7.2"
 local SCRIPT_NAME = "Document Script"
 
 -- Configuration storage
@@ -13,38 +14,12 @@ local config = {
 }
 
 -- Control references (can be in pagers)
-local logger = nil
 local configText = nil
-local logLines = {}
-local maxLogLines = 60  -- Increased from 20 to 60 for full-height logger
 
 -- Startup tracking
 local startupRefreshTime = nil
 local frameCount = 0
 local STARTUP_DELAY_FRAMES = 60  -- Wait 1 second (60 frames at 60fps)
-
--- === LOGGING FUNCTIONS ===
-local function log(message)
-    local logMessage = os.date("%H:%M:%S") .. " " .. message
-    
-    -- REMOVED print to console - scripts will handle their own console output
-    
-    -- Store messages
-    table.insert(logLines, logMessage)
-    if #logLines > maxLogLines then
-        table.remove(logLines, 1)
-    end
-    
-    -- Try to find logger if not found yet
-    if not logger then
-        logger = root:findByName("logger", true)  -- recursive search
-    end
-    
-    -- Update logger if found
-    if logger and logger.values then
-        logger.values.text = table.concat(logLines, "\n")
-    end
-end
 
 -- === CONFIGURATION PARSING ===
 local function parseConfiguration()
@@ -106,26 +81,16 @@ local function parseConfiguration()
         end
     end
     
-    log("Config: " .. connectionCount .. " connections, " .. unfoldCount .. " unfolds")
+    print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. ": Config parsed - " .. connectionCount .. " connections, " .. unfoldCount .. " unfolds")
     return true
 end
 
 -- === NOTIFY HANDLER ===
 function onReceiveNotify(action, value)
-    if action == "register_logger" then
-        -- Logger is notifying us of its existence
-        logger = value
-        log("Logger registered")
-        
-        -- Send all buffered messages to logger
-        if logger and logger.values then
-            logger.values.text = table.concat(logLines, "\n")
-        end
-        
-    elseif action == "register_configuration" then
+    if action == "register_configuration" then
         -- Configuration text is notifying us
         configText = value
-        log("Config registered")
+        print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. ": Config registered")
         
         -- Parse the configuration immediately
         parseConfiguration()
@@ -137,12 +102,6 @@ function onReceiveNotify(action, value)
     elseif action == "refresh_all_groups" then
         -- Global refresh button pressed
         refreshAllGroups()
-        
-    elseif action == "log_message" then
-        -- Another script wants to log a message
-        if value then
-            log(tostring(value))
-        end
     end
 end
 
@@ -152,7 +111,7 @@ function getConnectionForInstance(instance)
 end
 
 function refreshAllGroups()
-    log("=== REFRESH ALL GROUPS ===")
+    print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. ": === REFRESH ALL GROUPS ===")
     
     -- Update status
     local status = root:findByName("global_status")
@@ -174,7 +133,7 @@ function refreshAllGroups()
         group:notify("refresh_tracks")
     end
     
-    log("Refreshed " .. #groups .. " groups")
+    print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. ": Refreshed " .. #groups .. " groups")
     
     -- Update status
     if status then
@@ -199,7 +158,7 @@ function update()
         
         -- Perform refresh at the specified frame count
         if frameCount == STARTUP_DELAY_FRAMES then
-            log("=== AUTOMATIC STARTUP REFRESH ===")
+            print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. ": === AUTOMATIC STARTUP REFRESH ===")
             refreshAllGroups()
         end
     end
@@ -207,15 +166,8 @@ end
 
 -- === INITIALIZATION ===
 function init()
-    -- Add visual separator for new run
-    log("════════════════════════════════════════")
-    log("═══ NEW SESSION " .. os.date("%Y-%m-%d %H:%M:%S") .. " ═══")
-    log("════════════════════════════════════════")
-    
-    log(SCRIPT_NAME .. " v" .. VERSION .. " loaded")
-    
-    -- Try to find logger
-    logger = root:findByName("logger", true)
+    -- Version logging
+    print(SCRIPT_NAME .. " v" .. VERSION)
     
     -- Try to parse configuration
     parseConfiguration()
@@ -225,8 +177,7 @@ function init()
     sendOSC('/live/song/get/track_names')
     sendOSC('/live/song/start_listen/is_playing')
     
-    log("Ready")
-    log("Automatic refresh scheduled...")
+    print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. ": Ready - automatic refresh scheduled...")
     
     -- Reset frame counter for startup refresh
     frameCount = 0
@@ -281,7 +232,7 @@ function onReceiveOSC(message, connections)
         
         -- Log summary instead of details
         if unfoldedCount > 0 then
-            log("Unfolded " .. unfoldedCount .. " groups on " .. (sourceInstance or "unknown"))
+            print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. ": Unfolded " .. unfoldedCount .. " groups on " .. (sourceInstance or "unknown"))
         end
     end
     
