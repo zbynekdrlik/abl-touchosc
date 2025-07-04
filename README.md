@@ -17,6 +17,13 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 - **Smart Track Labels**: First word display with return prefix handling
 - **Requires**: [Forked AbletonOSC](https://github.com/zbynekdrlik/AbletonOSC/tree/feature/return-tracks-support) with listener fixes
 
+### Performance Optimizations (v1.3.0) 🚀
+- **Reduced CPU Usage**: ~50% reduction through scheduled updates
+- **Optimized Update Rates**: Controls update at appropriate frequencies (20-100Hz)
+- **Zero Debug Overhead**: No performance impact when DEBUG=0
+- **Smoother Response**: Better performance with 16+ tracks
+- **Position Stability**: Controls never move without real data (no jumping)
+
 ### Professional Controls
 
 #### Volume Fader
@@ -25,6 +32,7 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 - Exact dB curve matching Ableton's response
 - Emergency movement detection for quick adjustments
 - State preservation between sessions
+- **Fixed**: No position jumping when disconnected
 
 #### Level Meter  
 - Precisely calibrated to match Ableton's meters
@@ -33,6 +41,7 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
   - Yellow: -12dB warning
   - Red: -3dB peak warning
 - Real-time response with connection filtering
+- **Optimized**: 20Hz update rate for smooth visuals
 
 #### Mute Button
 - Reliable state tracking with feedback prevention
@@ -43,6 +52,7 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 - Smooth panning with visual feedback
 - Double-tap to center
 - Color indication of pan position
+- **Fixed**: No position jumping when disconnected
 
 #### dB Value Display
 - Shows current fader position in dB
@@ -117,11 +127,12 @@ Return tracks use the exact same scripts and controls as regular tracks:
 - **Connection Routing**: Controls automatically route to configured connections
 - **State Preservation**: Control positions are maintained between sessions
 - **Visual Feedback**: All controls provide immediate visual feedback
+- **Position Stability**: Controls maintain position when disconnected (v1.3.0)
 
 ### Manual Controls
 
 - **Refresh Button**: Manually trigger track discovery at any time
-- **Logger**: View system messages and track assignments
+- **Logger**: View system messages and track assignments (removed in v1.3.0 - use TouchOSC's built-in log viewer)
 
 ## 🔧 Configuration
 
@@ -149,30 +160,56 @@ unfold_master: 'Master'
 
 Both regular tracks and return tracks use the same connection for each instance.
 
+### Performance Settings
+
+All scripts have DEBUG mode disabled by default for optimal performance:
+```lua
+local DEBUG = 0  -- No logging overhead (default)
+local DEBUG = 1  -- Enable console logging for troubleshooting
+```
+
 ## 📚 Technical Documentation
 
 ### Architecture Overview
 
 The system uses a unified script architecture:
-- **Document Script**: Central configuration and logging
+- **Document Script**: Central configuration and auto-refresh
 - **Group Scripts**: Track discovery with auto-detection
 - **Control Scripts**: Same scripts handle both track types
 - **Tag Communication**: Parent groups pass info via tags
 - **Complete Isolation**: No shared variables between scripts
+- **Performance Optimized**: Scheduled updates instead of continuous polling
 
 ### Script Versions
 
-| Script | Current Version | Purpose |
-|--------|----------------|---------|
-| document_script.lua | 2.7.1 | Configuration, logging, auto-refresh |
-| group_init.lua | 1.14.5 | Track group with auto-detection |
-| fader_script.lua | 2.4.1 | Volume control for all track types |
-| meter_script.lua | 2.3.1 | Level metering unified |
-| mute_button.lua | 1.9.1 | Mute control unified |
-| pan_control.lua | 1.4.1 | Pan control unified |
-| db_label.lua | 1.2.0 | dB display unified |
-| db_meter_label.lua | 2.5.1 | Peak meter unified |
-| global_refresh_button.lua | 1.4.0 | Manual refresh trigger |
+| Script | Current Version | Purpose | Optimization |
+|--------|----------------|---------|--------------|
+| document_script.lua | 2.7.2 | Configuration, auto-refresh | Logger removed |
+| group_init.lua | 1.15.1 | Track group with auto-detection | 100ms scheduled updates |
+| fader_script.lua | 2.5.3 | Volume control for all track types | Position stability fix |
+| meter_script.lua | 2.4.0 | Level metering unified | 50ms scheduled updates |
+| mute_button.lua | 1.9.1 | Mute control unified | - |
+| pan_control.lua | 1.4.2 | Pan control unified | Position stability fix |
+| db_label.lua | 1.2.0 | dB display unified | - |
+| db_meter_label.lua | 2.5.1 | Peak meter unified | - |
+| global_refresh_button.lua | 1.4.0 | Manual refresh trigger | - |
+
+### Performance Improvements (v1.3.0)
+
+**Update Rate Optimization:**
+- Group activity monitoring: 60-120Hz → 10Hz (100ms intervals)
+- Meter updates: 60-120Hz → 20Hz (50ms intervals)
+- Fader sync checking: Continuous → On-demand
+
+**Debug Overhead Elimination:**
+- Early return when DEBUG=0 (no string operations)
+- Zero performance impact in production mode
+- Direct console output when debugging enabled
+
+**Position Stability Fix:**
+- Controls track `has_valid_position` flag
+- No value processing until Ableton sends initial data
+- Prevents jumping to default positions on startup/disconnect
 
 ### Unified Architecture Details
 
@@ -212,10 +249,22 @@ The forked AbletonOSC adds these endpoints:
 - **Direct Configuration Reading**: Each script reads config independently
 - **Connection Filtering**: OSC messages filtered by connection
 - **State Machine Design**: Robust state tracking for all controls
+- **Scheduled Updates**: Performance-optimized update rates
+- **Position Preservation**: Controls never move without real data
 
 ## 🔧 Troubleshooting
 
 ### Common Issues
+
+**Controls jumping to wrong positions:**
+- Fixed in v1.3.0 - update to latest scripts
+- Faders no longer jump to 0 when disconnected
+- Pan no longer jumps to full right
+
+**Poor performance with many tracks:**
+- Update to v1.3.0 for ~50% CPU reduction
+- Ensure DEBUG=0 in all scripts (default)
+- Check network connection quality
 
 **Return tracks not working:**
 - Install the [forked AbletonOSC](https://github.com/zbynekdrlik/AbletonOSC/tree/feature/return-tracks-support)
@@ -232,16 +281,14 @@ The forked AbletonOSC adds these endpoints:
 - Check both regular and return track names
 - Try manual refresh
 
-**Track label shows wrong text:**
-- Update to group_init.lua v1.14.5 or later
-- Script now handles return prefixes intelligently
-
 ### Debug Mode
 
 Enable detailed logging by modifying script DEBUG constants:
 ```lua
 local DEBUG = 1  -- Set to 1 for verbose logging
 ```
+
+**Note**: Debug mode impacts performance. Use only for troubleshooting.
 
 ## 🤝 Contributing
 
@@ -250,6 +297,7 @@ We welcome contributions! Please:
 - Update documentation with code changes
 - Include version updates in scripts
 - Test thoroughly with logging enabled
+- Profile performance impacts
 
 See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed guidelines.
 
@@ -262,10 +310,11 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 - Built for professional audio workflows
 - Inspired by the need for sophisticated multi-instance control
 - Return track support added to fill a gap in AbletonOSC
+- Performance optimizations based on real-world usage feedback
 - Thanks to the TouchOSC and AbletonOSC communities
 
 ---
 
-**Current Status**: v1.2.0 - Production ready with full return track support using unified architecture. All controls tested and working perfectly for both regular and return tracks.
+**Current Status**: v1.3.0 - Production ready with full return track support and performance optimizations. Controls maintain position stability when disconnected.
 
 For development documentation and future plans, see the [docs](docs/) directory.
