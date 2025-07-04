@@ -1,12 +1,12 @@
 -- TouchOSC Meter Script - Audio Level Display
--- Version: 2.6.0
--- Fixed: Improved color responsiveness and reduced lag
--- Fixed: Respect DEBUG flag for all logging
+-- Version: 2.6.1
+-- Fixed: Removed notification throttling for better fluency
+-- Fixed: Direct connection setup like main branch
 -- Purpose: Display audio levels from Ableton Live
 -- Optimized: Event-driven updates only - no continuous polling!
 
 -- Version constant
-local VERSION = "2.6.0"
+local VERSION = "2.6.1"
 
 -- Debug mode
 local DEBUG = 0  -- Set to 0 for production (zero overhead)
@@ -26,7 +26,7 @@ local COLOR_RED = {1.0, 0.0, 0.0, 1.0}       -- Clipping level
 
 -- Smooth color transitions
 local current_color = {COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4]}
-local color_smoothing = 0.7  -- INCREASED for faster color response (was 0.3)
+local color_smoothing = 0.3  -- RESTORED to main branch value for consistency
 
 -- CALIBRATION POINTS (from main branch)
 local CALIBRATION_POINTS = {
@@ -51,13 +51,6 @@ local connectionIndex = nil
 local connections = nil
 local isActive = false
 local lastMeterValue = 0
-local connectionSetupDeferred = false
-
--- NOTIFICATION THROTTLING - REDUCED for better responsiveness
-local NOTIFICATION_THRESHOLD = 0.02  -- Notify if change > 2% (was 5%)
-local lastNotifiedValue = 0
-local lastNotificationTime = 0
-local NOTIFICATION_MIN_INTERVAL = 0.05  -- 50ms between notifications (was 100ms)
 
 -- ===========================
 -- UTILITY FUNCTIONS
@@ -170,18 +163,10 @@ function getColorForLevel(fader_pos)
   end
 end
 
--- Smooth color transitions - IMPROVED for faster response
+-- Smooth color transitions
 function smoothColor(target_color)
-  -- FIXED: Use faster smoothing for more responsive color changes
   for i = 1, 4 do
-    local diff = target_color[i] - current_color[i]
-    -- Apply full change if difference is small (for instant response to small changes)
-    if math.abs(diff) < 0.1 then
-      current_color[i] = target_color[i]
-    else
-      -- Otherwise apply smoothing
-      current_color[i] = current_color[i] + diff * color_smoothing
-    end
+    current_color[i] = current_color[i] + (target_color[i] - current_color[i]) * color_smoothing
   end
   return current_color
 end
@@ -286,12 +271,6 @@ function onReceiveOSC(message, connections)
         return false
     end
     
-    -- Setup connections if deferred and not done yet
-    if connectionSetupDeferred and not connectionIndex then
-        setupConnections()
-        connectionSetupDeferred = false
-    end
-    
     -- Get our connection index
     local myConnection = connectionIndex or getConnectionIndex()
     
@@ -322,7 +301,7 @@ function onReceiveOSC(message, connections)
         -- Get target color based on fader position
         local target_color = getColorForLevel(fader_position)
         
-        -- Apply smoothed color transition - FIXED with faster response
+        -- Apply smoothed color transition
         local smoothed = smoothColor(target_color)
         self.color = Color(smoothed[1], smoothed[2], smoothed[3], smoothed[4])
         
@@ -342,19 +321,10 @@ function onReceiveOSC(message, connections)
         -- Track activity state
         isActive = fader_position > 0.01
         
-        -- FIXED: More responsive parent notification
+        -- FIXED: Notify parent immediately without throttling (like main branch)
         if parentGroup and parentGroup.notify and isActive then
-            local now = os.clock()
-            local valueDelta = math.abs(normalized_meter - lastNotifiedValue)
-            local timeDelta = now - lastNotificationTime
-            
-            -- Only notify if change is significant AND enough time has passed
-            if valueDelta > NOTIFICATION_THRESHOLD and timeDelta > NOTIFICATION_MIN_INTERVAL then
-                parentGroup:notify("value_changed", "meter")
-                lastNotifiedValue = normalized_meter
-                lastNotificationTime = now
-                debug("Notified parent - significant change:", string.format("%.2f%%", valueDelta * 100))
-            end
+            parentGroup:notify("value_changed", "meter")
+            debug("Notified parent immediately")
         end
         
         lastMeterValue = normalized_meter
@@ -376,16 +346,14 @@ function onReceiveNotify(key, value)
         trackNumber = value
         debug("Track number updated to:", trackNumber)
         
-        -- FIXED: Defer connection setup until we receive OSC
-        connectionSetupDeferred = true
+        -- FIXED: Setup connections immediately like main branch
+        setupConnections()
         
         -- Reset meter when track changes
         self.values.x = 0
         current_color = {COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4]}
         self.color = Color(current_color[1], current_color[2], current_color[3], current_color[4])
         lastMeterValue = 0
-        lastNotifiedValue = 0
-        lastNotificationTime = 0
         
     elseif key == "track_type" then
         trackType = value
@@ -417,8 +385,10 @@ function init()
         return
     end
     
-    -- DO NOT setup connections here - wait for track info!
-    -- The parent's tag won't have the instance info until track discovery
+    -- FIXED: Setup connections immediately like main branch
+    if trackNumber then
+        setupConnections()
+    end
     
     -- Set initial color to green
     self.color = Color(COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4])
@@ -430,9 +400,7 @@ function init()
     debug("Parent:", parentGroup and parentGroup.name or "none")
     debug("Track:", trackNumber, "Type:", trackType)
     debug("Using calibrated meter conversion")
-    debug("Color smoothing:", color_smoothing, "(faster response)")
-    debug("Notification threshold:", string.format("%.0f%%", NOTIFICATION_THRESHOLD * 100))
-    debug("Min notification interval:", NOTIFICATION_MIN_INTERVAL, "seconds")
+    debug("Immediate parent notification enabled")
 end
 
 -- Note: No update() function needed - fully event-driven!
