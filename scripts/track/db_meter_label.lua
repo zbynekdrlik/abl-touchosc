@@ -1,11 +1,11 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.8.0
+-- Version: 2.9.0
+-- FIXED: Removed ALL centralized logging - each script prints its own logs
 -- FIXED: Removed value_changed fallback - direct OSC only
--- FIXED: Use centralized logging via notify
 -- Shows actual peak dBFS level from track output meter
 -- Multi-connection routing support
 
-local VERSION = "2.8.0"
+local VERSION = "2.9.0"
 
 -- State variables
 local parentGroup = nil
@@ -63,21 +63,16 @@ local METER_DB_CALIBRATION = {
 }
 
 -- ===========================
--- LOGGING (FIXED: Use centralized logging)
+-- LOGGING (FIXED: Direct console logging only)
 -- ===========================
 
 local function log(message)
     if DEBUG == 1 then
-        -- Add context to identify which control sent the log
+        -- Direct console logging only - NO centralized logging!
         local context = "dBFS"
         if parentGroup and parentGroup.name then
             context = "dBFS(" .. parentGroup.name .. ")"
         end
-        
-        -- Send to document script for proper logging
-        root:notify("log_message", context .. ": " .. message)
-        
-        -- Also print to console for development/debugging
         print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
     end
 end
@@ -361,11 +356,12 @@ function onReceiveOSC(message, connections)
 end
 
 -- ===========================
--- NOTIFICATIONS (FIXED: Removed value_changed fallback)
+-- NOTIFICATIONS (FIXED: No centralized logging)
 -- ===========================
 
 function onReceiveNotify(key, value)
     -- CRITICAL FIX: Removed value_changed handler - each control receives OSC directly!
+    -- CRITICAL FIX: No centralized logging - each script handles its own!
     
     if key == "track_changed" then
         -- Reset when track changes
@@ -395,8 +391,7 @@ function init()
     
     -- Find parent group
     if not findParentGroup() then
-        -- Use notify for error logging too
-        root:notify("log_message", "dBFS: ERROR - No parent group found")
+        -- Direct print for errors - no centralized logging!
         print("[" .. os.date("%H:%M:%S") .. "] dBFS: ERROR - No parent group found")
         return
     end
@@ -406,6 +401,7 @@ function init()
     
     log("Initialized - Direct OSC handling only!")
     log("CRITICAL FIX: Removed value_changed fallback")
+    log("CRITICAL FIX: No centralized logging - each script handles its own!")
     log("Peak dBFS meter - accurately calibrated to match Ableton Live")
     log("Range: -∞ to +6 dBFS (32-bit float headroom)")
 end
