@@ -8,18 +8,19 @@ Based on the analysis of the abl-touchosc repository, the `notify()` function is
 
 ## Current Notify Usage
 
-### 1. Document Script (`document_script.lua` v2.8.1)
+### 1. Document Script (`document_script.lua` v2.8.2)
 
 **Receives notifications:**
 - `register_configuration` - Configuration text object registers itself (once at startup)
-- `configuration_updated` - Configuration has been changed (rare user action)
 - `refresh_all_groups` - Trigger from global refresh button (user-triggered)
 
 **Sends notifications:**
 - `clear_mapping` - To all track groups before refresh (user-triggered)
 - `refresh_tracks` - To all track groups to trigger mapping (user-triggered)
 
-**Frequency:** Only during user-triggered refresh or configuration changes.
+**Frequency:** Only during user-triggered refresh or startup registration.
+
+**Note:** `configuration_updated` handler was removed in v2.8.2 as it was dead code - TouchOSC text objects are read-only at runtime.
 
 ### 2. Global Refresh Button (`global_refresh_button.lua` v1.5.1)
 
@@ -102,6 +103,16 @@ For a typical 8-track setup, this is ~40 notify calls, but only when the user ma
 ### 4. **State Synchronization**
 - Ensures all related controls update together when track mappings change
 - Prevents inconsistent states across the UI
+
+## Dead Code Removed
+
+### `configuration_updated` Handler (Removed in v2.8.2)
+- **Why it was dead code:**
+  - TouchOSC text objects are read-only at runtime
+  - Configuration can only be changed in designer mode
+  - Any configuration change requires document reload
+  - No script ever sent this notification
+- **Impact:** Simplified notify protocol, cleaner code
 
 ## Alternatives to Notify
 
@@ -217,5 +228,7 @@ The current usage of `notify()` for inter-script communication is appropriate an
 The current implementation uses `notify()` appropriately for event-driven communication between loosely coupled components. The recent logging refactor successfully removed the performance-impacting centralized logging system while preserving the essential inter-script communication mechanisms.
 
 **No high-frequency notify calls were found.** All usage is limited to infrequent, user-triggered events or configuration changes. The performance impact is negligible.
+
+Dead code has been removed (v2.8.2), making the system cleaner and more maintainable.
 
 No immediate changes are recommended, but the alternative approaches documented here can be considered if specific performance or architectural needs arise in the future.
