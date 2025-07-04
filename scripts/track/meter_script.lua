@@ -1,15 +1,16 @@
 -- TouchOSC Meter Script - Audio Level Display
--- Version: 2.5.7
+-- Version: 2.5.8
+-- Performance: Added early return debug guard for zero overhead when DEBUG != 1
 -- Fixed: Reduced notification spam - only notify on significant changes
 -- Fixed: Added tostring() for potential nil/boolean values in debug
 -- Purpose: Display audio levels from Ableton Live
 -- Optimized: Event-driven updates only - no continuous polling!
 
 -- Version constant
-local VERSION = "2.5.7"
+local VERSION = "2.5.8"
 
 -- Debug mode
-local DEBUG = 1  -- Enable debug for troubleshooting
+local DEBUG = 0  -- Set to 0 for production (zero overhead)
 
 -- Meter configuration
 local METER_MIN_DB = -48.0  -- Minimum dB to display (TouchOSC default)
@@ -63,7 +64,8 @@ local NOTIFICATION_MIN_INTERVAL = 0.1  -- Minimum 100ms between notifications
 -- ===========================
 
 local function debug(...)
-    if DEBUG == 0 then return end
+    -- Performance guard: early return for zero overhead when DEBUG != 1
+    if DEBUG ~= 1 then return end
     
     local args = {...}
     local msg = ""
