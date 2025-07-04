@@ -1,12 +1,12 @@
 -- TouchOSC Fader Script - Advanced Volume and Send Control
--- Version: 2.5.8
--- Fixed: Removed ALL pcall and _G references (not supported in TouchOSC)
+-- Version: 2.5.9
+-- Added: Double-tap to jump to 0dB functionality
+-- Fixed: Added proper dB conversion function
 -- Fixed: Use simple connection detection like main branch
 -- Optimized: Event-driven updates, no continuous polling
--- Changed: DEBUG = 1 for troubleshooting
 
 -- Version constant
-local VERSION = "2.5.8"
+local VERSION = "2.5.9"
 
 -- Debug mode (set to 1 for debug output)
 local DEBUG = 1  -- Enable debug for troubleshooting
@@ -14,6 +14,16 @@ local DEBUG = 1  -- Enable debug for troubleshooting
 -- Control type detection
 local CONTROL_TYPE = nil  -- Will be "volume" or "send"
 local SEND_INDEX = nil    -- For send controls
+
+-- DOUBLE-TAP DETECTION SETTINGS
+local ENABLE_DOUBLE_TAP = true          -- Set to false to disable double-tap functionality
+local DOUBLE_TAP_MAX_TIME = 250         -- Maximum time between taps in milliseconds
+local DOUBLE_TAP_MIN_TIME = 50          -- Minimum time between taps to avoid accidental triggers
+local DOUBLE_TAP_ANIMATION_SPEED = 0.005 -- Speed of animated movement (0.005 units per update)
+
+-- CURVE SETTINGS FOR -6dB AT 50%
+local use_log_curve = true
+local log_exponent = 0.515
 
 -- ===========================
 -- UTILITY FUNCTIONS
@@ -50,16 +60,34 @@ local lastSentValue = nil
 local lastReceivedValue = nil
 local isInternalUpdate = false
 local isUserInteracting = false  -- Track active user interaction
+local last_osc_x = 0
+local last_osc_audio = 0
+local synced = true
+local touched = false
+local last = 0
 
 -- Touch state
 local isTouched = false
 local touchStartTime = 0
 local touchReleaseTime = 0
 local hasSentTouch = false
+local touch_started = false
+local touch_start_position = 0
+local touch_start_time = 0
+local last_tap_time = 0
+local movement_detected = false
+local last_movement_time = 0
+local touch_event_count = 0
+
+-- Double-tap animation state
+local double_tap_animation_active = false
+local double_tap_target_position = 0
+local double_tap_start_position = 0
 
 -- Timing variables for position sync
 local lastPositionSyncTime = 0
 local POSITION_SYNC_INTERVAL = 5.0  -- 5 seconds between syncs
+local SYNC_DELAY = 1000  -- 1 second delay after touch release
 
 -- Send control variables
 local sendNames = {}  -- Table to store send names
@@ -82,35 +110,52 @@ local function detectControlType()
 end
 
 -- ===========================
--- DB/LINEAR CONVERSION
+-- CURVE CONVERSION FUNCTIONS
 -- ===========================
 
-local DB_THRESHOLD = -60.0
-
-local function linearToDb(linear)
-    if linear <= 0 then
-        return -math.huge
-    elseif linear >= 1.0 then
-        return 6.0  -- Max at +6 dB
-    else
-        -- TouchOSC seems to use this formula based on testing
-        local db = 20.0 * math.log10(linear)
-        -- Clamp to reasonable range
-        if db < DB_THRESHOLD then
-            return DB_THRESHOLD
-        end
-        return db
-    end
+function linearToLog(linear_pos)
+  if linear_pos <= 0 then return 0
+  elseif linear_pos >= 1 then return 1
+  else return math.pow(linear_pos, log_exponent) end
 end
 
-local function dbToLinear(db)
-    if db <= DB_THRESHOLD then
-        return 0.0
-    elseif db >= 6.0 then
-        return 1.0
+function logToLinear(log_pos)
+  if log_pos <= 0 then return 0
+  elseif log_pos >= 1 then return 1
+  else return math.pow(log_pos, 1/log_exponent) end
+end
+
+-- YOUR EXISTING DB CONVERSION FUNCTION
+function value2db(vl)
+  if vl <= 1 and vl >= 0.4 then
+    return 40*vl -34
+  elseif vl < 0.4 and vl >= 0.15 then
+    local alpha = 799.503788
+    local beta = 12630.61132
+    local gamma = 201.871345
+    local delta = 399.751894
+    return -((delta*vl - gamma)^2 + beta)/alpha
+  elseif vl < 0.15 then
+    local alpha = 70.
+    local beta = 118.426374
+    local gamma = 7504./5567.
+    local db_value_str = beta*(vl^(1/gamma)) - alpha
+    if db_value_str <= -70.0 then 
+      return -math.huge  -- -inf
     else
-        return 10.0 ^ (db / 20.0)
+      return db_value_str
     end
+  else
+    return 0
+  end
+end
+
+function formatDB(db_value)
+  if db_value == -math.huge or db_value < -100 then
+    return "-∞dB"
+  else
+    return string.format("%.1fdB", db_value)
+  end
 end
 
 -- ===========================
@@ -264,14 +309,17 @@ local function sendFaderPosition(value)
         end
     end
     
+    -- Convert to audio value for volume
+    local audio_value = use_log_curve and linearToLog(value) or value
+    
     -- Send appropriate message
     if CONTROL_TYPE == "send" then
-        sendOSC(oscPath, trackNumber, SEND_INDEX, value, connections)
-        debug(string.format("Sent send %d position: %.3f to track %d", SEND_INDEX, value, trackNumber))
+        sendOSC(oscPath, trackNumber, SEND_INDEX, audio_value, connections)
+        debug(string.format("Sent send %d position: %.3f to track %d", SEND_INDEX, audio_value, trackNumber))
     else
-        sendOSC(oscPath, trackNumber, value, connections)
-        local db = linearToDb(value)
-        debug(string.format("Sent volume: %.3f (%.1f dB) to %s %d", value, db, trackType, trackNumber))
+        sendOSC(oscPath, trackNumber, audio_value, connections)
+        local db = value2db(audio_value)
+        debug(string.format("Sent volume: %.3f (%.1f dB) to %s %d", audio_value, db, trackType, trackNumber))
     end
 end
 
@@ -315,18 +363,25 @@ local function updateFaderPosition(value, source)
         isInternalUpdate = true
         currentAbletonValue = value
         lastReceivedValue = value
+        last_osc_audio = value
         
-        -- Only update if user is not touching
-        if not isTouched then
-            self.values.x = value
-            local db = linearToDb(value)
+        if use_log_curve then
+            last_osc_x = logToLinear(value)
+        else
+            last_osc_x = value
+        end
+        
+        -- Only update if user is not touching and we're synced
+        if not isTouched and synced then
+            self.values.x = last_osc_x
             if CONTROL_TYPE == "send" then
                 debug(string.format("Send %d position from Ableton: %.3f", SEND_INDEX, value))
             else
+                local db = value2db(value)
                 debug(string.format("Volume from Ableton: %.3f (%.1f dB)", value, db))
             end
         else
-            debug("Ignored Ableton update - user is touching")
+            debug("Ignored Ableton update - user is touching or not synced")
         end
         
         isInternalUpdate = false
@@ -389,26 +444,66 @@ function onReceiveOSC(message, connections)
 end
 
 -- ===========================
--- TOUCH HANDLING
+-- TOUCH AND VALUE HANDLING
 -- ===========================
 
 function onValueChanged(valueName)
     if valueName == "x" and not isInternalUpdate then
-        local value = self.values.x
+        local fader_position = self.values.x
+        local current_time = getMillis()
         
-        -- Always allow user input, even without Ableton connection
-        updateFaderPosition(value, "user")
+        -- Skip processing if animation is active and no touch
+        if double_tap_animation_active and not self.values.touch then
+            return  -- Let update() handle the animation
+        end
+        
+        -- Convert position to audio value for sending
+        local audio_value = use_log_curve and linearToLog(fader_position) or fader_position
+        local db_value = value2db(audio_value)
+        
+        -- Send the position change
+        updateFaderPosition(fader_position, "user")
+        
+        -- Enhanced logging
+        debug("=== FADER MOVED ===")
+        debug("Fader:", string.format("%.1f%%", fader_position * 100))
+        debug("Audio:", string.format("%.3f", audio_value), string.format("(%.1f%%)", audio_value * 100))
+        debug("dB:", formatDB(db_value))
+        debug("Touch:", self.values.touch and "TOUCHING" or "RELEASED")
+        
+        -- Detect movement for double-tap detection
+        if touch_started then
+            local movement = math.abs(fader_position - touch_start_position)
+            if movement > 0.015 then
+                movement_detected = true
+                last_movement_time = current_time
+            end
+        end
         
         -- Notify parent group of activity
         if parentGroup and parentGroup.notify then
             parentGroup:notify("value_changed", "fader")
         end
+        
     elseif valueName == "touch" then
         isTouched = self.values.touch
+        local current_time = getMillis()
         
         if isTouched then
-            touchStartTime = os.clock()
+            touch_started = true
+            touch_start_position = self.values.x
+            touch_start_time = current_time
+            movement_detected = false
+            touch_event_count = 1
             isUserInteracting = true
+            
+            -- Cancel any ongoing double-tap animation
+            if ENABLE_DOUBLE_TAP and double_tap_animation_active then
+                double_tap_animation_active = false
+                debug("*** DOUBLE-TAP ANIMATION CANCELLED - New touch started ***")
+            end
+            
+            debug("*** TOUCH START - Position:", string.format("%.1f%%", touch_start_position * 100))
             
             -- Send touch on
             if trackNumber and connections and not hasSentTouch then
@@ -428,15 +523,62 @@ function onValueChanged(valueName)
                 end
             end
         else
-            touchReleaseTime = os.clock()
+            -- Touch released
+            touch_started = false
             isUserInteracting = false
-            local touchDuration = touchReleaseTime - touchStartTime
+            touched = true  -- Mark for sync delay
+            synced = false
+            last = getMillis()
+            
+            local total_movement = math.abs(self.values.x - touch_start_position)
+            local touch_duration = current_time - touch_start_time
+            local time_since_movement = current_time - last_movement_time
+            
+            debug("*** TOUCH END ***")
+            debug("Total movement:", string.format("%.4f", total_movement))
+            debug("Touch duration:", touch_duration, "ms")
+            
+            -- Check for tap (minimal movement, short duration)
+            local is_tap = (total_movement < 0.01) and 
+                           (touch_duration < 200) and 
+                           (not movement_detected or time_since_movement > 100)
+            
+            if is_tap and ENABLE_DOUBLE_TAP then
+                debug("*** VALID TAP DETECTED ***")
+                
+                local time_since_last_tap = current_time - last_tap_time
+                
+                if time_since_last_tap < DOUBLE_TAP_MAX_TIME and time_since_last_tap > DOUBLE_TAP_MIN_TIME then
+                    debug("*** DOUBLE TAP SUCCESS! ***")
+                    debug("Time between taps:", time_since_last_tap, "ms")
+                    
+                    -- Start animation to 0dB (0.85 linear for Live's scale)
+                    if use_log_curve then
+                        double_tap_target_position = logToLinear(0.85)
+                    else
+                        double_tap_target_position = 0.85
+                    end
+                    
+                    double_tap_start_position = self.values.x
+                    double_tap_animation_active = true
+                    
+                    debug("*** STARTING ANIMATION TO 0dB ***")
+                    debug("From:", string.format("%.1f%%", double_tap_start_position * 100))
+                    debug("To:", string.format("%.1f%%", double_tap_target_position * 100), "0.0dB")
+                    
+                    last_tap_time = 0
+                else
+                    last_tap_time = current_time
+                end
+            else
+                last_tap_time = 0
+            end
             
             -- Send touch off
             if trackNumber and connections and hasSentTouch then
                 local oscPath
                 if CONTROL_TYPE == "send" then
-                    debug(string.format("Send %d released (duration: %.2fs)", SEND_INDEX, touchDuration))
+                    debug(string.format("Send %d released", SEND_INDEX))
                 else
                     if trackType == "return" then
                         oscPath = '/live/return/set/volume/touched'
@@ -445,7 +587,7 @@ function onValueChanged(valueName)
                     end
                     sendOSC(oscPath, trackNumber, false, connections)
                     hasSentTouch = false
-                    debug(string.format("Sent touch OFF (duration: %.2fs)", touchDuration))
+                    debug("Sent touch OFF")
                 end
             end
             
@@ -471,6 +613,10 @@ function onReceiveNotify(key, value)
         trackNumber = value
         debug("Track number updated to: " .. tostring(trackNumber))
         
+        -- Reset state
+        touched = false
+        synced = true
+        
         -- Request current position and send names
         requestCurrentPosition()
         if CONTROL_TYPE == "send" then
@@ -493,8 +639,79 @@ end
 -- ===========================
 
 function update()
+    -- Handle double-tap animation
+    if ENABLE_DOUBLE_TAP and double_tap_animation_active then
+        if self.values.touch then
+            -- Touch detected - cancel animation
+            double_tap_animation_active = false
+            debug("*** DOUBLE-TAP ANIMATION CANCELLED - Touch detected ***")
+        else
+            -- Continue animation
+            local current_pos = self.values.x
+            local distance_to_target = double_tap_target_position - current_pos
+            
+            -- Determine direction
+            local direction = 0
+            if distance_to_target > 0 then
+                direction = 1
+            elseif distance_to_target < 0 then
+                direction = -1
+            end
+
+            -- If already at target, stop animation
+            if direction == 0 then
+                self.values.x = double_tap_target_position
+                double_tap_animation_active = false
+                debug("*** DOUBLE-TAP ANIMATION COMPLETE (Already at target) ***")
+                sendFaderPosition(double_tap_target_position)
+                return
+            end
+
+            local step_size = DOUBLE_TAP_ANIMATION_SPEED
+            local proposed_new_position = current_pos + (direction * step_size)
+
+            -- Check if the proposed new position overshoots the target
+            if (direction > 0 and proposed_new_position >= double_tap_target_position) or
+               (direction < 0 and proposed_new_position <= double_tap_target_position) then
+                -- Snap to target
+                self.values.x = double_tap_target_position
+                double_tap_animation_active = false
+                debug("*** DOUBLE-TAP ANIMATION COMPLETE (Snapped to target) ***")
+                sendFaderPosition(double_tap_target_position)
+            else
+                -- Move towards target
+                self.values.x = proposed_new_position
+                sendFaderPosition(proposed_new_position)
+                
+                debug("*** DOUBLE-TAP ANIMATION ***")
+                debug("Current:", string.format("%.1f%%", proposed_new_position * 100), 
+                      "Target:", string.format("%.1f%%", double_tap_target_position * 100))
+            end
+        end
+    end
+    
+    -- Handle sync delay after touch release
+    if touched and not self.values.touch and not synced and not double_tap_animation_active then
+        local now = getMillis()
+        if (now - last > SYNC_DELAY) then
+            debug("*** SYNC DELAY COMPLETE - Updating to OSC position ***")
+            debug("Jumping from:", string.format("%.1f%%", self.values.x * 100), 
+                  "to:", string.format("%.1f%%", last_osc_x * 100))
+            self.values.x = last_osc_x
+            synced = true
+            touched = false
+        end
+    end
+    
+    -- Reset sync if touching again
+    if self.values.touch and not synced then
+        synced = true
+        touched = false
+        debug("*** Touch detected during sync delay - cancelling sync ***")
+    end
+    
     -- Periodic position sync when not touched
-    if not isTouched and trackNumber and connections then
+    if not isTouched and trackNumber and connections and synced then
         local now = os.clock()
         if now - lastPositionSyncTime > POSITION_SYNC_INTERVAL then
             requestCurrentPosition()
@@ -532,6 +749,19 @@ function init()
             discoverSendNames()
         end
     end
+    
+    debug("=== FADER WITH DOUBLE-TAP ===")
+    debug("Double-tap feature:", ENABLE_DOUBLE_TAP and "ENABLED" or "DISABLED")
+    if ENABLE_DOUBLE_TAP then
+        debug("Double-tap timing:")
+        debug("- Maximum time between taps:", DOUBLE_TAP_MAX_TIME, "ms")
+        debug("- Minimum time between taps:", DOUBLE_TAP_MIN_TIME, "ms")
+        debug("- Animation speed:", DOUBLE_TAP_ANIMATION_SPEED * 100, "% per update")
+    end
+    debug("Curve verification:")
+    local test_50 = linearToLog(0.5)
+    debug("50% fader:", string.format("%.3f", test_50), "audio", formatDB(value2db(test_50)))
+    debug("Unity position:", string.format("%.1f%%", logToLinear(0.85) * 100), "fader")
     
     debug("Initialization complete")
     debug("Parent: " .. tostring(parentGroup and parentGroup.name or "none"))
