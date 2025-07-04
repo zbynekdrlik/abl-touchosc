@@ -1,16 +1,17 @@
 -- TouchOSC Document Script
--- Version: 2.8.0
+-- Version: 2.8.1
+-- FIXED: Changed getMillis() to os.clock() for timing
 -- FIXED: Removed ALL centralized logging functionality
 -- Purpose: Manage document configuration ONLY
 
-local VERSION = "2.8.0"
+local VERSION = "2.8.1"
 
 -- Debug mode (set to 1 to enable logging)
 local DEBUG = 0
 
 -- Timer for automatic refresh
-local AUTO_REFRESH_DELAY = 1000  -- 1 second after load
-local last_refresh_time = 0
+local AUTO_REFRESH_DELAY = 1.0  -- 1 second after load (in seconds for os.clock)
+local startup_time = 0
 local startup_refresh_done = false
 
 -- Configuration state
@@ -174,8 +175,8 @@ end
 function update()
     -- Check for automatic startup refresh
     if not startup_refresh_done then
-        local now = getMillis()
-        if now - last_refresh_time > AUTO_REFRESH_DELAY then
+        local elapsed = os.clock() - startup_time
+        if elapsed > AUTO_REFRESH_DELAY then
             log("=== AUTOMATIC STARTUP REFRESH ===")
             refreshAllGroups()
             startup_refresh_done = true
@@ -214,7 +215,7 @@ function init()
     end
     
     -- Schedule automatic refresh
-    last_refresh_time = getMillis()
+    startup_time = os.clock()
     log("Ready - automatic refresh scheduled...")
     log("CRITICAL FIX: Removed ALL centralized logging functionality")
 end
