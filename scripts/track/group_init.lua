@@ -1,12 +1,16 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.15.1
--- Changed: Standardized DEBUG flag (uppercase) and disabled by default
+-- Version: 1.16.0
+-- Changed: Major performance optimization - throttled monitoring to 10fps instead of 60fps
 
 -- Version constant
-local SCRIPT_VERSION = "1.15.1"
+local SCRIPT_VERSION = "1.16.0"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
+
+-- Performance settings
+local MONITOR_INTERVAL = 0.1  -- Monitor at 10fps instead of 60fps (100ms intervals)
+local lastMonitorTime = 0
 
 -- Script-level variables to store group data
 local instance = nil
@@ -24,6 +28,10 @@ local listenersActive = false  -- Track if listeners are active
 local lastSendTime = 0
 local lastReceiveTime = 0
 local lastFaderValue = nil
+
+-- Cached references for performance
+local statusIndicator = nil
+local lastIndicatorColor = nil  -- Track last color to avoid redundant updates
 
 -- Local logging function
 local function log(message)
@@ -82,26 +90,38 @@ end
 -- Forward declaration for monitorActivity
 local monitorActivity
 
+-- Check if colors are equal (to avoid redundant updates)
+local function colorsEqual(c1, c2)
+    if not c1 or not c2 then return false end
+    return c1.r == c2.r and c1.g == c2.g and c1.b == c2.b and c1.a == c2.a
+end
+
 -- Update status indicator based on activity
 local function updateStatusIndicator()
-    local indicator = getChild(self, "status_indicator")
-    if not indicator then return end
+    -- Use cached reference if available
+    if not statusIndicator then
+        statusIndicator = getChild(self, "status_indicator")
+        if not statusIndicator then return end
+    end
     
     local currentTime = getMillis()
     local timeSinceSend = currentTime - lastSendTime
     local timeSinceReceive = currentTime - lastReceiveTime
     
+    -- Determine target color
+    local targetColor = nil
+    
     -- Check if mapped
     if trackMapped and trackNumber ~= nil then
-        indicator.visible = true
+        statusIndicator.visible = true
         
         -- Determine current state based on activity
         if timeSinceSend < 150 then
             -- Recently sent data - blue
-            indicator.color = Color(0, 0.5, 1, 1)
+            targetColor = Color(0, 0.5, 1, 1)
         elseif timeSinceReceive < 150 then
             -- Recently received data - yellow
-            indicator.color = Color(1, 1, 0, 1)
+            targetColor = Color(1, 1, 0, 1)
         elseif timeSinceSend < 500 or timeSinceReceive < 500 then
             -- Fading from active to idle
             local fadeTime = math.min(timeSinceSend, timeSinceReceive) - 150
@@ -109,25 +129,32 @@ local function updateStatusIndicator()
             
             if timeSinceSend < timeSinceReceive then
                 -- Fade from blue to green
-                indicator.color = Color(0, 0.5 * (1 - fade) + fade, 1 * (1 - fade) + fade * 0, 1)
+                targetColor = Color(0, 0.5 * (1 - fade) + fade, 1 * (1 - fade) + fade * 0, 1)
             else
                 -- Fade from yellow to green
-                indicator.color = Color(1 * (1 - fade), 1, 0, 1)
+                targetColor = Color(1 * (1 - fade), 1, 0, 1)
             end
         else
             -- Idle - solid green
-            indicator.color = Color(0, 1, 0, 1)
+            targetColor = Color(0, 1, 0, 1)
         end
     else
         -- Not mapped - red
-        indicator.visible = true
-        indicator.color = Color(1, 0, 0, 1)
+        statusIndicator.visible = true
+        targetColor = Color(1, 0, 0, 1)
+    end
+    
+    -- Only update if color changed
+    if targetColor and (not lastIndicatorColor or not colorsEqual(targetColor, lastIndicatorColor)) then
+        statusIndicator.color = targetColor
+        lastIndicatorColor = targetColor
     end
 end
 
 -- Monitor fader for outgoing activity
 monitorActivity = function()
     local currentTime = getMillis()
+    local activityDetected = false
     
     -- Check fader for changes (outgoing data)
     local fader = getChild(self, "fader")
@@ -135,12 +162,15 @@ monitorActivity = function()
         local currentValue = fader.values.x
         if lastFaderValue and math.abs(currentValue - lastFaderValue) > 0.001 then
             lastSendTime = currentTime
+            activityDetected = true
         end
         lastFaderValue = currentValue
     end
     
-    -- Update status indicator
-    updateStatusIndicator()
+    -- Only update indicator if activity detected or it's been a while
+    if activityDetected or (currentTime - lastSendTime < 1000) or (currentTime - lastReceiveTime < 1000) then
+        updateStatusIndicator()
+    end
 end
 
 -- Enable/disable all controls in the group - ONLY INTERACTIVITY
@@ -251,14 +281,21 @@ function init()
         end
     end
     
+    -- Cache status indicator reference
+    statusIndicator = getChild(self, "status_indicator")
+    
     -- Initialize status indicator
     updateStatusIndicator()
 end
 
--- Use update() function instead of schedule for periodic monitoring
+-- Use update() function with throttling for performance
 function update()
-    -- Monitor activity periodically
-    monitorActivity()
+    local currentTime = os.clock()
+    -- Only monitor at specified interval (10fps instead of 60fps)
+    if currentTime - lastMonitorTime >= MONITOR_INTERVAL then
+        lastMonitorTime = currentTime
+        monitorActivity()
+    end
 end
 
 function refreshTrackMapping()
@@ -291,12 +328,16 @@ function onReceiveOSC(message, connections)
             local trackIndex = message[2] and message[2][1] and message[2][1].value
             if trackIndex == trackNumber then
                 lastReceiveTime = getMillis()
+                -- Force indicator update on next monitor cycle
+                lastIndicatorColor = nil
             end
         -- Check for volume data
         elseif path == oscPrefix .. 'get/volume' then
             local trackIndex = message[2] and message[2][1] and message[2][1].value
             if trackIndex == trackNumber then
                 lastReceiveTime = getMillis()
+                -- Force indicator update on next monitor cycle
+                lastIndicatorColor = nil
             end
         end
     end
