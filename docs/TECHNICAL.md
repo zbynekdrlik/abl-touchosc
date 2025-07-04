@@ -27,7 +27,7 @@ TouchOSC Runtime
 ## Core Components
 
 ### Document Script (`document_script.lua`)
-**Version:** 2.8.0  
+**Version:** 2.8.1  
 **Purpose:** Central configuration management and automatic refresh
 
 **Key Features:**
@@ -45,7 +45,7 @@ unfold_master: 'Master'
 ```
 
 ### Group Script (`group_init.lua`)
-**Version:** 1.15.0  
+**Version:** 1.15.1  
 **Purpose:** Track discovery and control management
 
 **Key Features:**
@@ -59,7 +59,7 @@ unfold_master: 'Master'
 ### Control Scripts
 
 #### Fader Script (`fader_script.lua`)
-**Version:** 2.5.1  
+**Version:** 2.5.2  
 **Features:**
 - Professional movement scaling algorithm
 - 0.1dB minimum movement detection
@@ -87,28 +87,28 @@ unfold_master: 'Master'
 ```
 
 #### Mute Button Script (`mute_button.lua`)
-**Version:** 2.0.0  
+**Version:** 2.0.1  
 **Features:**
 - State tracking with feedback prevention
 - Visual-only indication (buttons have no text property)
 - Touch detection for immediate response
 
 #### Pan Control Script (`pan_control.lua`)
-**Version:** 1.5.0  
+**Version:** 1.5.1  
 **Features:**
 - Double-tap to center (0.5)
 - Color feedback for position
 - Simple, efficient implementation
 
 #### dB Label Script (`db_label.lua`)
-**Version:** 1.3.0  
+**Version:** 1.3.1  
 **Features:**
 - Real-time dB value display
 - Shows "-∞ dBFS" for minimum values
 - Shows "-" when track unmapped
 
 #### dB Meter Label Script (`db_meter_label.lua`)
-**Version:** 2.6.0  
+**Version:** 2.6.1  
 **Features:**
 - Meter level to dBFS conversion
 - Calibrated response matching meters
@@ -187,11 +187,11 @@ local configText = configObj.values.text
 Each script implements its own logging with debug control:
 ```lua
 -- Debug flag - set to 1 to enable logging
-local debug = 0  -- Default to off for performance
+local DEBUG = 0  -- Default to off for performance
 
 -- Local logging function
 local function log(message)
-    if debug == 1 then
+    if DEBUG == 1 then
         local context = "SCRIPTNAME"
         if self.parent and self.parent.name then
             context = "SCRIPTNAME(" .. self.parent.name .. ")"
@@ -208,12 +208,12 @@ end
 
 Example:
 ```
-[06:16:48] FADER(band_CG #): Script v2.5.1 loaded
+[06:16:48] FADER(band_CG #): Script v2.5.2 loaded
 [06:16:49] GROUP(band_CG #): Mapped to Track 39
 ```
 
 ### Debug Control
-- Each script has its own `debug` flag
+- Each script has its own `DEBUG` flag
 - Set to 1 to enable logging for that script
 - Default is 0 for performance
 - Logs appear in TouchOSC console
@@ -252,7 +252,7 @@ end
 6. Document OSC patterns
 
 ### Debugging
-1. Set `debug = 1` in specific scripts
+1. Set `DEBUG = 1` in specific scripts
 2. Check console output in TouchOSC
 3. Verify version numbers in logs
 4. Test connection isolation
