@@ -1,5 +1,6 @@
 -- TouchOSC Track Group Initialization Script
--- Version: 1.15.2
+-- Version: 1.15.3
+-- Fixed: Removed child control handler modification that caused errors
 -- Fixed: Schedule method not available - using time-based update checks
 -- Optimized: Replaced continuous update() with time-based activity monitoring
 -- Fixed: Parse tag for track info to support both regular and return tracks
@@ -7,7 +8,7 @@
 -- Fixed: Debug guard early return for zero overhead
 
 -- Version constant
-local VERSION = "1.15.2"
+local VERSION = "1.15.3"
 
 -- Debug mode (set to 1 for debug output)
 local DEBUG = 0
@@ -290,21 +291,6 @@ function onValueChanged(valueName)
     end
 end
 
--- Handle child control touches
-local function setupChildTouchHandlers()
-    for _, control in ipairs(childControls) do
-        local originalOnValueChanged = control.onValueChanged
-        control.onValueChanged = function(vName)
-            if vName == "touch" or vName == "x" or vName == "y" then
-                recordActivity()
-            end
-            if originalOnValueChanged then
-                originalOnValueChanged(vName)
-            end
-        end
-    end
-end
-
 -- ===========================
 -- UPDATE FUNCTION
 -- ===========================
@@ -338,9 +324,6 @@ function init()
     
     -- Discover child controls
     discoverChildControls()
-    
-    -- Setup touch handlers for children
-    setupChildTouchHandlers()
     
     -- Initialize activity state
     lastActivityTime = os.clock()
