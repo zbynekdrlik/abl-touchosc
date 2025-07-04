@@ -2,78 +2,79 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Currently working on: Systematic review of notify() usage
-- [ ] Waiting for: Testing of db_meter_label changes (v2.8.0)
+- [x] Currently working on: REMOVED ALL CENTRALIZED LOGGING
+- [ ] Waiting for: Testing of changes (db_meter_label v2.9.0, document_script v2.8.0)
 - [ ] Blocked by: None
-- [ ] **ONGOING**: Reviewing other scripts for logging pattern updates
+- [ ] **CRITICAL**: NO CENTRALIZED LOGGING - Each script handles its own!
 
-## Current Status (2025-07-04 21:31 UTC)
+## Current Status (2025-07-04 21:41 UTC)
 
-### ✅ COMPLETED: db_meter_label.lua Fixed (v2.8.0)
+### ✅ MAJOR FIX COMPLETED: REMOVED ALL CENTRALIZED LOGGING
 
-**Changes made:**
-1. **Removed value_changed fallback** - The notify handler for "value_changed" has been completely removed
-2. **Updated logging to centralized pattern** - Now uses `root:notify("log_message", ...)` as per TouchOSC rules
-3. **Version bumped to 2.8.0** - Indicates significant fix
+**What was wrong:**
+- I misunderstood and tried to implement centralized logging
+- This was OPPOSITE of the goal of this performance branch!
 
-### 📋 CLARIFICATION: log_message notify is CORRECT
+**What was fixed:**
+1. **db_meter_label.lua v2.9.0** 
+   - Removed ALL centralized logging
+   - Removed value_changed fallback
+   - Each script prints its own logs
 
-After reviewing the TouchOSC rules (rule #11), the centralized logging pattern using `root:notify("log_message", ...)` is the CORRECT approach. The document script (v2.7.6) properly handles these notifications.
+2. **document_script.lua v2.8.0**
+   - Removed ALL log_message handling
+   - Removed logger functionality
+   - Now handles configuration ONLY
 
-### 🔍 NOTIFY USAGE REVIEW STATUS:
+3. **TouchOSC rules updated**
+   - Rule #11 now clearly states NO CENTRALIZED LOGGING
+   - Added multiple warnings and examples
+   - Made it crystal clear for future sessions
 
-1. **log_message** - ✅ CORRECT (centralized logging pattern per rules)
-   - Document script handles it properly
-   - Scripts SHOULD use this pattern
+### 🚨 CRITICAL PRINCIPLE FOR THIS BRANCH:
 
-2. **value_changed in db_meter_label** - ✅ FIXED
-   - Fallback removed in v2.8.0
-   - Now relies only on direct OSC
+**NO CENTRALIZED LOGGING WHATSOEVER:**
+- NO log_message notify
+- NO logger text object
+- NO centralized logger
+- Each script prints to console directly
+- This is for PERFORMANCE - no notification overhead!
 
-3. **track_changed** - ✅ NEEDED
-   - Informs children when track mapping changes
-   - Lightweight, essential for coordination
+### 📝 SCRIPTS STILL TO UPDATE:
 
-4. **track_type** - ✅ NEEDED
-   - Informs children whether track is regular or return
-   - Essential for proper OSC path handling
+All other scripts need to be checked for:
+- [ ] Remove any `root:notify("log_message", ...)` calls
+- [ ] Update to direct console logging
+- [ ] Verify DEBUG flag controls logging
 
-5. **track_unmapped** - ✅ NEEDED
-   - Clears children when track is unmapped
-   - Essential for state management
-
-6. **child_touched/released** - ✅ NEEDED
-   - UI interaction notifications
-   - Already reviewed in group_init.lua
-
-7. **sibling_touched/released** - ✅ NEEDED
-   - Forwarded from child_touched/released
-   - Essential for coordinated UI behavior
-
-8. **refresh_all_groups** - ✅ NEEDED
-   - One-time trigger for track discovery
-   - Essential for initialization
-
-### 📝 SCRIPTS TO UPDATE FOR LOGGING:
-
-Need to check and update logging pattern in:
+Scripts to check:
 - [ ] fader_script.lua
-- [ ] meter_script.lua
+- [ ] meter_script.lua  
 - [ ] mute_button.lua
 - [ ] pan_control.lua
 - [ ] db_label.lua
-- [ ] group_init.lua (already uses local log, needs review)
+- [ ] group_init.lua
 - [ ] global_refresh_button.lua
 
+### ✅ NOTIFY USAGE (All others are OK):
+
+After review, these notify uses are NEEDED and correct:
+- `track_changed` - Essential for child coordination
+- `track_type` - Essential for OSC path selection
+- `track_unmapped` - Essential for state management
+- `child_touched/released` - UI interactions
+- `sibling_touched/released` - UI coordination
+- `refresh_all_groups` - One-time initialization
+
 ### NEXT STEPS:
-1. Wait for user to test db_meter_label v2.8.0
-2. Update other scripts to use centralized logging
-3. Verify all scripts follow TouchOSC rules properly
-4. Update README if needed
+1. Test the updated scripts (v2.9.0 and v2.8.0)
+2. Update remaining scripts to remove centralized logging
+3. Verify all scripts use direct console logging
+4. Update CHANGELOG.md with these changes
 
 ---
 
-## State Saved: 2025-07-04 21:31 UTC
-**Status**: db_meter_label fixed, reviewing other scripts for logging updates
+## State Saved: 2025-07-04 21:41 UTC
+**Status**: Removed ALL centralized logging from key scripts
 **Branch**: feature/performance-optimization  
-**Next Action**: Test db_meter_label changes, then update logging in other scripts
+**Next Action**: Test changes, then update remaining scripts
