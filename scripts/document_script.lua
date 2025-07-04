@@ -1,9 +1,9 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.8.1
+-- Version: 2.8.2
 -- Purpose: Main document script with configuration and track management
--- Changed: Standardized DEBUG flag (uppercase) and disabled by default
+-- Changed: Removed dead configuration_updated handler (config is read-only at runtime)
 
-local VERSION = "2.8.1"
+local VERSION = "2.8.2"
 local SCRIPT_NAME = "Document Script"
 
 -- Debug flag - set to 1 to enable logging
@@ -104,14 +104,11 @@ function onReceiveNotify(action, value)
         -- Parse the configuration immediately
         parseConfiguration()
         
-    elseif action == "configuration_updated" then
-        -- Configuration text has been updated - reparse silently
-        parseConfiguration()
-        
     elseif action == "refresh_all_groups" then
         -- Global refresh button pressed
         refreshAllGroups()
     end
+    -- Note: Removed "configuration_updated" handler - config text is read-only at runtime
     -- Note: Removed "log_message" handler - each script logs independently now
 end
 
