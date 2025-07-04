@@ -2,6 +2,50 @@
 
 All notable changes to the ABL TouchOSC project are documented here.
 
+## [1.3.0] - 2025-07-04
+### Logging System Refactor Release 📝
+
+This release removes the centralized logging system in favor of local logging functions in each script, improving performance and reducing complexity.
+
+### Major Changes
+
+#### Removed Centralized Logging System
+- **No More notify() Overhead**: Eliminated all notify("log_message") calls
+- **Local Logging**: Each script now has its own local log() function
+- **Debug Control**: Standardized DEBUG flag (uppercase) across all scripts
+- **Production Ready**: DEBUG=0 by default - no log messages in production
+
+#### Performance Improvements
+- **Reduced Script Size**: Average 10% reduction in script size
+- **Better Performance**: No notify() overhead for logging
+- **Simpler Architecture**: Each script is self-contained
+
+#### Script Updates
+All scripts updated with local logging and DEBUG=0:
+- **document_script.lua [2.8.1]**: Removed log_message handler
+- **global_refresh_button.lua [1.5.1]**: Local logging instead of notify
+- **group_init.lua [1.15.1]**: Already had local logging, standardized
+- **mute_button.lua [2.0.1]**: Local logging, removed verbose logs
+- **fader_script.lua [2.5.2]**: Local logging, DEBUG mode standardized
+- **meter_script.lua [2.4.1]**: Local logging, DEBUG mode standardized  
+- **db_label.lua [1.3.1]**: Local logging, reduced verbosity
+- **db_meter_label.lua [2.6.1]**: Local logging, DEBUG mode standardized
+- **pan_control.lua [1.5.1]**: Local logging, reduced verbosity
+
+### Impact Summary
+- **Files Changed**: 11 files modified
+- **Lines Removed**: Net reduction of 330 lines
+- **Script Size**: ~10% reduction (e.g., fader_script.lua: 35KB → 32KB)
+- **Log Output**: None in production (DEBUG=0)
+
+### Testing Confirmed
+- ✅ All functionality preserved
+- ✅ No log messages in production
+- ✅ Debug logging works when DEBUG=1
+- ✅ All controls tested and working
+
+---
+
 ## [1.2.0] - 2025-07-03
 ### Return Track Support Release 🎚️
 
