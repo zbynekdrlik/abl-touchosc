@@ -1,10 +1,13 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.7.1
--- Purpose: Main document script with configuration, logging, and track management
--- Fixed: Automatic refresh on startup with proper timing
+-- Version: 2.8.1
+-- Purpose: Main document script with configuration and track management
+-- Changed: Standardized DEBUG flag (uppercase) and disabled by default
 
-local VERSION = "2.7.1"
+local VERSION = "2.8.1"
 local SCRIPT_NAME = "Document Script"
+
+-- Debug flag - set to 1 to enable logging
+local DEBUG = 0
 
 -- Configuration storage
 local config = {
@@ -13,36 +16,17 @@ local config = {
 }
 
 -- Control references (can be in pagers)
-local logger = nil
 local configText = nil
-local logLines = {}
-local maxLogLines = 60  -- Increased from 20 to 60 for full-height logger
 
 -- Startup tracking
 local startupRefreshTime = nil
 local frameCount = 0
 local STARTUP_DELAY_FRAMES = 60  -- Wait 1 second (60 frames at 60fps)
 
--- === LOGGING FUNCTIONS ===
+-- === LOCAL LOGGING FUNCTION ===
 local function log(message)
-    local logMessage = os.date("%H:%M:%S") .. " " .. message
-    
-    -- REMOVED print to console - scripts will handle their own console output
-    
-    -- Store messages
-    table.insert(logLines, logMessage)
-    if #logLines > maxLogLines then
-        table.remove(logLines, 1)
-    end
-    
-    -- Try to find logger if not found yet
-    if not logger then
-        logger = root:findByName("logger", true)  -- recursive search
-    end
-    
-    -- Update logger if found
-    if logger and logger.values then
-        logger.values.text = table.concat(logLines, "\n")
+    if DEBUG == 1 then
+        print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. ": " .. message)
     end
 end
 
@@ -112,17 +96,7 @@ end
 
 -- === NOTIFY HANDLER ===
 function onReceiveNotify(action, value)
-    if action == "register_logger" then
-        -- Logger is notifying us of its existence
-        logger = value
-        log("Logger registered")
-        
-        -- Send all buffered messages to logger
-        if logger and logger.values then
-            logger.values.text = table.concat(logLines, "\n")
-        end
-        
-    elseif action == "register_configuration" then
+    if action == "register_configuration" then
         -- Configuration text is notifying us
         configText = value
         log("Config registered")
@@ -137,13 +111,8 @@ function onReceiveNotify(action, value)
     elseif action == "refresh_all_groups" then
         -- Global refresh button pressed
         refreshAllGroups()
-        
-    elseif action == "log_message" then
-        -- Another script wants to log a message
-        if value then
-            log(tostring(value))
-        end
     end
+    -- Note: Removed "log_message" handler - each script logs independently now
 end
 
 -- === GLOBAL HELPER FUNCTIONS ===
@@ -207,15 +176,7 @@ end
 
 -- === INITIALIZATION ===
 function init()
-    -- Add visual separator for new run
-    log("════════════════════════════════════════")
-    log("═══ NEW SESSION " .. os.date("%Y-%m-%d %H:%M:%S") .. " ═══")
-    log("════════════════════════════════════════")
-    
-    log(SCRIPT_NAME .. " v" .. VERSION .. " loaded")
-    
-    -- Try to find logger
-    logger = root:findByName("logger", true)
+    log("Script v" .. VERSION .. " loaded")
     
     -- Try to parse configuration
     parseConfiguration()
@@ -225,8 +186,7 @@ function init()
     sendOSC('/live/song/get/track_names')
     sendOSC('/live/song/start_listen/is_playing')
     
-    log("Ready")
-    log("Automatic refresh scheduled...")
+    log("Ready - automatic refresh scheduled")
     
     -- Reset frame counter for startup refresh
     frameCount = 0

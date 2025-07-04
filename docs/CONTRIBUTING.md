@@ -44,14 +44,20 @@ end
 ```
 
 #### Logging Format
-Use centralized logging through root:notify:
+Each script implements its own local logging:
 ```lua
+-- Debug flag - set to 1 to enable logging
+local DEBUG = 0  -- Default to off for performance
+
+-- Local logging function
 local function log(message)
-    local context = "SCRIPT_NAME"
-    if self.parent and self.parent.name then
-        context = "SCRIPT_NAME(" .. self.parent.name .. ")"
+    if DEBUG == 1 then
+        local context = "SCRIPT_NAME"
+        if self.parent and self.parent.name then
+            context = "SCRIPT_NAME(" .. self.parent.name .. ")"
+        end
+        print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
     end
-    root:notify("log_message", context .. ": " .. message)
 end
 ```
 
@@ -95,9 +101,9 @@ Logs must show:
 
 Example:
 ```
-06:16:47 Document Script v2.7.1 loaded
-06:16:48 === AUTOMATIC STARTUP REFRESH ===
-06:16:48 CONTROL(band_CG #) Mapped to Track 39
+[06:16:47] Document Script: Script v2.8.1 loaded
+[06:16:48] Document Script: === AUTOMATIC STARTUP REFRESH ===
+[06:16:48] GROUP(band_CG #): Mapped to Track 39
 ```
 
 ## 📝 Documentation

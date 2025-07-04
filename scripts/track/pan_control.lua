@@ -1,84 +1,63 @@
 -- TouchOSC Pan Control Script
--- Version: 1.4.1
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Added: Return track support using parent's trackType
--- Fixed: Added logger output using root:notify like other scripts
+-- Version: 1.5.1
+-- Changed: Standardized DEBUG flag (uppercase) and disabled by default
 
 -- Version constant
-local VERSION = "1.4.1"
+local VERSION = "1.5.1"
 
--- Double-tap configuration
-local delay = 300 -- the maximum elapsed time between taps
-local last = 0
-local touch_on_first = false
+-- Debug flag - set to 1 to enable logging
+local DEBUG = 0
 
--- Color constants
-local COLOR_CENTERED = Color(0.39, 0.39, 0.39, 1.0)  -- #646464FF when at center
-local COLOR_OFF_CENTER = Color(0.20, 0.76, 0.86, 1.0) -- #34C1DC when out of center
+-- State variables
+local trackNumber = nil
+local trackType = nil  -- "track" or "return"
+local currentPan = 0.5  -- Center (0.5 = center in TouchOSC, 0 = center in Ableton)
+local lastOscPan = 0.5
+local isTouching = false
 
 -- ===========================
--- LOGGING
+-- LOCAL LOGGING
 -- ===========================
 
--- Logging with both logger object and console output
 local function log(message)
-    local context = "PAN"
-    if self.parent and self.parent.name then
-        context = "PAN(" .. self.parent.name .. ")"
+    if DEBUG == 1 then
+        local context = "PAN"
+        if self.parent and self.parent.name then
+            context = "PAN(" .. self.parent.name .. ")"
+        end
+        print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
     end
-    
-    -- Send to document script for logger text update (like meter and fader)
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
-    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
 -- ===========================
 -- CONNECTION HELPERS
 -- ===========================
 
--- Read configuration directly (following script isolation pattern)
-local function readConfiguration()
-    local configControl = root:findByName("configuration", true)
-    if not configControl then
-        log("ERROR: Configuration control not found")
-        return nil
-    end
-    
-    local configText = configControl.values.text
-    if not configText or configText == "" then
-        log("ERROR: Configuration is empty")
-        return nil
-    end
-    
-    -- Parse configuration
-    local config = {}
-    for line in configText:gmatch("[^\r\n]+") do
-        local key, value = line:match("^([^:]+):%s*(.+)$")
-        if key and value then
-            config[key] = tonumber(value) or value
-        end
-    end
-    
-    return config
-end
-
--- Get the connection index from parent group
+-- Get connection configuration
 local function getConnectionIndex()
     -- Check if parent has tag with instance:trackNumber:trackType format
     if self.parent and self.parent.tag then
         local instance = self.parent.tag:match("^(%w+):")
         if instance then
-            -- Read configuration directly
-            local config = readConfiguration()
-            if config then
-                local connectionKey = "connection_" .. instance
-                local connectionIndex = config[connectionKey]
-                if connectionIndex then
-                    return connectionIndex
+            -- Find configuration object
+            local configObj = root:findByName("configuration", true)
+            if not configObj or not configObj.values or not configObj.values.text then
+                return 1
+            end
+            
+            local configText = configObj.values.text
+            local searchKey = "connection_" .. instance .. ":"
+            
+            -- Parse configuration text
+            for line in configText:gmatch("[^\r\n]+") do
+                line = line:match("^%s*(.-)%s*$")  -- Trim whitespace
+                if line:sub(1, #searchKey) == searchKey then
+                    local value = line:sub(#searchKey + 1):match("^%s*(.-)%s*$")
+                    return tonumber(value) or 1
                 end
             end
+            
+            return 1
         end
     end
     
@@ -95,10 +74,6 @@ local function buildConnectionTable(index)
     return connections
 end
 
--- ===========================
--- TRACK INFORMATION
--- ===========================
-
 -- Get track number and type from parent group
 local function getTrackInfo()
     -- Parent stores track info in tag as "instance:trackNumber:trackType"
@@ -112,69 +87,44 @@ local function getTrackInfo()
 end
 
 -- ===========================
--- MAIN FUNCTIONS
+-- PAN CONVERSION FUNCTIONS
 -- ===========================
 
--- Handle value changes (touch and movement)
-function onValueChanged()
-    local trackNumber, trackType = getTrackInfo()
-    if not trackNumber then
-        return
-    end
-    
-    -- Double-tap detection
-    if self.values.touch then
-        touch_on_first = true
-    end
-    
-    if touch_on_first and not self.values.touch then
-        local now = getMillis()
-        if now - last < delay then
-            -- Double-tap detected - center the pan
-            self.values.x = 0.5
-            last = 0
-            touch_on_first = false
-            log("Double-tap detected - pan centered")
-        else
-            last = now
-        end
-    end
-    
-    -- Send pan value with connection routing
+-- Convert TouchOSC value (0-1) to Ableton pan (-1 to 1)
+local function touchOSCToAbletonPan(value)
+    -- TouchOSC: 0 = left, 0.5 = center, 1 = right
+    -- Ableton: -1 = left, 0 = center, 1 = right
+    return (value * 2) - 1
+end
+
+-- Convert Ableton pan (-1 to 1) to TouchOSC value (0-1)
+local function abletonToTouchOSCPan(value)
+    -- Ableton: -1 = left, 0 = center, 1 = right
+    -- TouchOSC: 0 = left, 0.5 = center, 1 = right
+    return (value + 1) / 2
+end
+
+-- ===========================
+-- OSC HANDLERS
+-- ===========================
+
+-- Send OSC with connection routing
+local function sendOSCRouted(path, track, pan)
     local connectionIndex = getConnectionIndex()
     local connections = buildConnectionTable(connectionIndex)
-    
-    -- Convert to Ableton range (-1 to 1)
-    local abletonValue = (self.values.x * 2) - 1
-    
-    -- Send to correct path based on track type
-    local path = trackType == "return" and '/live/return/set/panning' or '/live/track/set/panning'
-    sendOSC(path, trackNumber, abletonValue, connections)
+    sendOSC(path, track, pan, connections)
 end
 
--- Update visual color based on pan position
-function update()
-    local value = self.values.x
-    if math.abs(value - 0.5) > 0.01 then
-        -- Pan is off-center
-        self.color = COLOR_OFF_CENTER
-    else
-        -- Pan is centered
-        self.color = COLOR_CENTERED
-    end
-end
-
--- Handle incoming pan updates from Ableton
 function onReceiveOSC(message, connections)
     local path = message[1]
+    local arguments = message[2]
     
-    -- Get track info from parent
-    local trackNumber, trackType = getTrackInfo()
-    if not trackNumber then
+    -- Check if we have track info
+    if not trackNumber or not trackType then
         return false
     end
     
-    -- Check if this is a pan message for the correct track type
+    -- Check if this is a panning message for the correct track type
     local isPanMessage = false
     if trackType == "return" and path == '/live/return/get/panning' then
         isPanMessage = true
@@ -186,31 +136,70 @@ function onReceiveOSC(message, connections)
         return false
     end
     
-    -- Check if this message is from our connection
-    local myConnection = getConnectionIndex()
-    if not connections[myConnection] then
-        return false
+    -- Check if this message is for our track
+    if arguments[1].value == trackNumber then
+        -- Get the panning value from Ableton and convert to TouchOSC range
+        local abletonPan = arguments[2].value
+        lastOscPan = abletonToTouchOSCPan(abletonPan)
+        
+        -- Only update if not touching to prevent jumps
+        if not isTouching then
+            currentPan = lastOscPan
+            self.values.x = currentPan
+        end
     end
     
-    -- Check if this is our track
-    local arguments = message[2]
-    if not arguments or #arguments < 2 then
-        return false
+    return false  -- Don't block other receivers
+end
+
+-- ===========================
+-- USER INTERACTION
+-- ===========================
+
+function onValueChanged(valueName)
+    -- Handle touch state
+    if valueName == "touch" then
+        isTouching = self.values.touch
+        
+        -- Sync with last OSC value when releasing
+        if not isTouching then
+            currentPan = lastOscPan
+            self.values.x = currentPan
+        end
+    elseif valueName == "x" and isTouching then
+        -- Check if track is mapped
+        if not trackNumber or not trackType then
+            return
+        end
+        
+        -- Update pan value
+        currentPan = self.values.x
+        
+        -- Convert to Ableton range and send
+        local abletonPan = touchOSCToAbletonPan(currentPan)
+        local path = trackType == "return" and '/live/return/set/panning' or '/live/track/set/panning'
+        sendOSCRouted(path, trackNumber, abletonPan)
     end
-    
-    local msgTrackNumber = arguments[1].value
-    
-    if msgTrackNumber ~= trackNumber then
-        return false
+end
+
+-- ===========================
+-- NOTIFY HANDLER
+-- ===========================
+
+function onReceiveNotify(key, value)
+    if key == "track_changed" then
+        trackNumber = value
+        -- Reset to center when track changes
+        currentPan = 0.5
+        self.values.x = currentPan
+    elseif key == "track_type" then
+        trackType = value
+    elseif key == "track_unmapped" then
+        trackNumber = nil
+        trackType = nil
+        currentPan = 0.5
+        self.values.x = currentPan
     end
-    
-    -- Get the pan value (-1 to 1 from Ableton)
-    local abletonPan = arguments[2].value
-    
-    -- Convert to TouchOSC range (0-1)
-    self.values.x = (abletonPan + 1) / 2
-    
-    return true
 end
 
 -- ===========================
@@ -218,16 +207,13 @@ end
 -- ===========================
 
 function init()
-    -- Log version
     log("Script v" .. VERSION .. " loaded")
     
-    -- DO NOT touch self.values.x - preserve current state!
+    -- Get initial track info
+    trackNumber, trackType = getTrackInfo()
     
-    -- Log parent info
-    if self.parent and self.parent.name then
-        log("Initialized for parent: " .. self.parent.name)
-    end
+    -- Set initial position to center
+    self.values.x = currentPan
 end
 
--- Initialize on script load
 init()

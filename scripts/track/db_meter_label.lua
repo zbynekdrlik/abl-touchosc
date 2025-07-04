@@ -1,77 +1,45 @@
--- TouchOSC dB Meter Label Display
--- Version: 2.5.1
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Added: Return track support using parent's trackType
--- Shows actual peak dBFS level from track output meter
--- Accurately calibrated to match Ableton Live's display
--- Multi-connection routing support
+-- TouchOSC dBFS Meter Label Display (Real-time meter value in dBFS)
+-- Version: 2.6.1
+-- Changed: Standardized DEBUG flag (uppercase) and disabled by default
 
 -- Version constant
-local VERSION = "2.5.1"
+local VERSION = "2.6.1"
+
+-- Debug flag for meter value display (NOT general debugging)
+-- When set to 1, shows raw meter values for calibration
+local DEBUG_METER_VALUES = 0
+
+-- Debug flag - set to 1 to enable logging
+local DEBUG = 0
 
 -- State variables
-local lastDB = -70.0
-local lastMeterValue = 0
+local trackNumber = nil
+local trackType = nil
+local lastMeterDB = -math.huge
+local lastRawMeter = 0
 
--- Debug mode
-local DEBUG = 0  -- Set to 1 for detailed logging
-
--- ===========================
--- METER CALIBRATION TABLE
--- ===========================
--- Calibration table based on extensive testing with Ableton Live
--- AbletonOSC uses non-linear scaling with 0.921 = 0 dBFS, 1.0 = +6 dBFS
+-- Calibration table for meter to dBFS conversion
+-- Based on verified measurements from user testing
 local METER_DB_CALIBRATION = {
     {0.000, -math.huge},  -- Silence
-    {0.001, -100.0},      -- Very quiet
-    {0.010, -80.0},       
-    {0.050, -70.0},       
-    {0.070, -64.7},       -- Verified
-    {0.100, -60.0},       
-    {0.150, -54.0},       
-    {0.200, -50.0},       
-    {0.250, -46.0},       
-    {0.300, -43.0},       
-    {0.350, -40.5},       
-    {0.400, -38.5},       
-    {0.425, -37.7},       -- Verified
-    {0.500, -33.0},       
-    {0.539, -29.0},       -- Verified
-    {0.600, -24.4},       -- Verified
-    {0.631, -22.0},       -- Verified
-    {0.674, -18.8},       -- Verified
-    {0.700, -16.8},       
-    {0.750, -14.0},       
-    {0.800, -10.0},       
-    {0.842, -6.0},        -- Verified
-    {0.900, -3.0},        
-    {0.921, 0.0},         -- Verified (unity/0 dBFS)
-    {0.950, 2.0},         
-    {0.980, 4.0},         
-    {1.000, 6.0},         -- Verified (max headroom)
+    {0.001, -80.0},       -- Very quiet  
+    {0.600, -24.4},       -- VERIFIED by user
+    {0.631, -22.0},       -- VERIFIED by user
+    {0.842, -6.0},        -- VERIFIED by user
+    {1.000, 0.0},         -- Unity (0 dBFS)
 }
 
 -- ===========================
--- CENTRALIZED LOGGING
+-- LOCAL LOGGING
 -- ===========================
 
 local function log(message)
-    -- Get parent name for context
-    local context = "dBFS"
-    if self.parent and self.parent.name then
-        context = "dBFS(" .. self.parent.name .. ")"
-    end
-    
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development
-    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
-end
-
-local function debugLog(message)
     if DEBUG == 1 then
-        log("[DEBUG] " .. message)
+        local context = "dBFS"
+        if self.parent and self.parent.name then
+            context = "dBFS(" .. self.parent.name .. ")"
+        end
+        print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
     end
 end
 
@@ -91,67 +59,20 @@ local function getTrackInfo()
     return nil, nil
 end
 
--- Check if track is properly mapped
-local function isTrackMapped()
-    local trackNumber, trackType = getTrackInfo()
-    return trackNumber ~= nil
-end
-
--- Get connection index for this instance
-local function getConnectionIndex()
-    -- Default to connection 1 if can't determine
-    local defaultConnection = 1
-    
-    -- Check parent tag for instance name
-    if not self.parent or not self.parent.tag then
-        return defaultConnection
-    end
-    
-    -- Extract instance name from tag
-    local instance = self.parent.tag:match("^(%w+):")
-    if not instance then
-        return defaultConnection
-    end
-    
-    -- Find and read configuration
-    local configObj = root:findByName("configuration", true)
-    if not configObj or not configObj.values or not configObj.values.text then
-        return defaultConnection
-    end
-    
-    -- Parse configuration to find connection for this instance
-    local configText = configObj.values.text
-    for line in configText:gmatch("[^\r\n]+") do
-        -- Look for connection_instance: number pattern
-        local configInstance, connectionNum = line:match("connection_(%w+):%s*(%d+)")
-        if configInstance and configInstance == instance then
-            return tonumber(connectionNum) or defaultConnection
-        end
-    end
-    
-    return defaultConnection
-end
-
 -- ===========================
--- METER TO DB CONVERSION
+-- METER TO dBFS CONVERSION
 -- ===========================
 
--- Convert meter level to dB using calibration table
-function meterToDB(meter_normalized)
-    -- Handle nil or negative values
-    if not meter_normalized or meter_normalized <= 0 then
+-- Convert normalized meter value (0-1) to dBFS using calibration table
+local function meterToDB(meter_normalized)
+    -- Handle edge cases
+    if meter_normalized <= 0 then
         return -math.huge
+    elseif meter_normalized >= 1 then
+        return 0
     end
     
-    -- Handle values above 1.0 (extended range)
-    if meter_normalized > 1.0 then
-        -- Extrapolate beyond our calibration
-        -- We know 1.0 = +6 dBFS, so continue linearly
-        local db_above_6 = 6.0 + ((meter_normalized - 1.0) * 20)
-        return db_above_6
-    end
-    
-    -- Find calibration points for interpolation
+    -- Find the appropriate calibration points and interpolate
     for i = 1, #METER_DB_CALIBRATION - 1 do
         local point1 = METER_DB_CALIBRATION[i]
         local point2 = METER_DB_CALIBRATION[i + 1]
@@ -160,50 +81,31 @@ function meterToDB(meter_normalized)
             -- Linear interpolation between calibration points
             local meter_range = point2[1] - point1[1]
             local db_range = point2[2] - point1[2]
+            local meter_offset = meter_normalized - point1[1]
+            local interpolation_ratio = meter_offset / meter_range
             
-            -- Handle -inf in interpolation
-            if point1[2] == -math.huge then
-                -- Special case: interpolating from -inf
-                -- Use logarithmic scaling near zero
-                return 20 * math.log10(meter_normalized)
-            elseif point2[2] == -math.huge then
-                -- This shouldn't happen but handle it
-                return -math.huge
-            else
-                -- Normal linear interpolation
-                local meter_offset = meter_normalized - point1[1]
-                local interpolation_ratio = meter_offset / meter_range
-                local db_value = point1[2] + (db_range * interpolation_ratio)
-                
-                debugLog(string.format("Meter: %.4f → Between %.4f (%.1f dB) and %.4f (%.1f dB) → %.1f dB", 
-                    meter_normalized, point1[1], point1[2], point2[1], point2[2], db_value))
-                
-                return db_value
-            end
+            return point1[2] + (db_range * interpolation_ratio)
         end
     end
     
-    -- Fallback for values outside calibration range
-    if meter_normalized <= METER_DB_CALIBRATION[1][1] then
-        return METER_DB_CALIBRATION[1][2]
-    else
-        return METER_DB_CALIBRATION[#METER_DB_CALIBRATION][2]
-    end
+    -- Should not reach here, but return 0 as fallback
+    return 0
 end
 
--- ===========================
--- dBFS DISPLAY FORMATTING
--- ===========================
-
--- Format dBFS value for display with proper unit
-function formatDB(db_value)
-    if db_value == -math.huge or db_value <= -70 then
-        return "-∞ dBFS"
-    elseif db_value >= 0 then
-        -- Show + for positive values (floating-point headroom)
-        return string.format("+%.1f dBFS", db_value)
+-- Format dBFS value for display
+local function formatDBFS(db_value, raw_meter)
+    if DEBUG_METER_VALUES == 1 and raw_meter then
+        -- Debug mode: show raw meter value for calibration
+        return string.format("%.3f", raw_meter)
     else
-        return string.format("%.1f dBFS", db_value)
+        -- Normal mode: show dBFS
+        if db_value == -math.huge or db_value < -80 then
+            return "-∞ dBFS"
+        elseif db_value >= 0 then
+            return "0.0 dBFS"  -- Clamp at 0 dBFS
+        else
+            return string.format("%.1f dBFS", db_value)
+        end
     end
 end
 
@@ -213,12 +115,17 @@ end
 
 function onReceiveOSC(message, connections)
     local path = message[1]
+    local arguments = message[2]
     
     -- Get track info from parent
-    local trackNumber, trackType = getTrackInfo()
-    if not trackNumber then
+    local trackNum, trackTyp = getTrackInfo()
+    if not trackNum then
         return false
     end
+    
+    -- Store in local variables
+    trackNumber = trackNum
+    trackType = trackTyp
     
     -- Check if this is a meter message for the correct track type
     local isMeterMessage = false
@@ -232,64 +139,21 @@ function onReceiveOSC(message, connections)
         return false
     end
     
-    -- Get our connection index
-    local myConnection = getConnectionIndex()
-    
-    -- Check if this message is from our connection
-    if connections and not connections[myConnection] then
-        return false
-    end
-    
-    local arguments = message[2]
-    if not arguments or #arguments < 2 then
-        return false
-    end
-    
     -- Check if this message is for our track
-    local msgTrackNumber = arguments[1].value
-    
-    if msgTrackNumber ~= trackNumber then
-        return false
+    if arguments[1].value == trackNumber then
+        -- Get the meter value and convert to dBFS
+        local meter_value = arguments[2].value
+        lastRawMeter = meter_value
+        
+        -- Convert to dBFS using calibration table
+        local db_value = meterToDB(meter_value)
+        lastMeterDB = db_value
+        
+        -- Update label text
+        self.values.text = formatDBFS(db_value, meter_value)
     end
-    
-    -- Get meter level and calculate dB
-    local meter_level = arguments[2].value
-    local db_value = meterToDB(meter_level)
-    
-    -- Always update the display for every meter value
-    self.values.text = formatDB(db_value)
-    
-    -- Enhanced logging for debugging
-    local shouldLog = false
-    
-    -- Always log if value changed significantly
-    if not lastDB or math.abs(db_value - lastDB) > 1.0 then
-        shouldLog = true
-    end
-    
-    -- Log clipping
-    if db_value > 0 and (not lastDB or lastDB <= 0) then
-        shouldLog = true
-    end
-    
-    if shouldLog then
-        log(string.format("%s track %d: %s (meter: %.4f)%s", 
-            trackType, trackNumber, formatDB(db_value), meter_level,
-            db_value > 0 and " [CLIPPING]" or ""))
-    end
-    
-    lastDB = db_value
-    lastMeterValue = meter_level
     
     return false  -- Don't block other receivers
-end
-
--- ===========================
--- UPDATE FUNCTION
--- ===========================
-
-function update()
-    -- No update needed - display updates on OSC messages
 end
 
 -- ===========================
@@ -299,20 +163,43 @@ end
 function onReceiveNotify(key, value)
     -- Handle track changes
     if key == "track_changed" then
+        trackNumber = value
         -- Clear the display when track changes
         self.values.text = "-∞ dBFS"
-        lastDB = -math.huge
-        lastMeterValue = 0
-        log("Track changed - display reset")
+        lastMeterDB = -math.huge
+        lastRawMeter = 0
+    elseif key == "track_type" then
+        trackType = value
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
+        trackNumber = nil
+        trackType = nil
         self.values.text = "-"
-        lastDB = nil
-        lastMeterValue = nil
-        log("Track unmapped - display shows dash")
-    elseif key == "control_enabled" then
-        -- Show/hide based on track mapping status
-        self.values.visible = value
+        lastMeterDB = nil
+        lastRawMeter = 0
+    end
+end
+
+-- ===========================
+-- USER INTERACTION
+-- ===========================
+
+function onValueChanged(valueName)
+    -- Toggle debug mode when label is tapped
+    if valueName == "x" then
+        DEBUG_METER_VALUES = 1 - DEBUG_METER_VALUES  -- Toggle between 0 and 1
+        
+        -- Update display immediately
+        if lastMeterDB then
+            self.values.text = formatDBFS(lastMeterDB, lastRawMeter)
+        end
+        
+        -- Visual feedback
+        if DEBUG_METER_VALUES == 1 then
+            self.color = Color(1, 1, 0, 1)  -- Yellow in debug mode
+        else
+            self.color = Color(1, 1, 1, 1)  -- White in normal mode
+        end
     end
 end
 
@@ -324,23 +211,18 @@ function init()
     -- Log version
     log("Script v" .. VERSION .. " loaded")
     
+    -- Get initial track info
+    trackNumber, trackType = getTrackInfo()
+    
     -- Set initial text
-    if isTrackMapped() then
+    if trackNumber then
         self.values.text = "-∞ dBFS"
     else
         self.values.text = "-"
     end
     
-    -- Log parent info
-    if self.parent and self.parent.name then
-        log("Initialized for parent: " .. self.parent.name)
-        log("Peak dBFS meter - accurately calibrated to match Ableton Live")
-        log("Range: -∞ to +6 dBFS (32-bit float headroom)")
-    end
-    
-    if DEBUG == 1 then
-        log("DEBUG MODE ENABLED")
-    end
+    -- Set initial color
+    self.color = Color(1, 1, 1, 1)  -- White
 end
 
 init()

@@ -1,20 +1,16 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.4.1
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Added: Return track support using parent's trackType
--- Fixed: Never change fader position based on assumptions
--- Added: Centralized logging and multi-connection routing
--- Preserved: ALL original fader functionality
+-- Version: 2.5.2
+-- Changed: Standardized DEBUG flag (uppercase) and disabled by default
 
 -- Version constant
-local VERSION = "2.4.1"
+local VERSION = "2.5.2"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
 -- ===========================
 
--- DEBUG CONTROL: Set to 1 to enable all logging, 0 to disable completely
-local DEBUG = 0
+-- Debug flag - set to 1 to enable logging
+local DEBUG = 0  -- Default to off for performance
 
 -- GRADUAL FIRST MOVEMENT SCALING SETTINGS
 local ENABLE_FIRST_MOVEMENT_SCALING = true
@@ -83,31 +79,18 @@ local double_tap_target_position = 0
 local double_tap_start_position = 0
 
 -- ===========================
--- CENTRALIZED LOGGING
+-- LOCAL LOGGING
 -- ===========================
 
--- Centralized logging through document script
+-- Local logging function
 local function log(message)
-    -- Get parent name for context
-    local context = "FADER"
-    if self.parent and self.parent.name then
-        context = "FADER(" .. self.parent.name .. ")"
+    if DEBUG == 1 then
+        local context = "FADER"
+        if self.parent and self.parent.name then
+            context = "FADER(" .. self.parent.name .. ")"
+        end
+        print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
     end
-    
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
-    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
-end
-
--- DEBUG PRINT FUNCTION (modified to use centralized logging)
-function debugPrint(...)
-  if DEBUG == 1 then
-    local args = {...}
-    local msg = table.concat(args, " ")
-    log(msg)
-  end
 end
 
 -- ===========================
@@ -123,7 +106,6 @@ local function getConnectionIndex()
             -- Find configuration object
             local configObj = root:findByName("configuration", true)
             if not configObj or not configObj.values or not configObj.values.text then
-                debugPrint("Warning: No configuration found, using default connection 1")
                 return 1
             end
             
@@ -139,7 +121,6 @@ local function getConnectionIndex()
                 end
             end
             
-            debugPrint("Warning: No config for " .. instance .. " - using default (1)")
             return 1
         end
     end
@@ -264,15 +245,11 @@ function applyFirstMovementScaling(raw_position, is_touching)
     first_movement_done = false
     reaction_compensation_active = false
     reaction_movements_count = 0
-    debugPrint("*** TOUCH SESSION STARTED - Gradual scaling ready ***")
-    debugPrint("Touch start audio:", string.format("%.3f", touch_start_audio), formatDB(value2db(touch_start_audio)))
     return raw_position
   end
   
   if not is_touching and touch_session_active then
     touch_session_active = false
-    debugPrint("*** TOUCH SESSION ENDED - Scaling reset ***")
-    debugPrint("Total movements processed:", movements_processed)
     movements_processed = 0
     first_movement_done = false
     reaction_compensation_active = false
@@ -288,7 +265,6 @@ function applyFirstMovementScaling(raw_position, is_touching)
     
     -- Guard against invalid positions
     if raw_position < 0 or raw_position > 1 then
-      debugPrint("*** WARNING: Invalid raw position:", raw_position, "- Clamping ***")
       raw_position = math.max(0, math.min(1, raw_position))
     end
     
@@ -305,14 +281,8 @@ function applyFirstMovementScaling(raw_position, is_touching)
         local target_db = value2db(target_audio)
         local db_change = target_db - start_db
         
-        debugPrint("*** FIRST MOVEMENT CHECK ***")
-        debugPrint("Start dB:", formatDB(start_db))
-        debugPrint("Would go to:", formatDB(target_db))
-        debugPrint("Change would be:", string.format("%.3f", db_change), "dB")
-        
         -- Check for emergency movement (large fast movement)
         if abs_movement > EMERGENCY_MOVEMENT_THRESHOLD then
-          debugPrint("*** EMERGENCY MOVEMENT DETECTED - No scaling ***")
           emergency_mode_active = true
           last_position = raw_position
           return raw_position
@@ -320,8 +290,6 @@ function applyFirstMovementScaling(raw_position, is_touching)
         
         -- If the change would be less than minimum, force it AND activate reaction compensation
         if math.abs(db_change) < MINIMUM_DB_CHANGE then
-          debugPrint("*** FORCING MINIMUM 0.1dB CHANGE ***")
-          
           -- Determine direction from the movement
           local direction = movement_delta > 0 and 1 or -1
           
@@ -329,21 +297,14 @@ function applyFirstMovementScaling(raw_position, is_touching)
           local forced_target_audio = dbChangeToAudioChange(touch_start_audio, direction * MINIMUM_DB_CHANGE)
           local forced_position = use_log_curve and logToLinear(forced_target_audio) or forced_target_audio
           
-          debugPrint("Direction:", direction > 0 and "UP" or "DOWN")
-          debugPrint("Forced to:", formatDB(start_db + direction * MINIMUM_DB_CHANGE))
-          debugPrint("Forced position:", string.format("%.4f", forced_position))
-          
           -- Activate reaction compensation only when forcing to 0.1dB
           reaction_compensation_active = true
           reaction_movements_count = 0
-          debugPrint("*** REACTION TIME COMPENSATION ACTIVATED ***")
           
           last_position = forced_position
           return forced_position
         else
           -- Movement is already >= 0.1dB, scale it but ensure minimum 0.1dB result
-          debugPrint("Change is already >= 0.1dB")
-          
           -- Apply initial scaling to this movement
           local scaled_delta = movement_delta * INITIAL_SCALE_FACTOR
           local scaled_position = last_position + scaled_delta
@@ -353,13 +314,11 @@ function applyFirstMovementScaling(raw_position, is_touching)
           local scaled_db_change = value2db(scaled_audio) - start_db
           
           if math.abs(scaled_db_change) < MINIMUM_DB_CHANGE then
-            debugPrint("Scaled result would be < 0.1dB, forcing to minimum")
             local direction = movement_delta > 0 and 1 or -1
             local forced_target_audio = dbChangeToAudioChange(touch_start_audio, direction * MINIMUM_DB_CHANGE)
             scaled_position = use_log_curve and logToLinear(forced_target_audio) or forced_target_audio
           end
           
-          debugPrint("Final position after scaling:", string.format("%.4f", scaled_position))
           last_position = scaled_position
           movements_processed = 1  -- Count this as first processed movement
           return scaled_position
@@ -368,7 +327,6 @@ function applyFirstMovementScaling(raw_position, is_touching)
       
       -- CHECK FOR EMERGENCY MOVEMENTS (bypass all scaling)
       if abs_movement > EMERGENCY_MOVEMENT_THRESHOLD then
-        debugPrint("*** EMERGENCY MOVEMENT - Bypassing all scaling ***")
         emergency_mode_active = true
         last_position = raw_position
         return raw_position
@@ -377,7 +335,6 @@ function applyFirstMovementScaling(raw_position, is_touching)
       -- If emergency mode was active but movement is now small, deactivate it
       if emergency_mode_active and abs_movement < EMERGENCY_MOVEMENT_THRESHOLD * 0.5 then
         emergency_mode_active = false
-        debugPrint("*** Emergency mode deactivated ***")
       end
       
       -- Skip all scaling if in emergency mode
@@ -390,9 +347,6 @@ function applyFirstMovementScaling(raw_position, is_touching)
       if reaction_compensation_active and reaction_movements_count < REACTION_MOVEMENTS and not emergency_mode_active then
         reaction_movements_count = reaction_movements_count + 1
         
-        debugPrint("*** REACTION TIME COMPENSATION - Movement #" .. reaction_movements_count .. " ***")
-        debugPrint("Applying extra slow scaling for precise control")
-        
         -- Gradually increase scale factor during reaction compensation (30% to 70%)
         local reaction_progress = (reaction_movements_count - 1) / (REACTION_MOVEMENTS - 1)
         local current_reaction_scale = REACTION_SCALE_FACTOR + (0.7 - REACTION_SCALE_FACTOR) * reaction_progress
@@ -404,14 +358,8 @@ function applyFirstMovementScaling(raw_position, is_touching)
         -- Clamp to valid range
         new_position = math.max(0, math.min(1, new_position))
         
-        debugPrint("Raw movement:", string.format("%.4f", movement_delta))
-        debugPrint("Scaled movement:", string.format("%.4f", scaled_delta))
-        debugPrint("Scale factor:", string.format("%.2f", current_reaction_scale), "(", string.format("%.0f", current_reaction_scale * 100), "%)")
-        debugPrint("Reaction movements remaining:", REACTION_MOVEMENTS - reaction_movements_count)
-        
         if reaction_movements_count >= REACTION_MOVEMENTS then
           reaction_compensation_active = false
-          debugPrint("*** REACTION TIME COMPENSATION COMPLETE ***")
         end
         
         last_position = new_position
@@ -440,19 +388,10 @@ function applyFirstMovementScaling(raw_position, is_touching)
         -- Clamp to valid range
         new_position = math.max(0, math.min(1, new_position))
         
-        debugPrint("*** GRADUAL SCALING - Movement #" .. movements_processed .." ***")
-        debugPrint("Raw movement:", string.format("%.4f", movement_delta))
-        debugPrint("Scaled movement:", string.format("%.4f", scaled_delta))
-        debugPrint("Scale factor:", string.format("%.2f", scale_factor), "(", string.format("%.0f", scale_factor * 100), "%)")
-        debugPrint("Progress:", string.format("%.1f", progress * 100), "%")
-        debugPrint("In linear range:", in_linear_range)
-        debugPrint("Movements remaining:", SCALED_MOVEMENTS_COUNT - movements_processed)
-        
         last_position = new_position
         return new_position
       else
         -- Full normal movement after gradual scaling is complete
-        debugPrint("*** FULL NORMAL MOVEMENT - Gradual scaling complete ***")
         last_position = raw_position
         return raw_position
       end
@@ -514,13 +453,9 @@ function onReceiveOSC(message, connections)
       if synced then
         self.values.x = last_osc_x
         last_position = last_osc_x
-        debugPrint("*** OSC UPDATE - Fader:", string.format("%.1f%%", last_osc_x * 100), "Audio:", string.format("%.3f", remote_audio_value))
-      else
-        debugPrint("*** OSC UPDATE DURING SYNC DELAY - Storing for later ***")
       end
     else
       touched = true
-      debugPrint("*** OSC RECEIVED WHILE TOUCHING - Ignoring to prevent jump ***")
     end
   end
   
@@ -540,7 +475,6 @@ function update()
     if self.values.touch then
       -- Touch detected - cancel animation
       double_tap_animation_active = false
-      debugPrint("*** DOUBLE-TAP ANIMATION CANCELLED - Touch detected ***")
     else
       -- Continue animation
       local current_pos = self.values.x
@@ -559,7 +493,6 @@ function update()
           self.values.x = double_tap_target_position
           last_position = double_tap_target_position
           double_tap_animation_active = false
-          debugPrint("*** DOUBLE-TAP ANIMATION COMPLETE (Already at target) ***")
           local final_audio = use_log_curve and linearToLog(double_tap_target_position) or double_tap_target_position
           local trackNumber, trackType = getTrackInfo()
           if trackNumber then
@@ -579,7 +512,6 @@ function update()
           self.values.x = double_tap_target_position
           last_position = double_tap_target_position
           double_tap_animation_active = false
-          debugPrint("*** DOUBLE-TAP ANIMATION COMPLETE (Snapped to target) ***")
           local final_audio = use_log_curve and linearToLog(double_tap_target_position) or double_tap_target_position
           local trackNumber, trackType = getTrackInfo()
           if trackNumber then
@@ -598,15 +530,6 @@ function update()
             local path = trackType == "return" and '/live/return/set/volume' or '/live/track/set/volume'
             sendOSCRouted(path, trackNumber, new_audio)
           end
-          
-          debugPrint("*** DOUBLE-TAP ANIMATION (Constant Speed) ***")
-          -- Progress calculation assuming linear movement
-          if double_tap_target_position ~= double_tap_start_position then
-            debugPrint("Progress:", string.format("%.1f%%", ((proposed_new_position - double_tap_start_position) / (double_tap_target_position - double_tap_start_position)) * 100))
-          else
-            debugPrint("Progress: 100% (target is start)")
-          end
-          debugPrint("Current:", string.format("%.1f%%", proposed_new_position * 100), "Target:", string.format("%.1f%%", double_tap_target_position * 100))
       end
     end
   end
@@ -616,15 +539,12 @@ function update()
     last = getMillis()
     touched = false
     synced = false
-    debugPrint("*** TOUCH RELEASED - Starting sync delay ***")
   end
   
   -- Only sync if not currently touching AND not synced AND not animating
   if not synced and not self.values.touch and not double_tap_animation_active then
     local now = getMillis()
     if (now - last > delay) then
-      debugPrint("*** SYNC DELAY COMPLETE - Updating to OSC position ***")
-      debugPrint("Jumping from:", string.format("%.1f%%", self.values.x * 100), "to:", string.format("%.1f%%", last_osc_x * 100))
       self.values.x = last_osc_x
       last_position = last_osc_x
       synced = true
@@ -634,19 +554,12 @@ function update()
   -- Reset sync if touching again
   if self.values.touch and not synced then
     synced = true
-    debugPrint("*** Touch detected during sync delay - cancelling sync ***")
   end
-  
-  -- REMOVED: Color changing code
-  -- The group script handles enabling/disabling interactivity
-  -- We should NOT change colors here
 end
 
 function onValueChanged()
   -- Safety check: only process if track is mapped
   if not isTrackMapped() then
-    -- FIXED: Don't change fader position - just return
-    debugPrint("Track not mapped - ignoring value change")
     return
   end
   
@@ -658,19 +571,11 @@ function onValueChanged()
   -- APPLY FIRST MOVEMENT SCALING
   local raw_fader_position = self.values.x
   
-  -- Detect and log suspicious jumps
-  if last_raw_position > 0 then
+  -- Detect and log suspicious jumps (only if debug enabled)
+  if DEBUG == 1 and last_raw_position > 0 then
     local raw_jump = math.abs(raw_fader_position - last_raw_position)
     if raw_jump > 0.1 and self.values.touch then  -- 10% jump while touching
-      debugPrint("*** SUSPICIOUS JUMP DETECTED ***")
-      debugPrint("Last raw position:", string.format("%.4f", last_raw_position))
-      debugPrint("New raw position:", string.format("%.4f", raw_fader_position))
-      debugPrint("Jump size:", string.format("%.4f", raw_jump), string.format("(%.1f%%)", raw_jump * 100))
-      debugPrint("Touch state:", self.values.touch)
-      debugPrint("Synced state:", synced)
-      debugPrint("Touched flag:", touched)
-      debugPrint("Emergency mode:", emergency_mode_active)
-      debugPrint("Last OSC position:", string.format("%.4f", last_osc_x))
+      log("Suspicious jump: " .. string.format("%.4f", raw_jump))
     end
   end
   last_raw_position = raw_fader_position
@@ -685,8 +590,6 @@ function onValueChanged()
   -- Update fader position if scaling was applied
   if math.abs(scaled_fader_position - raw_fader_position) > 0.0001 then
     self.values.x = scaled_fader_position
-    debugPrint("*** FADER POSITION SCALED ***")
-    debugPrint("Raw:", string.format("%.4f", raw_fader_position), "Scaled:", string.format("%.4f", scaled_fader_position))
   end
   
   -- TOUCH BEHAVIOR DEBUG
@@ -694,37 +597,6 @@ function onValueChanged()
     touch_event_count = touch_event_count + 1
   end
   
-  -- ENHANCED LOGGING WITH DB VALUES
-  debugPrint("=== FADER MOVED ===")
-  debugPrint("Fader:", string.format("%.1f%%", scaled_fader_position * 100))
-  debugPrint("Audio:", string.format("%.3f", audio_value), string.format("(%.1f%%)", audio_value * 100))
-  debugPrint("dB:", formatDB(db_value))
-  debugPrint("Touch:", self.values.touch and "TOUCHING" or "RELEASED")
-  debugPrint("Movements processed:", movements_processed, "/", SCALED_MOVEMENTS_COUNT)
-  local scaling_active = (movements_processed <= SCALED_MOVEMENTS_COUNT and touch_session_active)
-  debugPrint("Scaling:", scaling_active and "ACTIVE" or "INACTIVE")
-  if reaction_compensation_active then
-    debugPrint("*** REACTION COMPENSATION ACTIVE ***", reaction_movements_count, "/", REACTION_MOVEMENTS)
-  end
-  if scaling_active then
-    local progress = movements_processed > 0 and (movements_processed - 1) / (SCALED_MOVEMENTS_COUNT - 1) or 0
-    local current_scale = INITIAL_SCALE_FACTOR + (FINAL_SCALE_FACTOR - INITIAL_SCALE_FACTOR) * progress
-    debugPrint("Current scale factor:", string.format("%.2f", current_scale), "(", string.format("%.0f", current_scale * 100), "%)")
-  end
-  
-  -- DEBUG TOUCH BEHAVIOR ISSUE
-  if self.values.touch then
-    debugPrint("Touch event #" .. touch_event_count)
-    local pos_change = math.abs(scaled_fader_position - last_logged_position)
-    if last_logged_position >= 0 then
-      debugPrint("Position change:", string.format("%.4f", pos_change))
-      if pos_change > 0.01 then
-        debugPrint("*** LARGE JUMP DETECTED ***")
-      elseif pos_change < 0.0001 then
-        debugPrint("*** VERY SMALL MOVEMENT ***")
-      end
-    end
-  end
   last_logged_position = scaled_fader_position
   
   -- Send OSC with routing based on track type
@@ -732,9 +604,6 @@ function onValueChanged()
   if trackNumber then
     local path = trackType == "return" and '/live/return/set/volume' or '/live/track/set/volume'
     sendOSCRouted(path, trackNumber, audio_value)
-    
-    -- Volume change log ONLY in debug mode
-    debugPrint(string.format("Volume change for %s track %d: %.3f", trackType, trackNumber, scaled_fader_position))
   end
   
   -- TOUCH DETECTION WITH DEBUG
@@ -748,10 +617,7 @@ function onValueChanged()
     -- Cancel any ongoing double-tap animation (if enabled)
     if ENABLE_DOUBLE_TAP and double_tap_animation_active then
       double_tap_animation_active = false
-      debugPrint("*** DOUBLE-TAP ANIMATION CANCELLED - New touch started ***")
     end
-    
-    debugPrint("*** TOUCH START - Position:", string.format("%.1f%%", touch_start_position * 100), formatDB(value2db(linearToLog(touch_start_position))))
     
   elseif self.values.touch and touch_started then
     local movement = math.abs(scaled_fader_position - touch_start_position)
@@ -766,11 +632,6 @@ function onValueChanged()
     local touch_duration = current_time - touch_start_time
     local time_since_movement = current_time - last_movement_time
     
-    debugPrint("*** TOUCH END ***")
-    debugPrint("Total events during touch:", touch_event_count)
-    debugPrint("Total movement:", string.format("%.4f", total_movement))
-    debugPrint("Touch duration:", touch_duration, "ms")
-    
     local is_tap = (total_movement < 0.01) and 
                    (touch_duration < 200) and 
                    (not movement_detected or time_since_movement > 100)
@@ -778,7 +639,6 @@ function onValueChanged()
     if is_tap then
       -- Check if double-tap is enabled
       if not ENABLE_DOUBLE_TAP then
-        debugPrint("*** TAP DETECTED - Double-tap disabled ***")
         last_tap_time = 0
         return
       end
@@ -786,15 +646,9 @@ function onValueChanged()
       -- CHECK MINIMAL DEAD ZONES (now modified to always allow double-tap)
       local in_dead_zone, zone_reason = isInDeadZone(audio_value)
       
-      debugPrint("*** VALID TAP DETECTED ***")
-      debugPrint("Tap duration:", touch_duration, "ms")
-      
       local time_since_last_tap = current_time - last_tap_time
       
       if time_since_last_tap < DOUBLE_TAP_MAX_TIME and time_since_last_tap > DOUBLE_TAP_MIN_TIME then
-        debugPrint("*** DOUBLE TAP SUCCESS! ***")
-        debugPrint("Time between taps:", time_since_last_tap, "ms")
-        
         -- Start animation to 0dB (or Unity gain, which is 0.85 linear for Live's scale)
         if use_log_curve then
           double_tap_target_position = logToLinear(0.85)
@@ -804,10 +658,6 @@ function onValueChanged()
         
         double_tap_start_position = self.values.x
         double_tap_animation_active = true
-        
-        debugPrint("*** STARTING ANIMATION TO 0dB ***")
-        debugPrint("From:", string.format("%.1f%%", double_tap_start_position * 100), formatDB(db_value))
-        debugPrint("To:", string.format("%.1f%%", double_tap_target_position * 100), "0.0dB")
         
         last_tap_time = 0
       else
@@ -825,60 +675,19 @@ end
 function onReceiveNotify(key, value)
   -- Parent might notify us of track changes
   if key == "track_changed" then
-    -- FIXED: Don't change fader position - just reset internal state
+    -- Don't change fader position - just reset internal state
     touched = false
     synced = true
     last_position = self.values.x  -- Keep current position
-    debugPrint("Track changed - state reset, position preserved")
   elseif key == "track_unmapped" then
-    -- FIXED: Don't change fader position
-    debugPrint("Track unmapped - fader position preserved")
+    -- Don't change fader position
   end
 end
 
 -- VERIFICATION
 function init()
-  -- Log version with centralized logging
+  -- Log version
   log("Script v" .. VERSION .. " loaded")
-  
-  -- Log parent info
-  if self.parent and self.parent.name then
-    log("Initialized for parent: " .. self.parent.name)
-  end
-  
-  debugPrint("=== PROFESSIONAL FADER WITH IMMEDIATE 0.1dB RESPONSE ===")
-  debugPrint("DEBUG MODE:", DEBUG == 1 and "ENABLED" or "DISABLED")
-  debugPrint("Gradual movement scaling:", ENABLE_FIRST_MOVEMENT_SCALING and "ENABLED" or "DISABLED")
-  if ENABLE_FIRST_MOVEMENT_SCALING then
-    debugPrint("- Scaled movements count:", SCALED_MOVEMENTS_COUNT)
-    debugPrint("- Initial scale factor:", INITIAL_SCALE_FACTOR, "(", INITIAL_SCALE_FACTOR * 100, "%)")
-    debugPrint("- Final scale factor:", FINAL_SCALE_FACTOR, "(", FINAL_SCALE_FACTOR * 100, "%)")
-    debugPrint("- Minimum dB change:", MINIMUM_DB_CHANGE, "dB (immediate response)")
-    debugPrint("- Reaction compensation:", REACTION_MOVEMENTS, "movements at", REACTION_SCALE_FACTOR * 100, "% to 70% speed")
-    debugPrint("- Emergency movement threshold:", EMERGENCY_MOVEMENT_THRESHOLD * 100, "% (bypasses all scaling)")
-    debugPrint("- Linear range:", formatDB(value2db(LINEAR_RANGE_START)), "to", formatDB(value2db(LINEAR_RANGE_END)))
-    debugPrint("- Extra precision scaling (85%) applied in linear range")
-  end
-  debugPrint("Dead zones (double-tap disabled):")
-  debugPrint("- NONE (Double-tap enabled everywhere including -inf and +6dB)") -- Reflects change
-  debugPrint("Double-tap feature:", ENABLE_DOUBLE_TAP and "ENABLED" or "DISABLED")
-  if ENABLE_DOUBLE_TAP then
-    debugPrint("Double-tap timing:")
-    debugPrint("- Maximum time between taps:", DOUBLE_TAP_MAX_TIME, "ms")
-    debugPrint("- Minimum time between taps:", DOUBLE_TAP_MIN_TIME, "ms")
-    debugPrint("- Animation speed:", DOUBLE_TAP_ANIMATION_SPEED * 100, "% of full range per update (constant speed)") -- Reflects change in interpretation
-  end
-  debugPrint("")
-  debugPrint("Curve verification:")
-  local test_50 = linearToLog(0.5)
-  debugPrint("50% fader:", string.format("%.3f", test_50), "audio", formatDB(value2db(test_50)))
-  debugPrint("Unity position:", string.format("%.1f%%", logToLinear(0.85) * 100), "fader")
-  
-  -- Initialize scaling variables - preserve current position
-  last_position = self.values.x or 0
-  
-  -- REMOVED: Initial color setting
-  -- Let the group script handle interactivity
 end
 
 init()

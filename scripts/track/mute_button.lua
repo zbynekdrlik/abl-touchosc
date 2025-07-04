@@ -1,23 +1,75 @@
--- mute_button.lua
--- Version: 1.9.1
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Added: Return track support using parent's trackType
--- Use root:notify for logger output
+-- TouchOSC Mute Button Script
+-- Version: 2.0.1
+-- Changed: Standardized DEBUG flag (uppercase) and disabled by default
 
-local VERSION = "1.9.1"
+-- Version constant
+local VERSION = "2.0.1"
 
--- Logging
+-- Debug flag - set to 1 to enable logging
+local DEBUG = 0
+
+-- State variables
+local trackNumber = nil
+local trackType = nil  -- "track" or "return"
+local isMuted = false
+
+-- ===========================
+-- LOCAL LOGGING
+-- ===========================
+
 local function log(message)
-    local context = "MUTE"
-    if self.parent and self.parent.name then
-        context = "MUTE(" .. self.parent.name .. ")"
+    if DEBUG == 1 then
+        local context = "MUTE"
+        if self.parent and self.parent.name then
+            context = "MUTE(" .. self.parent.name .. ")"
+        end
+        print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
+    end
+end
+
+-- ===========================
+-- CONNECTION HELPERS
+-- ===========================
+
+-- Get connection configuration
+local function getConnectionIndex()
+    -- Check if parent has tag with instance:trackNumber:trackType format
+    if self.parent and self.parent.tag then
+        local instance = self.parent.tag:match("^(%w+):")
+        if instance then
+            -- Find configuration object
+            local configObj = root:findByName("configuration", true)
+            if not configObj or not configObj.values or not configObj.values.text then
+                return 1
+            end
+            
+            local configText = configObj.values.text
+            local searchKey = "connection_" .. instance .. ":"
+            
+            -- Parse configuration text
+            for line in configText:gmatch("[^\r\n]+") do
+                line = line:match("^%s*(.-)%s*$")  -- Trim whitespace
+                if line:sub(1, #searchKey) == searchKey then
+                    local value = line:sub(#searchKey + 1):match("^%s*(.-)%s*$")
+                    return tonumber(value) or 1
+                end
+            end
+            
+            return 1
+        end
     end
     
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
-    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
+    -- Fallback to default
+    return 1
+end
+
+-- Build connection table for OSC routing
+local function buildConnectionTable(index)
+    local connections = {}
+    for i = 1, 10 do
+        connections[i] = (i == index)
+    end
+    return connections
 end
 
 -- Get track number and type from parent group
@@ -32,50 +84,39 @@ local function getTrackInfo()
     return nil, nil
 end
 
--- Get expected connection index
-local function getConnectionIndex()
-    if self.parent and self.parent.tag then
-        local instance = self.parent.tag:match("^(%w+):")
-        if instance then
-            -- Find configuration
-            local configObj = root:findByName("configuration", true)
-            if not configObj or not configObj.values or not configObj.values.text then
-                return 1
-            end
-            
-            local configText = configObj.values.text
-            local searchKey = "connection_" .. instance .. ":"
-            
-            -- Parse configuration
-            for line in configText:gmatch("[^\r\n]+") do
-                line = line:match("^%s*(.-)%s*$")  -- Trim
-                if line:sub(1, #searchKey) == searchKey then
-                    local value = line:sub(#searchKey + 1):match("^%s*(.-)%s*$")
-                    return tonumber(value) or 1
-                end
-            end
-        end
+-- ===========================
+-- VISUAL STATE MANAGEMENT
+-- ===========================
+
+local function updateVisualState()
+    -- Buttons use values.x for pressed/released state
+    -- 0 = pressed/on, 1 = released/off
+    if isMuted then
+        self.values.x = 0  -- Pressed state (muted)
+        self.color = Color(1, 0, 0, 1)  -- Red when muted
+    else
+        self.values.x = 1  -- Released state (unmuted)
+        self.color = Color(0.5, 0.5, 0.5, 1)  -- Gray when unmuted
     end
-    return 1
 end
 
--- Build connection table
-local function buildConnectionTable(index)
-    local connections = {}
-    for i = 1, 10 do
-        connections[i] = (i == index)
-    end
-    return connections
+-- ===========================
+-- OSC HANDLERS
+-- ===========================
+
+-- Send OSC with connection routing
+local function sendOSCRouted(path, track, mute)
+    local connectionIndex = getConnectionIndex()
+    local connections = buildConnectionTable(connectionIndex)
+    sendOSC(path, track, mute, connections)
 end
 
--- Handle incoming OSC
 function onReceiveOSC(message, connections)
     local path = message[1]
     local arguments = message[2]
     
-    -- Get track info from parent
-    local trackNumber, trackType = getTrackInfo()
-    if not trackNumber then
+    -- Check if we have track info
+    if not trackNumber or not trackType then
         return false
     end
     
@@ -91,45 +132,72 @@ function onReceiveOSC(message, connections)
         return false
     end
     
-    -- Check if this is our track
-    if arguments[1] and arguments[1].value == trackNumber then
-        -- Check if message is from correct connection
-        local expectedConnection = getConnectionIndex()
-        if connections[expectedConnection] then
-            -- Update button visual state
-            if arguments[2].value then
-                self.values.x = 0  -- Muted = pressed
-            else
-                self.values.x = 1  -- Unmuted = released
-            end
-            
-            log("Received mute state: " .. (arguments[2].value and "MUTED" or "UNMUTED"))
-        end
+    -- Check if this message is for our track
+    if arguments[1].value == trackNumber then
+        -- Update mute state (1 = muted, 0 = unmuted in Ableton)
+        isMuted = (arguments[2].value == 1)
+        updateVisualState()
     end
     
-    return false
+    return false  -- Don't block other receivers
 end
 
--- Handle value changes
-function onValueChanged(key)
-    if key == "x" then
-        local trackNumber, trackType = getTrackInfo()
-        if trackNumber then
-            -- Send inverted x value as boolean
-            -- x=0 (pressed) -> send true (mute on)
-            -- x=1 (released) -> send false (mute off)
-            local muteState = (self.values.x == 0)
-            
-            -- Send with connection routing to correct path
-            local connectionIndex = getConnectionIndex()
-            local connections = buildConnectionTable(connectionIndex)
-            local path = trackType == "return" and "/live/return/set/mute" or "/live/track/set/mute"
-            
-            sendOSC(path, trackNumber, muteState, connections)
-            log("Sent mute " .. (muteState and "ON" or "OFF") .. " for " .. trackType .. " track " .. trackNumber)
+-- ===========================
+-- USER INTERACTION
+-- ===========================
+
+function onValueChanged(valueName)
+    -- Handle touch events
+    if valueName == "touch" and self.values.touch == 1 then
+        -- Check if track is mapped
+        if not trackNumber or not trackType then
+            return
         end
+        
+        -- Toggle mute state
+        isMuted = not isMuted
+        
+        -- Send OSC based on track type
+        local path = trackType == "return" and '/live/return/set/mute' or '/live/track/set/mute'
+        sendOSCRouted(path, trackNumber, isMuted and 1 or 0)
+        
+        -- Update visual state immediately for responsiveness
+        updateVisualState()
     end
 end
 
--- Initialize
-log("Script v" .. VERSION .. " loaded")
+-- ===========================
+-- NOTIFY HANDLER
+-- ===========================
+
+function onReceiveNotify(key, value)
+    if key == "track_changed" then
+        trackNumber = value
+        -- Reset mute state when track changes
+        isMuted = false
+        updateVisualState()
+    elseif key == "track_type" then
+        trackType = value
+    elseif key == "track_unmapped" then
+        trackNumber = nil
+        trackType = nil
+        isMuted = false
+        updateVisualState()
+    end
+end
+
+-- ===========================
+-- INITIALIZATION
+-- ===========================
+
+function init()
+    log("Script v" .. VERSION .. " loaded")
+    
+    -- Get initial track info
+    trackNumber, trackType = getTrackInfo()
+    
+    -- Set initial visual state
+    updateVisualState()
+end
+
+init()
