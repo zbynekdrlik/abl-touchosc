@@ -1,22 +1,28 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**⚠️ FADER FIXED - v2.6.4 - Testing Needed**
-- [x] Currently working on: Fixed boolean concat error in fader script
-- [ ] Waiting for: User to test if fader now controls Ableton volume properly
-- [ ] Blocked by: Need to identify status indicator script after fader test
+**⚠️ FADER PARTIALLY WORKING - MORE FIXES NEEDED**
+- [x] Currently working on: Fixed meter notification spam in v2.5.7
+- [ ] Waiting for: User to test if meter spam is reduced
+- [ ] Blocked by: Need to verify fader actually controls Ableton volume
 
-## Current Status (2025-07-04 15:20 UTC)
+## Current Status (2025-07-04 15:34 UTC)
 
 ### JUST FIXED:
-- **Fader Script v2.6.4** - Fixed boolean concat runtime error:
-  - **PROBLEM**: `in_linear_range` boolean wasn't converted to string in debugPrint
-  - **EFFECT**: Script crashed with "invalid value (boolean) at index 2 in table for 'concat'"
-  - **SOLUTION**: Added `tostring()` for all boolean values in debug output
+- **Meter Script v2.5.7** - Fixed excessive notification spam:
+  - **PROBLEM**: Meter was notifying parent on EVERY update (multiple times/second)
+  - **EFFECT**: Constant "value_changed = meter" spam in logs
+  - **SOLUTION**: Added throttling - only notify on >5% changes with 100ms minimum interval
+  - Also fixed potential boolean concat issues with tostring()
+
+### Previously Fixed:
+- **Fader Script v2.6.4** - Fixed boolean concat runtime error
+  - But user reports fader still doesn't control Ableton volume!
 
 ### REMAINING ISSUES:
+- **Fader** - May not be sending volume to Ableton properly
 - **Status indicator** - Not working at all (need to identify which script)
-- **Meter** - Unclear behavior (need more details)
+- **Other scripts** - Need to check for similar boolean concat issues
 
 ### CONFIRMED WORKING:
 - **Mute button** (v2.0.3) - Working correctly
@@ -28,10 +34,10 @@
 
 | Script | Version | Status | Notes |
 |--------|---------|--------|-------|
-| document_script.lua | v2.7.4 | ❓ Unknown | - |
-| group_init.lua | v1.15.9 | ❓ Unknown | - |
-| fader_script.lua | v2.6.4 | 🔧 JUST FIXED | Fixed boolean concat error |
-| meter_script.lua | v2.5.6 | ⚠️ Unclear | Behavior unclear |
+| document_script.lua | v2.7.4 | ✅ OK | No boolean issues found |
+| group_init.lua | v1.15.9 | ⚠️ Needs check | Potential boolean concat issues |
+| fader_script.lua | v2.6.4 | ⚠️ Runtime fixed | But not controlling Ableton! |
+| meter_script.lua | v2.5.7 | 🔧 JUST FIXED | Reduced notification spam |
 | pan_control.lua | v1.4.2 | ✅ Working | - |
 | db_label.lua | v1.3.2 | ✅ OK | - |
 | db_meter_label.lua | v2.6.1 | ✅ OK | - |
@@ -39,58 +45,53 @@
 | global_refresh_button.lua | v1.5.1 | ❓ Unknown | - |
 | status_indicator | ??? | ❌ BROKEN | Script unknown |
 
-## Fader Evolution Summary
+## Key Issues Found
 
-### Version History:
-- v2.6.2: Fixed critical initialization bug (removed position setting)
-- v2.6.3: Claimed to fix boolean concat (but missed one instance)
-- v2.6.4: Actually fixed ALL boolean concat errors
+### 1. Meter Notification Spam
+The meter was sending notifications to the parent group on EVERY meter update, causing:
+- Hundreds of "value_changed = meter" messages per second
+- Performance impact from excessive notifications
+- Cluttered logs making debugging difficult
 
-### Key Issues Fixed:
-1. **Initialization bug**: Script was setting position to 0 on init
-2. **Boolean concat errors**: Multiple places where booleans weren't converted to strings
-3. **Preserved main branch behavior**: Fader doesn't move on startup
+Fixed by adding:
+- 5% change threshold before notifying
+- 100ms minimum interval between notifications
+
+### 2. Boolean Concatenation Errors
+Found in multiple scripts where boolean/nil values weren't converted to strings:
+- Fader: `debugPrint("In linear range:", in_linear_range)` 
+- Meter: `debug("Track Type:", trackType, ...)` when trackType could be nil
+
+### 3. Fader Not Controlling Ableton
+User reports fader moves in logs but doesn't control Ableton volume. Need to investigate:
+- Is OSC message format correct?
+- Is connection routing working?
+- Is the audio value calculation correct?
 
 ## Next Steps
 
-### 1. Test Fader Fix (Critical)
-Please reload the template and test:
+### 1. Test Meter Fix
+Please reload and check if meter spam is reduced:
 ```
-1. Check console for: "FADER Script v2.6.4 loaded" 
-2. Move the fader - should control Ableton volume
-3. No runtime errors should appear
-4. Check all fader features work:
-   - Touch detection
-   - Movement scaling  
-   - Double-tap to unity
-   - Sync with Ableton
+Should see far fewer "value_changed = meter" messages
+Meter should still update visually
+Performance should be better
 ```
 
-### 2. Identify Status Indicator
-After fader works, need to find which script controls the status indicator:
-- Check template for object name
-- Could be part of group_init.lua
-- Might be a separate script
+### 2. Debug Fader Control
+Need to verify fader is actually sending to Ableton:
+- Check if OSC messages are being sent
+- Verify connection routing is correct
+- Test with OSC monitor if available
 
-### 3. Clarify Meter Issues
-What exactly is wrong with the meter?
-- Visual display issues?
-- Value accuracy problems?
-- Color changes not working?
-
-## Testing Checklist
-
-- [ ] Fader v2.6.4 loads without errors
-- [ ] Fader controls Ableton volume
-- [ ] No boolean concat runtime errors
-- [ ] Touch detection works
-- [ ] Movement scaling works
-- [ ] Double-tap to unity works
-- [ ] Fader syncs with Ableton position
+### 3. Check Other Scripts
+Still need to check for boolean concat issues in:
+- group_init.lua
+- global_refresh_button.lua
 
 ---
 
-## State Saved: 2025-07-04 15:20 UTC
-**Status**: Fader script v2.6.4 with boolean concat fix deployed
-**Next Action**: Test fader functionality
-**Key Fix**: Added tostring() for all boolean debug output
+## State Saved: 2025-07-04 15:34 UTC
+**Status**: Fixed meter spam, but fader still not controlling Ableton
+**Next Action**: Test meter fix and debug fader OSC sending
+**Key Learning**: Debug logging can introduce its own bugs!
