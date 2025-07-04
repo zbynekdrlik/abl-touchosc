@@ -1,5 +1,6 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.4.1
+-- Version: 2.5.0
+-- Performance optimized: Fixed debug overhead, optimized update() function
 -- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
 -- Fixed: Never change fader position based on assumptions
@@ -7,7 +8,7 @@
 -- Preserved: ALL original fader functionality
 
 -- Version constant
-local VERSION = "2.4.1"
+local VERSION = "2.5.0"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -82,6 +83,9 @@ local double_tap_animation_active = false
 local double_tap_target_position = 0
 local double_tap_start_position = 0
 
+-- Performance optimization: Schedule state for sync checking
+local needs_sync_check = false
+
 -- ===========================
 -- CENTRALIZED LOGGING
 -- ===========================
@@ -101,13 +105,15 @@ local function log(message)
     print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
--- DEBUG PRINT FUNCTION (modified to use centralized logging)
+-- PERFORMANCE OPTIMIZED DEBUG PRINT FUNCTION
 function debugPrint(...)
-  if DEBUG == 1 then
-    local args = {...}
-    local msg = table.concat(args, " ")
-    log(msg)
-  end
+  -- Early return if debug disabled - no string operations!
+  if DEBUG ~= 1 then return end
+  
+  -- Only do expensive operations if debug is enabled
+  local args = {...}
+  local msg = table.concat(args, " ")
+  log(msg)
 end
 
 -- ===========================
@@ -534,7 +540,13 @@ local function sendOSCRouted(path, track, volume)
   sendOSC(path, track, volume, connections)
 end
 
+-- PERFORMANCE OPTIMIZED: Only run expensive update logic when needed
 function update()
+  -- Skip update entirely if no sync or animation is needed
+  if synced and not double_tap_animation_active then
+    return
+  end
+  
   -- Handle double-tap animation (only if enabled)
   if ENABLE_DOUBLE_TAP and double_tap_animation_active then
     if self.values.touch then
@@ -611,15 +623,7 @@ function update()
     end
   end
   
-  -- Original sync delay code
-  if touched and not self.values.touch then
-    last = getMillis()
-    touched = false
-    synced = false
-    debugPrint("*** TOUCH RELEASED - Starting sync delay ***")
-  end
-  
-  -- Only sync if not currently touching AND not synced AND not animating
+  -- Handle sync delay only when needed
   if not synced and not self.values.touch and not double_tap_animation_active then
     local now = getMillis()
     if (now - last > delay) then
@@ -630,16 +634,20 @@ function update()
       synced = true
     end
   end
-  
-  -- Reset sync if touching again
-  if self.values.touch and not synced then
-    synced = true
-    debugPrint("*** Touch detected during sync delay - cancelling sync ***")
+end
+
+-- Schedule check for touch release
+function onSchedule()
+  -- Only process if we might need to start sync
+  if needs_sync_check then
+    if touched and not self.values.touch then
+      last = getMillis()
+      touched = false
+      synced = false
+      needs_sync_check = false
+      debugPrint("*** TOUCH RELEASED - Starting sync delay ***")
+    end
   end
-  
-  -- REMOVED: Color changing code
-  -- The group script handles enabling/disabling interactivity
-  -- We should NOT change colors here
 end
 
 function onValueChanged()
@@ -655,11 +663,17 @@ function onValueChanged()
     return  -- Let update() handle the animation
   end
   
+  -- Set flag for sync checking when touch is active
+  if self.values.touch then
+    needs_sync_check = true
+    synced = true  -- Reset sync if touching
+  end
+  
   -- APPLY FIRST MOVEMENT SCALING
   local raw_fader_position = self.values.x
   
-  -- Detect and log suspicious jumps
-  if last_raw_position > 0 then
+  -- Detect and log suspicious jumps (only in debug mode)
+  if DEBUG == 1 and last_raw_position > 0 then
     local raw_jump = math.abs(raw_fader_position - last_raw_position)
     if raw_jump > 0.1 and self.values.touch then  -- 10% jump while touching
       debugPrint("*** SUSPICIOUS JUMP DETECTED ***")
@@ -694,34 +708,36 @@ function onValueChanged()
     touch_event_count = touch_event_count + 1
   end
   
-  -- ENHANCED LOGGING WITH DB VALUES
-  debugPrint("=== FADER MOVED ===")
-  debugPrint("Fader:", string.format("%.1f%%", scaled_fader_position * 100))
-  debugPrint("Audio:", string.format("%.3f", audio_value), string.format("(%.1f%%)", audio_value * 100))
-  debugPrint("dB:", formatDB(db_value))
-  debugPrint("Touch:", self.values.touch and "TOUCHING" or "RELEASED")
-  debugPrint("Movements processed:", movements_processed, "/", SCALED_MOVEMENTS_COUNT)
-  local scaling_active = (movements_processed <= SCALED_MOVEMENTS_COUNT and touch_session_active)
-  debugPrint("Scaling:", scaling_active and "ACTIVE" or "INACTIVE")
-  if reaction_compensation_active then
-    debugPrint("*** REACTION COMPENSATION ACTIVE ***", reaction_movements_count, "/", REACTION_MOVEMENTS)
-  end
-  if scaling_active then
-    local progress = movements_processed > 0 and (movements_processed - 1) / (SCALED_MOVEMENTS_COUNT - 1) or 0
-    local current_scale = INITIAL_SCALE_FACTOR + (FINAL_SCALE_FACTOR - INITIAL_SCALE_FACTOR) * progress
-    debugPrint("Current scale factor:", string.format("%.2f", current_scale), "(", string.format("%.0f", current_scale * 100), "%)")
-  end
-  
-  -- DEBUG TOUCH BEHAVIOR ISSUE
-  if self.values.touch then
-    debugPrint("Touch event #" .. touch_event_count)
-    local pos_change = math.abs(scaled_fader_position - last_logged_position)
-    if last_logged_position >= 0 then
-      debugPrint("Position change:", string.format("%.4f", pos_change))
-      if pos_change > 0.01 then
-        debugPrint("*** LARGE JUMP DETECTED ***")
-      elseif pos_change < 0.0001 then
-        debugPrint("*** VERY SMALL MOVEMENT ***")
+  -- ENHANCED LOGGING WITH DB VALUES (only in debug mode)
+  if DEBUG == 1 then
+    debugPrint("=== FADER MOVED ===")
+    debugPrint("Fader:", string.format("%.1f%%", scaled_fader_position * 100))
+    debugPrint("Audio:", string.format("%.3f", audio_value), string.format("(%.1f%%)", audio_value * 100))
+    debugPrint("dB:", formatDB(db_value))
+    debugPrint("Touch:", self.values.touch and "TOUCHING" or "RELEASED")
+    debugPrint("Movements processed:", movements_processed, "/", SCALED_MOVEMENTS_COUNT)
+    local scaling_active = (movements_processed <= SCALED_MOVEMENTS_COUNT and touch_session_active)
+    debugPrint("Scaling:", scaling_active and "ACTIVE" or "INACTIVE")
+    if reaction_compensation_active then
+      debugPrint("*** REACTION COMPENSATION ACTIVE ***", reaction_movements_count, "/", REACTION_MOVEMENTS)
+    end
+    if scaling_active then
+      local progress = movements_processed > 0 and (movements_processed - 1) / (SCALED_MOVEMENTS_COUNT - 1) or 0
+      local current_scale = INITIAL_SCALE_FACTOR + (FINAL_SCALE_FACTOR - INITIAL_SCALE_FACTOR) * progress
+      debugPrint("Current scale factor:", string.format("%.2f", current_scale), "(", string.format("%.0f", current_scale * 100), "%)")
+    end
+    
+    -- DEBUG TOUCH BEHAVIOR ISSUE
+    if self.values.touch then
+      debugPrint("Touch event #" .. touch_event_count)
+      local pos_change = math.abs(scaled_fader_position - last_logged_position)
+      if last_logged_position >= 0 then
+        debugPrint("Position change:", string.format("%.4f", pos_change))
+        if pos_change > 0.01 then
+          debugPrint("*** LARGE JUMP DETECTED ***")
+        elseif pos_change < 0.0001 then
+          debugPrint("*** VERY SMALL MOVEMENT ***")
+        end
       end
     end
   end
@@ -845,6 +861,10 @@ function init()
   if self.parent and self.parent.name then
     log("Initialized for parent: " .. self.parent.name)
   end
+  
+  -- PERFORMANCE OPTIMIZATION: Schedule sync checking at 50ms intervals
+  -- Only runs when needed (needs_sync_check flag)
+  self:schedule(50)
   
   debugPrint("=== PROFESSIONAL FADER WITH IMMEDIATE 0.1dB RESPONSE ===")
   debugPrint("DEBUG MODE:", DEBUG == 1 and "ENABLED" or "DISABLED")
