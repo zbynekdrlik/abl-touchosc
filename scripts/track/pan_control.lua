@@ -1,11 +1,12 @@
 -- TouchOSC Pan Control Script
--- Version: 1.4.1
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Added: Return track support using parent's trackType
--- Fixed: Added logger output using root:notify like other scripts
+-- Version: 1.5.0
+-- Changed: Local logging, reduced verbosity
 
 -- Version constant
-local VERSION = "1.4.1"
+local VERSION = "1.5.0"
+
+-- Debug flag - set to 1 to enable logging
+local debug = 1
 
 -- Double-tap configuration
 local delay = 300 -- the maximum elapsed time between taps
@@ -20,18 +21,15 @@ local COLOR_OFF_CENTER = Color(0.20, 0.76, 0.86, 1.0) -- #34C1DC when out of cen
 -- LOGGING
 -- ===========================
 
--- Logging with both logger object and console output
+-- Local logging function
 local function log(message)
-    local context = "PAN"
-    if self.parent and self.parent.name then
-        context = "PAN(" .. self.parent.name .. ")"
+    if debug == 1 then
+        local context = "PAN"
+        if self.parent and self.parent.name then
+            context = "PAN(" .. self.parent.name .. ")"
+        end
+        print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
     end
-    
-    -- Send to document script for logger text update (like meter and fader)
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
-    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
 -- ===========================
@@ -42,13 +40,11 @@ end
 local function readConfiguration()
     local configControl = root:findByName("configuration", true)
     if not configControl then
-        log("ERROR: Configuration control not found")
         return nil
     end
     
     local configText = configControl.values.text
     if not configText or configText == "" then
-        log("ERROR: Configuration is empty")
         return nil
     end
     
@@ -134,7 +130,6 @@ function onValueChanged()
             self.values.x = 0.5
             last = 0
             touch_on_first = false
-            log("Double-tap detected - pan centered")
         else
             last = now
         end
@@ -222,11 +217,6 @@ function init()
     log("Script v" .. VERSION .. " loaded")
     
     -- DO NOT touch self.values.x - preserve current state!
-    
-    -- Log parent info
-    if self.parent and self.parent.name then
-        log("Initialized for parent: " .. self.parent.name)
-    end
 end
 
 -- Initialize on script load
