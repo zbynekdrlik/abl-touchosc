@@ -1,9 +1,9 @@
 -- TouchOSC Document Script
--- Version: 2.7.6
--- Fixed: Version logging respects DEBUG flag
--- Purpose: Manage document configuration and logging
+-- Version: 2.8.0
+-- FIXED: Removed ALL centralized logging functionality
+-- Purpose: Manage document configuration ONLY
 
-local VERSION = "2.7.6"
+local VERSION = "2.8.0"
 
 -- Debug mode (set to 1 to enable logging)
 local DEBUG = 0
@@ -20,53 +20,18 @@ local configuration = {
     raw_text = ""
 }
 
--- Logger text object reference  
-local loggerText = nil
-
 -- CRITICAL FIX: Default connection must be 1, not 0
 local DEFAULT_CONNECTION = 1
 
 -- ===========================
--- LOGGING SYSTEM
+-- LOGGING (Local only - NO centralized logging)
 -- ===========================
 
 local function log(message)
-    -- FIXED: Only log when DEBUG=1
+    -- FIXED: Only log locally when DEBUG=1
+    -- NO centralized logging - each script handles its own!
     if DEBUG == 1 then
         print("[" .. os.date("%H:%M:%S") .. "] Document Script: " .. message)
-    end
-end
-
-local function updateLoggerText(message)
-    if not loggerText then
-        -- Try to find logger text object
-        loggerText = root:findByName("logger_text", true)
-    end
-    
-    if loggerText and loggerText.values and loggerText.values.text ~= nil then
-        -- Prepend new message with timestamp
-        local timestamp = os.date("%H:%M:%S.%03d", os.time())
-        local newLine = timestamp .. " | " .. message .. "\n"
-        
-        -- Get existing text
-        local existingText = loggerText.values.text or ""
-        
-        -- Limit log size (keep last 50 lines)
-        local lines = {}
-        for line in existingText:gmatch("[^\n]+") do
-            table.insert(lines, line)
-        end
-        
-        -- Add new line at beginning
-        table.insert(lines, 1, timestamp .. " | " .. message)
-        
-        -- Keep only last 50 lines
-        while #lines > 50 do
-            table.remove(lines)
-        end
-        
-        -- Update text
-        loggerText.values.text = table.concat(lines, "\n")
     end
 end
 
@@ -181,10 +146,12 @@ function onReceiveOSC(message, connections)
 end
 
 -- ===========================
--- NOTIFY HANDLING
+-- NOTIFY HANDLING (FIXED: Removed log_message handler)
 -- ===========================
 
 function onReceiveNotify(key, value)
+    -- CRITICAL FIX: Removed log_message handler - NO centralized logging!
+    
     if key == "configuration_changed" then
         -- Re-parse configuration
         local configControl = self:findByName("configuration", false)
@@ -197,10 +164,6 @@ function onReceiveNotify(key, value)
     elseif key == "refresh_all" then
         -- Manual refresh triggered
         refreshAllGroups()
-        
-    elseif key == "log_message" then
-        -- Add log message from other scripts
-        updateLoggerText(tostring(value))
     end
 end
 
@@ -253,6 +216,7 @@ function init()
     -- Schedule automatic refresh
     last_refresh_time = getMillis()
     log("Ready - automatic refresh scheduled...")
+    log("CRITICAL FIX: Removed ALL centralized logging functionality")
 end
 
 init()
