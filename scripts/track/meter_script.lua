@@ -1,12 +1,12 @@
 -- TouchOSC Meter Script with Multi-OSC Support
--- Version: 2.5.1
--- Fixed: Use correct property 'value' instead of 'y' for meter
+-- Version: 2.5.2
+-- Fixed: Use correct property 'x' instead of 'value' for meter controls
 -- Optimized: Removed update() function - fully event-driven
 -- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
 
 -- Version constant
-local VERSION = "2.5.1"
+local VERSION = "2.5.2"
 
 -- ===========================
 -- DEBUG MODE
@@ -155,8 +155,8 @@ end
 
 -- Update meter display
 local function updateMeterDisplay()
-    -- Update meter value (meters use 'value' property)
-    self.values.value = smoothedLevel
+    -- Update meter value (meters use 'x' property for horizontal meters)
+    self.values.x = smoothedLevel
     
     -- Calculate and smooth color
     local targetColor = levelToColor(smoothedLevel)
@@ -286,8 +286,8 @@ function init()
         debug("WARNING: No track info available from parent")
     end
     
-    -- Initialize meter at zero (meters use 'value' property)
-    self.values.value = 0
+    -- Initialize meter at zero (meters use 'x' property for horizontal meters)
+    self.values.x = 0
     self.color = Color(0, 1, 0, 1)  -- Start green
     
     -- Initialize state
