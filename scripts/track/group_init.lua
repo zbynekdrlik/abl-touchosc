@@ -1,10 +1,12 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.14.5
--- Auto-detects regular vs return tracks
--- Fixed: Track label shows first word, skipping return track prefixes (A-, B-, etc.)
+-- Version: 1.15.0
+-- Changed: Local logging, significantly reduced log verbosity
 
 -- Version constant
-local SCRIPT_VERSION = "1.14.5"
+local SCRIPT_VERSION = "1.15.0"
+
+-- Debug flag - set to 1 to enable logging
+local debug = 1
 
 -- Script-level variables to store group data
 local instance = nil
@@ -23,23 +25,17 @@ local lastSendTime = 0
 local lastReceiveTime = 0
 local lastFaderValue = nil
 
--- Centralized logging through document script
+-- Local logging function
 local function log(message)
-    -- Add context to identify which control sent the log
-    local fullMessage = "CONTROL(" .. self.name .. ") " .. message
-    
-    -- Send to document script for proper logging
-    root:notify("log_message", fullMessage)
-    
-    -- Also print to console for immediate feedback during development
-    print("[" .. os.date("%H:%M:%S") .. "] " .. fullMessage)
+    if debug == 1 then
+        print("[" .. os.date("%H:%M:%S") .. "] GROUP(" .. self.name .. "): " .. message)
+    end
 end
 
 -- Get connection configuration
 local function getConnectionIndex(inst)
     local configObj = root:findByName("configuration", true)
     if not configObj or not configObj.values or not configObj.values.text then
-        log("Warning: No configuration found, using default connection 1")
         return 1
     end
     
@@ -54,7 +50,6 @@ local function getConnectionIndex(inst)
         end
     end
     
-    log("Warning: No config for " .. inst .. " - using default (1)")
     return 1
 end
 
@@ -178,11 +173,6 @@ local function setGroupEnabled(enabled, silent)
     
     -- Update status indicator immediately when enabling/disabling
     updateStatusIndicator()
-    
-    -- Only log if not silent
-    if not silent then
-        log("controls " .. (enabled and "ENABLED" or "DISABLED") .. " (" .. childCount .. " controls)")
-    end
 end
 
 -- Update connection label if it exists
@@ -190,7 +180,6 @@ local function updateConnectionLabel()
     local label = getChild(self, "connection_label")
     if label then
         label.values.text = instance  -- Will show "band" or "master"
-        log("Connection label set to: " .. instance)
     end
 end
 
@@ -208,7 +197,6 @@ local function clearListeners()
         sendOSC(oscPrefix .. 'stop_listen/panning', trackNumber, targetConnections)
         
         listenersActive = false
-        log("Stopped listeners for " .. trackType .. " " .. trackNumber)
     end
 end
 
@@ -234,8 +222,7 @@ function init()
     connectionIndex = getConnectionIndex(instance)
     
     -- Log initialization
-    log("Group init v" .. SCRIPT_VERSION .. " loaded")
-    log("Config - Instance: " .. instance .. ", Track: " .. trackName .. ", Connection: " .. connectionIndex)
+    log("Script v" .. SCRIPT_VERSION .. " loaded")
     
     -- SAFETY: Disable all controls until properly mapped
     setGroupEnabled(false, true)  -- Silent
@@ -266,8 +253,6 @@ function init()
     
     -- Initialize status indicator
     updateStatusIndicator()
-    
-    log("Ready - waiting for refresh")
 end
 
 -- Use update() function instead of schedule for periodic monitoring
@@ -277,8 +262,6 @@ function update()
 end
 
 function refreshTrackMapping()
-    log("Refreshing track mapping with auto-detection")
-    
     -- SAFETY: Clear any existing listeners and disable controls
     clearListeners()
     setGroupEnabled(false)
@@ -342,7 +325,7 @@ function onReceiveOSC(message, connections)
                             trackMapped = true
                             needsRefresh = false  -- Found it, stop searching
                             
-                            log("Mapped to Regular Track " .. trackNumber)
+                            log("Mapped to track " .. trackNumber)
                             
                             setGroupEnabled(true)
                             
@@ -396,7 +379,7 @@ function onReceiveOSC(message, connections)
                             trackMapped = true
                             needsRefresh = false
                             
-                            log("Mapped to Return Track " .. trackNumber)
+                            log("Mapped to return " .. trackNumber)
                             
                             setGroupEnabled(true)
                             
@@ -426,7 +409,7 @@ function onReceiveOSC(message, connections)
             
             -- If we've checked both regular and return tracks and didn't find it
             if needsRefresh then
-                log("ERROR: Track not found: '" .. trackName .. "' (checked both regular and return tracks)")
+                log("Track not found: " .. trackName)
                 setGroupEnabled(false)
                 trackNumber = nil
                 trackType = nil
