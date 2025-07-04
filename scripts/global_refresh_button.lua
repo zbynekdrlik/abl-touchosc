@@ -1,11 +1,11 @@
 -- TouchOSC Global Refresh Button Script
--- Version: 1.5.0
--- Changed: Local logging instead of centralized logging
+-- Version: 1.5.1
+-- Changed: Standardized DEBUG flag (uppercase) and disabled by default
 
-local SCRIPT_VERSION = "1.5.0"
+local SCRIPT_VERSION = "1.5.1"
 
 -- Debug flag - set to 1 to enable logging
-local debug = 1
+local DEBUG = 0
 
 -- Store last tap time to prevent double triggers
 local lastTapTime = 0
@@ -14,7 +14,7 @@ local needsColorReset = false
 
 -- Local logging function
 local function log(message)
-    if debug == 1 then
+    if DEBUG == 1 then
         print("[" .. os.date("%H:%M:%S") .. "] REFRESH BUTTON: " .. message)
     end
 end
