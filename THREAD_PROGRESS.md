@@ -1,37 +1,48 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**⚠️ FADER FIXED - READY FOR FINAL TEST**
-- [x] Fixed: Document script error (bad argument to ipairs)
-- [x] Fixed: Groups now set initial tag = "trackGroup" for discovery
-- [x] Fixed: Document script uses original findAllByProperty method
-- [x] Fixed: Fader pcall error (TouchOSC doesn't have pcall)
-- [ ] Currently working on: Awaiting user test with fixed fader
-- [ ] Waiting for: User to update fader v2.5.7 and test
+**⚠️ ROUND 7 FIX APPLIED - READY FOR TEST**
+- [x] Fixed: Fader v2.5.8 - Removed ALL pcall and _G references
+- [x] Fixed: Meter v2.5.4 - Removed pcall usage
+- [ ] Currently working on: Awaiting user test with fixed scripts
+- [ ] Waiting for: User to update both scripts and test
 - [ ] Blocked by: None
 
-## Current Status (2025-07-04 14:44 UTC)
+## Current Status (2025-07-04 14:54 UTC)
 
-### Latest Fix (Round 6)
-1. **fader_script.lua** (v2.5.6 → v2.5.7)
-   - **Fixed**: Runtime error "attempt to call global 'pcall' (a nil value)"
-   - Removed pcall usage in setupConnections()
-   - Replaced with direct checks (TouchOSC doesn't have pcall)
-   - Result: Fader should now initialize properly
+### Latest Fix (Round 7)
+1. **fader_script.lua** (v2.5.7 → v2.5.8)
+   - **Fixed**: Removed getConnectionIndex method calls (doesn't exist)
+   - **Fixed**: Removed all _G references (not supported in TouchOSC)
+   - **Fixed**: Use simple connection detection pattern from main branch
+   - Result: Should initialize properly now
 
-### User's Latest Test Results (14:37)
+2. **meter_script.lua** (v2.5.3 → v2.5.4)
+   - **Fixed**: Removed pcall usage (not supported in TouchOSC)
+   - **Fixed**: Use simple connection detection like main branch
+   - Result: Should work without errors
+
+### TouchOSC Limitations Discovered
+- ❌ No `pcall` function
+- ❌ No `_G` global table access
+- ❌ No `ipairs` on control collections
+- ❌ No `schedule()` method
+- ❌ Properties: use `interactive`, not `enabled`
+- ❌ Initial tags required for group discovery
+
+### User's Latest Test Results (14:46)
 **What's Working:**
 - ✅ Group discovery working (found 1 group)
 - ✅ Track mapping successful (mapped to Return Track 0: A-Repro LR #)
 - ✅ Controls enabled (7 controls)
-- ✅ Pan control received position from Ableton
-- ✅ Group tag system working
+- ✅ Pan control working perfectly
+- ✅ Activity fade in/out working
 
 **What Failed:**
-- ❌ Fader crashed with pcall error (NOW FIXED in v2.5.7)
-- ⚠️ Meter still showing v2.5.2 (needs v2.5.3)
+- ❌ Fader had getConnectionIndex error (NOW FIXED in v2.5.8)
+- ❌ Meter had pcall error (NOW FIXED in v2.5.4)
 
-### All Bug Fixes Applied (6 Rounds)
+### All Bug Fixes Applied (7 Rounds)
 
 #### Round 1: Basic Errors
 - meter_script.lua: Fixed property access (y → value → x)
@@ -55,13 +66,15 @@
 #### Round 6: Fader Fix
 - fader_script.lua: Removed pcall (not available in TouchOSC)
 
+#### Round 7: Complete TouchOSC Compatibility
+- fader_script.lua: Removed ALL unsupported functions
+- meter_script.lua: Removed pcall, simplified connection logic
+
 ## Scripts Needing Update
 
-### Critical Update Required:
-- **fader_script.lua**: Update to v2.5.7 (fixes pcall error)
-
-### Also Check:
-- **meter_script.lua**: Should be v2.5.3 (user has v2.5.2)
+### Critical Updates Required:
+- **fader_script.lua**: Update to v2.5.8 (removes all unsupported functions)
+- **meter_script.lua**: Update to v2.5.4 (removes pcall)
 
 ## Complete Script Version Summary
 
@@ -70,8 +83,8 @@
 |--------|---------|--------|-------------|
 | document_script.lua | v2.7.4 | ✅ Working | Fixed group finding |
 | group_init.lua | v1.15.8 | ✅ Working | Added initial tag, track discovery |
-| fader_script.lua | v2.5.7 | ❌ Needs Update | Removed pcall |
-| meter_script.lua | v2.5.3 | ❓ User has v2.5.2 | Event-driven updates |
+| fader_script.lua | v2.5.8 | ❌ Needs Update | No pcall, no _G, simple connection |
+| meter_script.lua | v2.5.4 | ❌ Needs Update | No pcall, simple connection |
 
 ### Other Optimized Scripts:
 | Script | Version | Status | Optimization |
@@ -100,8 +113,8 @@
 
 ## Testing Checklist for User
 
-1. [ ] Update fader_script.lua to v2.5.7
-2. [ ] Verify meter_script.lua is v2.5.3
+1. [ ] Update fader_script.lua to v2.5.8
+2. [ ] Update meter_script.lua to v2.5.4
 3. [ ] Restart TouchOSC completely
 4. [ ] Connect to Ableton Live
 5. [ ] Check console for any errors
@@ -123,11 +136,15 @@
 
 ### Debug Output Expected:
 ```
-CONTROL(fader) Fader v2.5.7
+CONTROL(fader) Fader v2.5.8
 CONTROL(fader) Detected as VOLUME control
 CONTROL(fader) Connection index: 3
 CONTROL(fader) Requested volume from return 0
 CONTROL(fader) Volume from Ableton: 0.xxx
+
+CONTROL(meter) Meter v2.5.4
+CONTROL(meter) From parent tag - Track: 0, Type: return
+CONTROL(meter) Connection index: 3
 ```
 
 ## Next Steps After Successful Test
@@ -149,9 +166,9 @@ CONTROL(fader) Volume from Ableton: 0.xxx
 ## Branch Status
 
 - Implementation: ✅ Complete
-- Bug fixes: ✅ Complete (6 rounds)
+- Bug fixes: ✅ Complete (7 rounds)
 - Documentation: ✅ Updated
-- Testing: ❌ Awaiting final test with fader v2.5.7
+- Testing: ❌ Awaiting final test with v2.5.8 and v2.5.4
 - **Ready for merge: Almost** (one final test needed)
 
 ## Session Timeline
@@ -159,24 +176,23 @@ CONTROL(fader) Volume from Ableton: 0.xxx
 1. **14:14** - Started with non-working system
 2. **14:24** - Fixed initial errors, group discovery failing
 3. **14:37** - Group discovery working, fader pcall error
-4. **14:44** - Fader fixed, awaiting final test
-5. **Total time**: ~30 minutes of debugging
+4. **14:44** - Fader fixed, awaiting test
+5. **14:46** - New errors found (getConnectionIndex, pcall in meter)
+6. **14:54** - All TouchOSC compatibility issues fixed
+7. **Total time**: ~40 minutes of debugging
 
 ## Key Learnings
 
-1. **TouchOSC Lua limitations** are strict:
-   - No pcall function
-   - No ipairs on control collections
-   - Specific property names (interactive, not enabled)
-   - Initial tags required for discovery patterns
+1. **TouchOSC Lua limitations** are very strict:
+   - No pcall, _G, ipairs on controls, schedule()
+   - Must verify EVERY Lua function against TouchOSC support
+   - Always check main branch for working patterns
 
-2. **Always check main branch** for working patterns
+2. **Test incrementally** - each fix reveals next issue
 
-3. **Debug incrementally** - each fix revealed next issue
-
-4. **Performance optimization** can be achieved while maintaining functionality
+3. **Performance optimization** must respect platform limitations
 
 ---
 
-## State Saved: 2025-07-04 14:44 UTC
-**Next Action**: User updates fader_script.lua to v2.5.7 and tests
+## State Saved: 2025-07-04 14:54 UTC
+**Next Action**: User updates fader_script.lua to v2.5.8 and meter_script.lua to v2.5.4 and tests
