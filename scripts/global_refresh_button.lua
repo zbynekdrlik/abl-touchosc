@@ -1,75 +1,122 @@
--- TouchOSC Global Refresh Button Script
--- Version: 1.5.1
--- Fixed: Schedule method not available - using time-based update checks
--- Performance optimized - removed centralized logging, time-based updates
--- Added DEBUG guards
+-- TouchOSC Global Refresh Button
+-- Version: 1.5.2
+-- Fixed: Version logging respects DEBUG flag
+-- Purpose: Single button to refresh all track mappings
 
-local SCRIPT_VERSION = "1.5.1"
+local VERSION = "1.5.2"
 
--- Debug mode (set to 1 for debug output)
-local DEBUG = 0
+-- Debug mode
+local DEBUG = 0  -- Set to 1 for logging
 
--- Store last tap time to prevent double triggers
-local lastTapTime = 0
-local needsColorReset = false
-local colorResetTime = 0
+-- State
+local isRefreshing = false
+local lastRefreshTime = 0
+local REFRESH_COOLDOWN = 1000  -- 1 second cooldown
 
--- Debug logging
-local function debug(message)
-    if DEBUG == 0 then return end
-    print("[" .. os.date("%H:%M:%S") .. "] REFRESH BUTTON: " .. message)
+-- ===========================
+-- LOGGING
+-- ===========================
+
+local function log(message)
+    if DEBUG == 1 then
+        print("[" .. os.date("%H:%M:%S") .. "] REFRESH BUTTON: " .. message)
+    end
 end
 
-function onValueChanged(valueName)
-    -- Handle both button-style (touch) and label-style (x) touches
-    if valueName == "touch" or valueName == "x" then
-        -- Prevent double triggers
-        local currentTime = os.clock()
-        if currentTime - lastTapTime < 0.5 then
-            return
-        end
-        lastTapTime = currentTime
-        
-        debug("Refresh triggered")
-        
-        -- Visual feedback - bright yellow
-        self.color = Color(1, 1, 0, 1)  -- Yellow while refreshing
-        
-        -- Schedule color reset using time tracking
-        needsColorReset = true
-        colorResetTime = currentTime + 0.3  -- Reset color after 300ms
-        
-        -- Notify document script to refresh all groups
-        root:notify("refresh_all_groups")
+-- ===========================
+-- VISUAL FEEDBACK
+-- ===========================
+
+local function setButtonState(active)
+    if active then
+        -- Active/pressed state
+        self.color = Color(1.0, 0.5, 0.0, 1.0)  -- Orange
+        self.values.x = 1.0
+    else
+        -- Normal state
+        self.color = Color(0.2, 0.2, 0.2, 1.0)  -- Dark gray
+        self.values.x = 0.0
+    end
+end
+
+-- ===========================
+-- REFRESH LOGIC
+-- ===========================
+
+local function performRefresh()
+    -- Check cooldown
+    local now = getMillis()
+    if now - lastRefreshTime < REFRESH_COOLDOWN then
+        log("Refresh on cooldown, please wait...")
+        return
+    end
+    
+    if isRefreshing then
+        log("Refresh already in progress...")
+        return
+    end
+    
+    isRefreshing = true
+    lastRefreshTime = now
+    setButtonState(true)
+    
+    log("=== STARTING GLOBAL REFRESH ===")
+    
+    -- Notify document script to refresh all groups
+    if root.documentScript then
+        root.documentScript:notify("refresh_all", true)
+        log("Sent refresh_all notification to document script")
+    else
+        log("ERROR: Document script not found!")
+    end
+    
+    -- Reset button after short delay
+    local resetTime = now + 500  -- 500ms visual feedback
+    
+    -- Store reset time for update function
+    self.resetTime = resetTime
+end
+
+-- ===========================
+-- EVENT HANDLERS
+-- ===========================
+
+function onValueChanged()
+    -- Trigger on button press (not release)
+    if self.values.x > 0.5 and self.values.touch then
+        performRefresh()
     end
 end
 
 function update()
-    -- Check if we need to reset color
-    if needsColorReset then
-        local currentTime = os.clock()
-        if currentTime >= colorResetTime then
-            self.color = Color(0.5, 0.5, 0.5, 1)  -- Back to gray
-            needsColorReset = false
-            debug("Color reset after refresh")
-        end
+    -- Check if we need to reset button
+    if self.resetTime and getMillis() >= self.resetTime then
+        setButtonState(false)
+        isRefreshing = false
+        self.resetTime = nil
+        log("Refresh complete")
     end
 end
 
+-- ===========================
+-- INITIALIZATION
+-- ===========================
+
 function init()
-    print("[" .. os.date("%H:%M:%S") .. "] REFRESH BUTTON: Script v" .. SCRIPT_VERSION .. " loaded")
+    -- Version logging only when DEBUG=1
+    if DEBUG == 1 then
+        print("[" .. os.date("%H:%M:%S") .. "] REFRESH BUTTON: Script v" .. VERSION .. " loaded")
+    end
     
-    -- Set button text
-    if self.values and type(self.values) == "table" and self.values.text ~= nil then
+    -- Set initial button state
+    setButtonState(false)
+    
+    -- Set button label if it has text
+    if self.values.text ~= nil then
         self.values.text = "REFRESH ALL"
     end
     
-    -- Set initial color
-    self.color = Color(0.5, 0.5, 0.5, 1)  -- Gray
-    
-    if DEBUG == 1 then
-        debug("Initialized")
-    end
+    log("Global refresh button ready")
 end
 
 init()

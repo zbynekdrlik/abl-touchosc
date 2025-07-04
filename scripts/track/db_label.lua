@@ -1,125 +1,51 @@
--- TouchOSC dB Value Label Display
--- Version: 1.3.3
--- Performance: Added early return debug guard for zero overhead when DEBUG != 1
--- Fixed: Added notify handler to request volume when track changes
--- Performance optimized - removed centralized logging, added DEBUG guards
--- Shows the current fader value in dB
--- Multi-connection routing support
+-- TouchOSC dB Display Label with Multi-Connection Support
+-- Version: 1.3.4
+-- Fixed: Version logging respects DEBUG flag
+-- Shows current fader position in dB with connection routing
 
--- Version constant
-local VERSION = "1.3.3"
+local VERSION = "1.3.4"
 
--- Debug mode (set to 1 for debug output)
-local DEBUG = 0  -- Set to 0 for production (zero overhead)
+-- DEBUG MODE
+local DEBUG = 0  -- Set to 1 for detailed logging
 
--- State variable (must be local, not on self)
-local lastDB = -math.huge
-local hasTrackedStarted = false
+-- State
+local parentGroup = nil
+local currentDb = -math.huge
+local lastLoggedDb = nil
 
--- ===========================
--- DEBUG LOGGING
--- ===========================
-
-local function debug(message)
-    -- Performance guard: early return for zero overhead when DEBUG != 1
-    if DEBUG ~= 1 then return end
-    
-    local context = "DB_LABEL"
-    if self.parent and self.parent.name then
-        context = "DB_LABEL(" .. self.parent.name .. ")"
-    end
-    
-    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
-end
+-- Curve settings (must match fader)
+local use_log_curve = true
+local log_exponent = 0.515
 
 -- ===========================
--- CONNECTION HELPERS
+-- LOGGING
 -- ===========================
 
--- Get connection index
-local function getConnectionIndex()
-    if self.parent and self.parent.tag then
-        local instance = self.parent.tag:match("^(%w+):")
-        if instance then
-            -- Find configuration
-            local configObj = root:findByName("configuration", true)
-            if not configObj or not configObj.values or not configObj.values.text then
-                return 1
-            end
-            
-            local configText = configObj.values.text
-            local searchKey = "connection_" .. instance .. ":"
-            
-            -- Parse configuration
-            for line in configText:gmatch("[^\r\n]+") do
-                line = line:match("^%s*(.-)%s*$")  -- Trim
-                if line:sub(1, #searchKey) == searchKey then
-                    local value = line:sub(#searchKey + 1):match("^%s*(.-)%s*$")
-                    return tonumber(value) or 1
-                end
-            end
+local function log(message)
+    if DEBUG == 1 then
+        local context = "DB_LABEL"
+        if parentGroup and parentGroup.name then
+            context = "DB_LABEL(" .. parentGroup.name .. ")"
         end
-    end
-    return 1
-end
-
--- Build connection table
-local function buildConnectionTable(index)
-    local connections = {}
-    for i = 1, 10 do
-        connections[i] = (i == index)
-    end
-    return connections
-end
-
--- Get track number and type from parent group
-local function getTrackInfo()
-    -- Parent stores track info in tag as "instance:trackNumber:trackType"
-    if self.parent and self.parent.tag then
-        local instance, trackNum, trackType = self.parent.tag:match("^(%w+):(%d+):(%w+)$")
-        if trackNum and trackType then
-            return tonumber(trackNum), trackType
-        end
-    end
-    return nil, nil
-end
-
--- Check if track is properly mapped
-local function isTrackMapped()
-    local trackNumber, trackType = getTrackInfo()
-    return trackNumber ~= nil
-end
-
--- Request current volume from Ableton
-local function requestVolume()
-    local trackNumber, trackType = getTrackInfo()
-    if trackNumber then
-        local connectionIndex = getConnectionIndex()
-        local connections = buildConnectionTable(connectionIndex)
-        local path = trackType == "return" and "/live/return/get/volume" or "/live/track/get/volume"
-        sendOSC(path, trackNumber, connections)
-        
-        debug("Requested volume for " .. trackType .. " track " .. trackNumber)
-        
-        -- Start volume listening
-        if not hasTrackedStarted then
-            local listenPath = trackType == "return" and "/live/return/start_listen/volume" or "/live/track/start_listen/volume"
-            sendOSC(listenPath, trackNumber, connections)
-            hasTrackedStarted = true
-            
-            debug("Started volume listener for " .. trackType .. " track " .. trackNumber)
-        end
+        print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
     end
 end
 
 -- ===========================
--- dB CONVERSION FUNCTION
+-- CONVERSION FUNCTIONS
 -- ===========================
+
+function linearToLog(linear_pos)
+    if not linear_pos or linear_pos <= 0 then return 0
+    elseif linear_pos >= 1 then return 1
+    else return math.pow(linear_pos, log_exponent) end
+end
 
 function value2db(vl)
-    -- Conversion from linear to decibel scale in track volume
+    if not vl then return -math.huge end
+    
     if vl <= 1 and vl >= 0.4 then
-        return 40*vl - 34
+        return 40*vl -34
     elseif vl < 0.4 and vl >= 0.15 then
         local alpha = 799.503788
         local beta = 12630.61132
@@ -130,28 +56,71 @@ function value2db(vl)
         local alpha = 70.
         local beta = 118.426374
         local gamma = 7504./5567.
-        local db_value = beta*(vl^(1/gamma)) - alpha
-        if db_value <= -70.0 then 
-            return -math.huge  -- -inf
+        local db_value_str = beta*(vl^(1/gamma)) - alpha
+        if db_value_str <= -70.0 then 
+            return -math.huge
         else
-            return db_value
+            return db_value_str
         end
     else
         return 0
     end
 end
 
--- Format dB value for display
 function formatDB(db_value)
-    if db_value == -math.huge or db_value < -70 then
-        return "-inf"
+    if db_value == -math.huge or db_value < -100 then
+        return "-∞"
     else
         return string.format("%.1f", db_value)
     end
 end
 
 -- ===========================
--- OSC HANDLER
+-- PARENT GROUP HELPERS
+-- ===========================
+
+local function findParentGroup()
+    if self.parent and self.parent.name then
+        parentGroup = self.parent
+        log("Found parent group: " .. parentGroup.name)
+        return true
+    end
+    return false
+end
+
+-- Get track info from parent's tag
+local function getTrackInfo()
+    if parentGroup and parentGroup.tag then
+        local instance, trackNum, trackType = parentGroup.tag:match("^(%w+):(%d+):(%w+)$")
+        if trackNum and trackType then
+            return tonumber(trackNum), trackType
+        end
+    end
+    return nil, nil
+end
+
+-- Get connection configuration
+local function getConnectionIndex()
+    if parentGroup and parentGroup.tag then
+        local instance = parentGroup.tag:match("^(%w+):")
+        if instance then
+            local configObj = root:findByName("configuration", true)
+            if configObj and configObj.values and configObj.values.text then
+                local configText = configObj.values.text
+                for line in configText:gmatch("[^\r\n]+") do
+                    local configInstance, connectionNum = line:match("connection_(%w+):%s*(%d+)")
+                    if configInstance and configInstance == instance then
+                        return tonumber(connectionNum) or 1
+                    end
+                end
+            end
+        end
+    end
+    return 1
+end
+
+-- ===========================
+-- OSC HANDLING
 -- ===========================
 
 function onReceiveOSC(message, connections)
@@ -164,11 +133,12 @@ function onReceiveOSC(message, connections)
         return false
     end
     
-    -- Check if this is a volume message for the correct track type
+    -- Check message type based on track type
     local isVolumeMessage = false
-    if trackType == "return" and path == '/live/return/get/volume' then
+    
+    if trackType == "return" and path == "/live/return/get/volume" then
         isVolumeMessage = true
-    elseif (trackType == "regular" or trackType == "track") and path == '/live/track/get/volume' then
+    elseif (trackType == "regular" or trackType == "track") and path == "/live/track/get/volume" then
         isVolumeMessage = true
     end
     
@@ -176,53 +146,67 @@ function onReceiveOSC(message, connections)
         return false
     end
     
-    -- Check if this message is for our track
-    if arguments[1].value == trackNumber then
-        -- Get the volume value and convert to dB
-        local audio_value = arguments[2].value
-        local db_value = value2db(audio_value)
-        
-        -- Update label text
-        self.values.text = formatDB(db_value)
-        
-        -- Only log significant changes to reduce spam
-        if DEBUG == 1 and (not lastDB or math.abs(db_value - lastDB) > 0.5) then
-            debug(string.format("%s track %d: %s dB (audio: %.3f)", trackType, trackNumber, formatDB(db_value), audio_value))
-            lastDB = db_value
-        end
+    -- Get our connection
+    local myConnection = getConnectionIndex()
+    if connections and not connections[myConnection] then
+        return false
     end
     
-    return false  -- Don't block other receivers
+    -- Check track number
+    local msgTrackNumber = arguments[1].value
+    if msgTrackNumber ~= trackNumber then
+        return false
+    end
+    
+    -- Update dB display
+    local volumeValue = arguments[2].value
+    currentDb = value2db(volumeValue)
+    self.values.text = formatDB(currentDb)
+    
+    -- Log significant changes
+    if DEBUG == 1 and lastLoggedDb then
+        local change = math.abs(currentDb - lastLoggedDb)
+        if change > 0.5 or currentDb == -math.huge or lastLoggedDb == -math.huge then
+            log(string.format("Volume: %.3f → %s dB", volumeValue, formatDB(currentDb)))
+            lastLoggedDb = currentDb
+        end
+    elseif DEBUG == 1 then
+        log(string.format("Initial volume: %.3f → %s dB", volumeValue, formatDB(currentDb)))
+        lastLoggedDb = currentDb
+    end
+    
+    return false
 end
 
 -- ===========================
--- NOTIFY HANDLER
+-- NOTIFICATIONS
 -- ===========================
 
 function onReceiveNotify(key, value)
-    debug("Received notify: " .. key .. " = " .. tostring(value))
-    
-    -- Handle track changes
-    if key == "track_changed" then
-        -- Clear the display when track changes
-        self.values.text = "-inf"
-        lastDB = -math.huge
-        hasTrackedStarted = false
-        debug("Track changed - display reset")
+    if key == "sibling_value_changed" and value == "fader" then
+        -- Fader moved locally - update immediately
+        local fader = parentGroup:findByName("fader", false)
+        if fader and fader.values and fader.values.x then
+            local faderPos = fader.values.x
+            local audioValue = use_log_curve and linearToLog(faderPos) or faderPos
+            currentDb = value2db(audioValue)
+            self.values.text = formatDB(currentDb)
+            log("Updated from fader: " .. formatDB(currentDb) .. " dB")
+        end
         
-        -- Request volume for new track
-        requestVolume()
+    elseif key == "track_changed" then
+        -- Reset when track changes
+        currentDb = -math.huge
+        self.values.text = formatDB(currentDb)
+        lastLoggedDb = nil
+        log("Track changed - reset to -∞")
         
     elseif key == "track_unmapped" then
-        -- Show dash when unmapped
-        self.values.text = "-"
-        lastDB = nil
-        hasTrackedStarted = false
-        debug("Track unmapped - display shows dash")
-        
-    elseif key == "control_enabled" then
-        -- Show/hide based on track mapping status
-        self.values.visible = value
+        -- Clear when unmapped
+        currentDb = -math.huge
+        self.values.text = formatDB(currentDb)
+        lastLoggedDb = nil
+        log("Track unmapped - cleared")
     end
 end
 
@@ -231,20 +215,21 @@ end
 -- ===========================
 
 function init()
-    -- Log version
-    print("[" .. os.date("%H:%M:%S") .. "] DB_LABEL: Script v" .. VERSION .. " loaded")
-    
-    -- Set initial text
-    if isTrackMapped() then
-        self.values.text = "-inf"
-        -- Request initial volume
-        requestVolume()
-    else
-        self.values.text = "-"
+    -- Version logging only when DEBUG=1
+    if DEBUG == 1 then
+        print("[" .. os.date("%H:%M:%S") .. "] DB_LABEL: Script v" .. VERSION .. " loaded")
     end
     
-    debug("Initialized for parent: " .. (self.parent and self.parent.name or "unknown"))
-    debug("DEBUG MODE ENABLED")
+    -- Find parent group
+    if not findParentGroup() then
+        print("[" .. os.date("%H:%M:%S") .. "] DB_LABEL: ERROR - No parent group found")
+        return
+    end
+    
+    -- Initialize display
+    self.values.text = formatDB(currentDb)
+    
+    log("Initialized - ready for updates")
 end
 
 init()
