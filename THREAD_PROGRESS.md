@@ -1,87 +1,58 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**✅ READY TO MERGE - Documentation Complete**
-- [x] Return track feature: COMPLETE AND WORKING
-- [ ] Label display test: Need to verify A-, B- prefix removal (should work)
-- [x] Performance issues: DOCUMENTED for future branch
+**⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
+- [ ] Currently working on: Removing centralized logging
+- [ ] Waiting for: User testing after each script update
+- [ ] Blocked by: None
 
-## Current Status (2025-07-03 20:52)
+## Current Task: Remove Centralized Logging
+**Started**: 2025-07-04
+**Branch**: feature/remove-centralized-logging
+**Status**: IMPLEMENTING
 
-### Return Track Feature
-- **Status**: ✅ COMPLETE
-- **Version**: 1.2.0
-- **Testing**: All features working
-- **Ready**: YES - pending label display verification
+### Specific Changes Required:
+1. Remove centralized logging via notify()
+2. Each script gets local log() function with debug=1 condition
+3. Remove all direct print() calls - use only log()
+4. Remove excessive logging to reduce script size
+5. Preserve all functionality
 
-### Performance Optimization
-- **Status**: 📄 DOCUMENTED
-- **Action**: Will be addressed in separate branch
-- **Docs Created**:
-  - `performance-optimization-phases.md` - Full implementation plan
-  - `performance-issues-quick-reference.md` - Quick fixes guide
+### Scripts to Update:
+- [ ] document_script.lua - Remove log_message handler, keep own log()
+- [ ] global_refresh_button.lua - Replace notify() with local log()
+- [ ] track/group_init.lua - Replace notify() with local log()
+- [ ] track/mute_button.lua - Replace notify() with local log()
+- [ ] track/fader_script.lua - Replace notify() with local log()
+- [ ] track/meter_script.lua - Replace notify() with local log()
+- [ ] track/db_label.lua - Replace notify() with local log()
+- [ ] track/db_meter_label.lua - Replace notify() with local log()
+- [ ] track/pan_control.lua - Replace notify() with local log()
 
-## Next Steps:
+## Implementation Status
+- Phase: Removing Centralized Logging
+- Step: Starting implementation
+- Status: IMPLEMENTING
 
-### 1. Test Label Display ⏳
-Quick test before merge:
-- Create return track "A-Reverb" → verify shows "Reverb"
-- Create return track "B-Delay" → verify shows "Delay"
-- Code review indicates this should work (group_init.lua lines 193-210)
+## Testing Status Matrix
+| Script | Updated | Tested | Working |
+|--------|---------|--------|---------|
+| document_script.lua | ❌ | ❌ | - |
+| global_refresh_button.lua | ❌ | ❌ | - |
+| group_init.lua | ❌ | ❌ | - |
+| mute_button.lua | ❌ | ❌ | - |
+| fader_script.lua | ❌ | ❌ | - |
+| meter_script.lua | ❌ | ❌ | - |
+| db_label.lua | ❌ | ❌ | - |
+| db_meter_label.lua | ❌ | ❌ | - |
+| pan_control.lua | ❌ | ❌ | - |
 
-### 2. Merge PR #8 ✅
-- Return track feature complete
-- Documentation complete
-- Performance issues documented for next branch
-- Ready for v1.2.0 release
+## Previous Thread Summary
+The return track feature (v1.2.0) was completed and ready to merge. Performance issues were documented for future optimization work. This is a new task to simplify the logging system.
 
-### 3. Future Work 🚀
-Create `feature/performance-optimization` branch with:
-- Phase 1: Quick wins (scheduled updates, debug fixes)
-- Phase 2: Smart updates (event-driven, batching)
-- Phase 3: Architecture optimization
-- Phase 4: Advanced optimizations
-
-## Implementation Status - RETURN TRACKS
-- Phase: COMPLETE - READY FOR MERGE
-- Status: ✅ All features implemented and tested
-- Version: 1.2.0
-
-## Branch Status
-
-- Implementation: ✅ Complete
-- Documentation: ✅ Complete (including performance docs)
-- Cleanup: ✅ Complete
-- Testing: ✅ Complete (except label verification)
-- **Ready for merge: YES**
-
-## Key Decisions Made
-
-1. **Merge return tracks first** - Feature is complete and working
-2. **Optimize separately** - Performance affects all tracks, not just returns
-3. **Document thoroughly** - Created phase docs for optimization work
-
-## Performance Documentation Created
-
-### 1. performance-optimization-phases.md
-- 4 phases of optimization
-- Specific tasks and code examples
-- Expected impact measurements
-- Timeline: 8-12 days total
-
-### 2. performance-issues-quick-reference.md  
-- Critical issues identified
-- Quick fix examples
-- Priority order
-- Testing commands
-
-## Summary
-
-The return track feature (v1.2.0) is complete and ready to merge. Performance issues have been thoroughly documented for future optimization work. Once label display is verified, the PR can be merged and tagged for release.
-
----
-
-## Last Actions
-- Created performance optimization documentation
-- Updated PR with merge strategy
-- Ready for final label test and merge
+## Next Steps
+1. Update each script one by one
+2. Test functionality after each update
+3. Create PR once first script is updated
+4. Continue through all scripts
+5. Final testing of all functionality
