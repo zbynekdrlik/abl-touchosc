@@ -1,12 +1,12 @@
 -- TouchOSC dB Value Label Display
--- Version: 1.3.0
--- Changed: Local logging, reduced verbosity
+-- Version: 1.3.1
+-- Changed: Standardized DEBUG flag (uppercase) and disabled by default
 
 -- Version constant
-local VERSION = "1.3.0"
+local VERSION = "1.3.1"
 
 -- Debug flag - set to 1 to enable logging
-local debug = 1
+local DEBUG = 0
 
 -- State variable (must be local, not on self)
 local lastDB = -math.huge
@@ -16,7 +16,7 @@ local lastDB = -math.huge
 -- ===========================
 
 local function log(message)
-    if debug == 1 then
+    if DEBUG == 1 then
         local context = "DB_LABEL"
         if self.parent and self.parent.name then
             context = "DB_LABEL(" .. self.parent.name .. ")"
