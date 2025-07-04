@@ -1,13 +1,14 @@
 -- mute_button.lua
--- Version: 2.0.0
+-- Version: 2.0.1
 -- Performance optimized - removed centralized logging, added DEBUG guards
+-- Fixed: Set DEBUG = 1 for troubleshooting
 -- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
 
-local VERSION = "2.0.0"
+local VERSION = "2.0.1"
 
 -- Debug mode (set to 1 for debug output)
-local DEBUG = 0
+local DEBUG = 1  -- Enable debug for troubleshooting
 
 -- Debug logging
 local function debug(message)
@@ -139,3 +140,20 @@ end
 
 -- Initialize
 print("[" .. os.date("%H:%M:%S") .. "] MUTE: Script v" .. VERSION .. " loaded")
+
+-- Request initial mute state (only works if track is already mapped)
+local trackNumber, trackType = getTrackInfo()
+if trackNumber then
+    local connectionIndex = getConnectionIndex()
+    local connections = buildConnectionTable(connectionIndex)
+    local path = trackType == "return" and "/live/return/get/mute" or "/live/track/get/mute"
+    sendOSC(path, trackNumber, connections)
+    
+    if DEBUG == 1 then
+        debug("Requested initial mute state for " .. trackType .. " track " .. trackNumber)
+    end
+else
+    if DEBUG == 1 then
+        debug("No track mapped yet - waiting for parent notification")
+    end
+end
