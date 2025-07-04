@@ -1,14 +1,14 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.5.0
+-- Version: 2.5.1
 -- Performance optimized: Fixed debug overhead, optimized update() function
+-- Removed: Centralized logging - using direct print only when DEBUG=1
 -- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
 -- Fixed: Never change fader position based on assumptions
--- Added: Centralized logging and multi-connection routing
 -- Preserved: ALL original fader functionality
 
 -- Version constant
-local VERSION = "2.5.0"
+local VERSION = "2.5.1"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -87,23 +87,8 @@ local double_tap_start_position = 0
 local needs_sync_check = false
 
 -- ===========================
--- CENTRALIZED LOGGING
+-- DEBUG PRINT FUNCTION
 -- ===========================
-
--- Centralized logging through document script
-local function log(message)
-    -- Get parent name for context
-    local context = "FADER"
-    if self.parent and self.parent.name then
-        context = "FADER(" .. self.parent.name .. ")"
-    end
-    
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
-    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
-end
 
 -- PERFORMANCE OPTIMIZED DEBUG PRINT FUNCTION
 function debugPrint(...)
@@ -113,7 +98,15 @@ function debugPrint(...)
   -- Only do expensive operations if debug is enabled
   local args = {...}
   local msg = table.concat(args, " ")
-  log(msg)
+  
+  -- Get parent name for context
+  local context = "FADER"
+  if self.parent and self.parent.name then
+    context = "FADER(" .. self.parent.name .. ")"
+  end
+  
+  -- Direct print to console
+  print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. msg)
 end
 
 -- ===========================
@@ -854,12 +847,17 @@ end
 
 -- VERIFICATION
 function init()
-  -- Log version with centralized logging
-  log("Script v" .. VERSION .. " loaded")
-  
-  -- Log parent info
-  if self.parent and self.parent.name then
-    log("Initialized for parent: " .. self.parent.name)
+  -- VERSION LOGGING - Always log version at startup regardless of DEBUG setting
+  if DEBUG == 1 then
+    -- Debug mode - include parent info
+    local parent_info = ""
+    if self.parent and self.parent.name then
+      parent_info = " for parent: " .. self.parent.name
+    end
+    print("[" .. os.date("%H:%M:%S") .. "] FADER: Script v" .. VERSION .. " loaded" .. parent_info)
+  else
+    -- Non-debug mode - minimal version log
+    print("Fader v" .. VERSION)
   end
   
   -- PERFORMANCE OPTIMIZATION: Schedule sync checking at 50ms intervals
