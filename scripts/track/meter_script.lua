@@ -1,12 +1,12 @@
 -- TouchOSC Meter Script - Audio Level Display
--- Version: 2.5.9
--- Performance: Fixed connection initialization timing issue
--- Fixed: Meter now works correctly by deferring connection setup
+-- Version: 2.6.0
+-- Fixed: Improved color responsiveness and reduced lag
+-- Fixed: Respect DEBUG flag for all logging
 -- Purpose: Display audio levels from Ableton Live
 -- Optimized: Event-driven updates only - no continuous polling!
 
 -- Version constant
-local VERSION = "2.5.9"
+local VERSION = "2.6.0"
 
 -- Debug mode
 local DEBUG = 0  -- Set to 0 for production (zero overhead)
@@ -26,7 +26,7 @@ local COLOR_RED = {1.0, 0.0, 0.0, 1.0}       -- Clipping level
 
 -- Smooth color transitions
 local current_color = {COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4]}
-local color_smoothing = 0.3  -- Smoothing factor (0-1, higher = faster)
+local color_smoothing = 0.7  -- INCREASED for faster color response (was 0.3)
 
 -- CALIBRATION POINTS (from main branch)
 local CALIBRATION_POINTS = {
@@ -53,11 +53,11 @@ local isActive = false
 local lastMeterValue = 0
 local connectionSetupDeferred = false
 
--- NOTIFICATION THROTTLING
-local NOTIFICATION_THRESHOLD = 0.05  -- Only notify if change > 5%
+-- NOTIFICATION THROTTLING - REDUCED for better responsiveness
+local NOTIFICATION_THRESHOLD = 0.02  -- Notify if change > 2% (was 5%)
 local lastNotifiedValue = 0
 local lastNotificationTime = 0
-local NOTIFICATION_MIN_INTERVAL = 0.1  -- Minimum 100ms between notifications
+local NOTIFICATION_MIN_INTERVAL = 0.05  -- 50ms between notifications (was 100ms)
 
 -- ===========================
 -- UTILITY FUNCTIONS
@@ -77,8 +77,10 @@ local function debug(...)
 end
 
 local function log(message)
-    -- Always log important messages
-    print("[" .. os.date("%H:%M:%S") .. "] CONTROL(" .. self.name .. ") " .. message)
+    -- FIXED: Respect DEBUG flag for version logging
+    if DEBUG == 1 then
+        print("[" .. os.date("%H:%M:%S") .. "] CONTROL(" .. self.name .. ") " .. message)
+    end
 end
 
 -- ===========================
@@ -168,10 +170,18 @@ function getColorForLevel(fader_pos)
   end
 end
 
--- Smooth color transitions
+-- Smooth color transitions - IMPROVED for faster response
 function smoothColor(target_color)
+  -- FIXED: Use faster smoothing for more responsive color changes
   for i = 1, 4 do
-    current_color[i] = current_color[i] + (target_color[i] - current_color[i]) * color_smoothing
+    local diff = target_color[i] - current_color[i]
+    -- Apply full change if difference is small (for instant response to small changes)
+    if math.abs(diff) < 0.1 then
+      current_color[i] = target_color[i]
+    else
+      -- Otherwise apply smoothing
+      current_color[i] = current_color[i] + diff * color_smoothing
+    end
   end
   return current_color
 end
@@ -312,7 +322,7 @@ function onReceiveOSC(message, connections)
         -- Get target color based on fader position
         local target_color = getColorForLevel(fader_position)
         
-        -- Apply smoothed color transition
+        -- Apply smoothed color transition - FIXED with faster response
         local smoothed = smoothColor(target_color)
         self.color = Color(smoothed[1], smoothed[2], smoothed[3], smoothed[4])
         
@@ -332,7 +342,7 @@ function onReceiveOSC(message, connections)
         -- Track activity state
         isActive = fader_position > 0.01
         
-        -- FIXED: Only notify parent on SIGNIFICANT changes
+        -- FIXED: More responsive parent notification
         if parentGroup and parentGroup.notify and isActive then
             local now = os.clock()
             local valueDelta = math.abs(normalized_meter - lastNotifiedValue)
@@ -403,7 +413,7 @@ function init()
     
     -- Find parent group
     if not findParentGroup() then
-        log("Warning: No parent group found")
+        debug("Warning: No parent group found")
         return
     end
     
@@ -420,6 +430,7 @@ function init()
     debug("Parent:", parentGroup and parentGroup.name or "none")
     debug("Track:", trackNumber, "Type:", trackType)
     debug("Using calibrated meter conversion")
+    debug("Color smoothing:", color_smoothing, "(faster response)")
     debug("Notification threshold:", string.format("%.0f%%", NOTIFICATION_THRESHOLD * 100))
     debug("Min notification interval:", NOTIFICATION_MIN_INTERVAL, "seconds")
 end
