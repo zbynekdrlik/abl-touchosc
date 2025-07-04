@@ -1,10 +1,11 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.7.0
--- FIXED: Restored direct OSC handling for real-time meter updates
+-- Version: 2.8.0
+-- FIXED: Removed value_changed fallback - direct OSC only
+-- FIXED: Use centralized logging via notify
 -- Shows actual peak dBFS level from track output meter
 -- Multi-connection routing support
 
-local VERSION = "2.7.0"
+local VERSION = "2.8.0"
 
 -- State variables
 local parentGroup = nil
@@ -62,12 +63,22 @@ local METER_DB_CALIBRATION = {
 }
 
 -- ===========================
--- LOGGING
+-- LOGGING (FIXED: Use centralized logging)
 -- ===========================
 
 local function log(message)
     if DEBUG == 1 then
-        print("[" .. os.date("%H:%M:%S") .. "] dBFS(" .. (parentGroup and parentGroup.name or "?") .. "): " .. message)
+        -- Add context to identify which control sent the log
+        local context = "dBFS"
+        if parentGroup and parentGroup.name then
+            context = "dBFS(" .. parentGroup.name .. ")"
+        end
+        
+        -- Send to document script for proper logging
+        root:notify("log_message", context .. ": " .. message)
+        
+        -- Also print to console for development/debugging
+        print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
     end
 end
 
@@ -273,7 +284,7 @@ local function updateDisplay(db_value)
 end
 
 -- ===========================
--- OSC HANDLER (RESTORED FOR DIRECT UPDATES)
+-- OSC HANDLER (DIRECT UPDATES ONLY)
 -- ===========================
 
 function onReceiveOSC(message, connections)
@@ -350,29 +361,13 @@ function onReceiveOSC(message, connections)
 end
 
 -- ===========================
--- NOTIFICATIONS
+-- NOTIFICATIONS (FIXED: Removed value_changed fallback)
 -- ===========================
 
 function onReceiveNotify(key, value)
-    if key == "value_changed" and value == "meter" then
-        -- FALLBACK: Get meter value directly if somehow OSC is not working
-        -- This should rarely be needed now that direct OSC is restored
-        local meter = parentGroup:findByName("meter", false)
-        if meter and meter.values and meter.values.x then
-            -- Convert meter position to meter value (reverse of meter's conversion)
-            local meterPos = meter.values.x
-            
-            -- Find the meter value from position using reverse lookup
-            -- This is approximate since we don't have the exact reverse calibration
-            local approxMeterValue = meterPos  -- Simplified for now
-            
-            local db = meterToDB(approxMeterValue)
-            updateDisplay(db)
-            
-            log("Updated from meter notify (fallback): " .. formatDB(db))
-        end
-        
-    elseif key == "track_changed" then
+    -- CRITICAL FIX: Removed value_changed handler - each control receives OSC directly!
+    
+    if key == "track_changed" then
         -- Reset when track changes
         updateDisplay(-math.huge)
         log("Track changed - reset")
@@ -400,6 +395,8 @@ function init()
     
     -- Find parent group
     if not findParentGroup() then
+        -- Use notify for error logging too
+        root:notify("log_message", "dBFS: ERROR - No parent group found")
         print("[" .. os.date("%H:%M:%S") .. "] dBFS: ERROR - No parent group found")
         return
     end
@@ -407,7 +404,8 @@ function init()
     -- Initialize display
     updateDisplay(-math.huge)
     
-    log("Initialized - Direct OSC handling restored!")
+    log("Initialized - Direct OSC handling only!")
+    log("CRITICAL FIX: Removed value_changed fallback")
     log("Peak dBFS meter - accurately calibrated to match Ableton Live")
     log("Range: -∞ to +6 dBFS (32-bit float headroom)")
 end
