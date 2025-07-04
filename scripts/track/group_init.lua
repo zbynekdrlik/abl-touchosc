@@ -1,16 +1,17 @@
 -- TouchOSC Track Group Initialization Script
--- Version: 1.15.6
+-- Version: 1.15.7
 -- Fixed: Added back track discovery mechanism (was completely missing!)
 -- Optimized: Time-based activity monitoring instead of continuous updates
 -- Fixed: Schedule method not available - using time-based update checks
 -- Fixed: Parse tag for track info to support both regular and return tracks
 -- Added: Return track type support
+-- Changed: DEBUG = 1 for troubleshooting
 
 -- Version constant
-local VERSION = "1.15.6"
+local VERSION = "1.15.7"
 
 -- Debug mode (set to 1 for debug output)
-local DEBUG = 0
+local DEBUG = 1  -- Enable debug for troubleshooting
 
 -- Global debounce settings (in seconds)
 local GLOBAL_DEBOUNCE_TIME = 0.05    -- 50ms debounce for all controls
@@ -313,16 +314,20 @@ function onReceiveOSC(message, connections)
     if path == '/live/song/get/track_names' then
         -- Only process if it's from our configured connection
         if not connections[connectionIndex] then 
+            debug("Ignoring track names from wrong connection")
             return true
         end
         
         if needsRefresh then
             local arguments = message[2]
             
+            debug("Received track names, checking for: " .. trackName)
+            
             if arguments then
                 for i = 1, #arguments do
                     if arguments[i] and arguments[i].value then
                         local trackNameValue = arguments[i].value
+                        debug("Track " .. (i-1) .. ": " .. trackNameValue)
                         
                         -- EXACT match only for safety
                         if trackNameValue == trackName then
@@ -366,16 +371,20 @@ function onReceiveOSC(message, connections)
     if path == '/live/song/get/return_track_names' then
         -- Only process if it's from our configured connection
         if not connections[connectionIndex] then 
+            debug("Ignoring return track names from wrong connection")
             return true
         end
         
         if needsRefresh then
             local arguments = message[2]
             
+            debug("Received return track names, checking for: " .. trackName)
+            
             if arguments then
                 for i = 1, #arguments do
                     if arguments[i] and arguments[i].value then
                         local returnNameValue = arguments[i].value
+                        debug("Return " .. (i-1) .. ": " .. returnNameValue)
                         
                         -- EXACT match only for safety
                         if returnNameValue == trackName then
@@ -435,6 +444,8 @@ end
 -- ===========================
 
 function onReceiveNotify(key, value)
+    debug("Received notify: " .. key .. " = " .. tostring(value))
+    
     if key == "refresh" or key == "refresh_tracks" or key == "refresh_group" then
         refreshTrackMapping()
     elseif key == "clear_mapping" then
@@ -443,6 +454,7 @@ function onReceiveNotify(key, value)
         trackNumber = nil
         trackType = nil
         listenersActive = false
+        debug("Mapping cleared")
     elseif key == "value_changed" then
         -- Child control value changed
         recordActivity()
