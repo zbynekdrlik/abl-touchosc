@@ -1,20 +1,20 @@
 -- TouchOSC Global Refresh Button Script
--- Version: 1.4.0
--- Cleaned up with proper centralized logging
+-- Version: 1.5.0
+-- Performance optimized - removed centralized logging, scheduled updates
+-- Added DEBUG guards
 
-local SCRIPT_VERSION = "1.4.0"
+local SCRIPT_VERSION = "1.5.0"
+
+-- Debug mode (set to 1 for debug output)
+local DEBUG = 0
 
 -- Store last tap time to prevent double triggers
 local lastTapTime = 0
-local colorResetTime = 0
 local needsColorReset = false
 
--- Centralized logging through document script
-local function log(message)
-    -- Send to document script for logger text update
-    root:notify("log_message", "REFRESH BUTTON: " .. message)
-    
-    -- Also print to console for development/debugging
+-- Debug logging
+local function debug(message)
+    if DEBUG == 0 then return end
     print("[" .. os.date("%H:%M:%S") .. "] REFRESH BUTTON: " .. message)
 end
 
@@ -28,31 +28,31 @@ function onValueChanged(valueName)
         end
         lastTapTime = currentTime
         
-        -- Log the action
-        log("Refresh triggered")
+        debug("Refresh triggered")
         
         -- Visual feedback - bright yellow
         self.color = Color(1, 1, 0, 1)  -- Yellow while refreshing
         
-        -- Schedule color reset for later
-        colorResetTime = currentTime + 0.3  -- Hold yellow for 300ms
+        -- Schedule color reset using TouchOSC's schedule feature
         needsColorReset = true
+        self:schedule(300)  -- Schedule callback in 300ms
         
         -- Notify document script to refresh all groups
         root:notify("refresh_all_groups")
     end
 end
 
-function update()
-    -- Check if we need to reset color
-    if needsColorReset and os.clock() >= colorResetTime then
+function onSchedule()
+    -- Reset color after scheduled delay
+    if needsColorReset then
         self.color = Color(0.5, 0.5, 0.5, 1)  -- Back to gray
         needsColorReset = false
+        debug("Color reset after refresh")
     end
 end
 
 function init()
-    log("Script v" .. SCRIPT_VERSION .. " initialized")
+    print("[" .. os.date("%H:%M:%S") .. "] REFRESH BUTTON: Script v" .. SCRIPT_VERSION .. " loaded")
     
     -- Set button text
     if self.values and type(self.values) == "table" and self.values.text ~= nil then
@@ -61,4 +61,10 @@ function init()
     
     -- Set initial color
     self.color = Color(0.5, 0.5, 0.5, 1)  -- Gray
+    
+    if DEBUG == 1 then
+        debug("Initialized")
+    end
 end
+
+init()
