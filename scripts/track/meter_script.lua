@@ -1,13 +1,17 @@
 -- TouchOSC Meter Script with Multi-Connection Support
--- Version: 2.3.2
--- Performance optimized: Removed centralized logging, debug prints only when DEBUG=1
+-- Version: 2.4.0
+-- Performance optimized: Reduced update frequency with scheduled updates
+-- Removed: Centralized logging, debug prints only when DEBUG=1
 -- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
 
-local VERSION = "2.3.2"
+local VERSION = "2.4.0"
 
 -- DEBUG MODE
 local DEBUG = 0  -- Set to 1 to see meter values and conversions in console
+
+-- PERFORMANCE SETTINGS
+local UPDATE_INTERVAL = 50  -- Update meter every 50ms (20Hz) instead of 60-120Hz
 
 -- COLOR THRESHOLDS (in dB) - PRESERVED FROM ORIGINAL
 local COLOR_THRESHOLD_YELLOW = -12    -- Above this = yellow (caution)
@@ -21,6 +25,10 @@ local COLOR_RED = {1.0, 0.0, 0.0, 1.0}       -- Clipping level
 -- Smooth color transitions - PRESERVED FROM ORIGINAL
 local current_color = {COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4]}
 local color_smoothing = 0.3  -- Smoothing factor (0-1, higher = faster)
+
+-- Performance optimization: Store pending meter update
+local pending_meter_value = nil
+local pending_meter_color = nil
 
 -- HARDCODED CALIBRATION BASED ON YOUR EXACT FADER DATA - PRESERVED
 local CALIBRATION_POINTS = {
@@ -210,6 +218,24 @@ function smoothColor(target_color)
 end
 
 -- ===========================
+-- PERFORMANCE OPTIMIZED UPDATE
+-- ===========================
+
+-- Scheduled update function - runs at controlled interval
+function onSchedule()
+  -- Apply pending meter update if available
+  if pending_meter_value then
+    self.values.x = pending_meter_value
+    pending_meter_value = nil
+  end
+  
+  if pending_meter_color then
+    self.color = pending_meter_color
+    pending_meter_color = nil
+  end
+end
+
+-- ===========================
 -- OSC HANDLING WITH MULTI-CONNECTION
 -- ===========================
 
@@ -259,15 +285,15 @@ function onReceiveOSC(message, connections)
   -- Convert AbletonOSC normalized value to fader position
   local fader_position = abletonToFaderPosition(normalized_meter)
   
-  -- Update meter position
-  self.values.x = fader_position
+  -- PERFORMANCE OPTIMIZATION: Store pending update instead of immediate update
+  pending_meter_value = fader_position
   
   -- Get target color based on fader position
   local target_color = getColorForLevel(fader_position)
   
   -- Apply smoothed color transition
   local smoothed = smoothColor(target_color)
-  self.color = Color(smoothed[1], smoothed[2], smoothed[3], smoothed[4])
+  pending_meter_color = Color(smoothed[1], smoothed[2], smoothed[3], smoothed[4])
   
   -- Debug logging
   debugPrint("=== METER UPDATE ===")
@@ -292,10 +318,14 @@ function onReceiveNotify(key, value)
         self.values.x = 0
         current_color = {COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4]}
         self.color = Color(current_color[1], current_color[2], current_color[3], current_color[4])
+        pending_meter_value = nil
+        pending_meter_color = nil
         debugPrint("Track changed - reset meter")
     elseif key == "track_unmapped" then
         -- Disable meter when track is unmapped
         self.values.x = 0
+        pending_meter_value = nil
+        pending_meter_color = nil
         debugPrint("Track unmapped - disabled meter")
     end
 end
@@ -311,7 +341,11 @@ function init()
   -- Initialize meter at minimum
   self.values.x = 0
   
+  -- PERFORMANCE OPTIMIZATION: Schedule updates at controlled interval
+  self:schedule(UPDATE_INTERVAL)
+  
   debugPrint("=== METER SCRIPT WITH MULTI-CONNECTION ===")
+  debugPrint("Performance optimized: " .. UPDATE_INTERVAL .. "ms update interval")
   debugPrint("Using hardcoded calibration points from your tests")
   debugPrint("Multi-connection routing enabled")
   
