@@ -1,5 +1,6 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.5.2
+-- Version: 2.5.3
+-- Fixed: Prevent ANY position changes when track is not mapped
 -- Performance optimized: Removed centralized logging, debug prints only when DEBUG=1
 -- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
@@ -7,7 +8,7 @@
 -- Preserved: ALL original fader functionality
 
 -- Version constant
-local VERSION = "2.5.2"
+local VERSION = "2.5.3"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -84,6 +85,9 @@ local double_tap_start_position = 0
 
 -- Performance optimization: Schedule state for sync checking
 local needs_sync_check = false
+
+-- CRITICAL: Track whether we have a valid position from Ableton
+local has_valid_position = false
 
 -- ===========================
 -- DEBUG PRINT FUNCTION
@@ -506,6 +510,9 @@ function onReceiveOSC(message, connections)
       last_osc_x = remote_audio_value
     end
     
+    -- Mark that we have received a valid position from Ableton
+    has_valid_position = true
+    
     -- Only update if not touching to prevent jumps
     if not self.values.touch then
       -- Don't update if we're in the middle of a sync delay
@@ -643,10 +650,16 @@ function onSchedule()
 end
 
 function onValueChanged()
-  -- Safety check: only process if track is mapped
+  -- CRITICAL FIX: Prevent ANY value changes when track is not mapped or no valid position
   if not isTrackMapped() then
-    -- FIXED: Don't change fader position - just return
-    debugPrint("Track not mapped - ignoring value change")
+    debugPrint("Track not mapped - ignoring value change completely")
+    return
+  end
+  
+  -- CRITICAL FIX: If we haven't received a valid position from Ableton yet, don't process changes
+  -- This prevents the fader from jumping to default positions on startup
+  if not has_valid_position then
+    debugPrint("No valid position from Ableton yet - ignoring value change")
     return
   end
   
@@ -833,14 +846,16 @@ end
 function onReceiveNotify(key, value)
   -- Parent might notify us of track changes
   if key == "track_changed" then
-    -- FIXED: Don't change fader position - just reset internal state
+    -- Track changed but might still be valid - wait for OSC data
     touched = false
     synced = true
     last_position = self.values.x  -- Keep current position
-    debugPrint("Track changed - state reset, position preserved")
+    -- Don't reset has_valid_position yet - wait for new OSC data
+    debugPrint("Track changed - state reset, position preserved, waiting for OSC")
   elseif key == "track_unmapped" then
-    -- FIXED: Don't change fader position
-    debugPrint("Track unmapped - fader position preserved")
+    -- Track is definitely unmapped - mark as invalid
+    has_valid_position = false
+    debugPrint("Track unmapped - fader frozen at current position")
   end
 end
 
@@ -852,6 +867,9 @@ function init()
   -- PERFORMANCE OPTIMIZATION: Schedule sync checking at 50ms intervals
   -- Only runs when needed (needs_sync_check flag)
   self:schedule(50)
+  
+  -- CRITICAL: Don't assume we have a valid position on startup
+  has_valid_position = false
   
   debugPrint("=== PROFESSIONAL FADER WITH IMMEDIATE 0.1dB RESPONSE ===")
   debugPrint("DEBUG MODE:", DEBUG == 1 and "ENABLED" or "DISABLED")
@@ -886,6 +904,8 @@ function init()
   
   -- REMOVED: Initial color setting
   -- Let the group script handle interactivity
+  
+  debugPrint("Waiting for valid position from Ableton...")
 end
 
 init()
