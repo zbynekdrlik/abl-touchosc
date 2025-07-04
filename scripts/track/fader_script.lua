@@ -1,5 +1,6 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.5.3
+-- Version: 2.5.4
+-- Fixed: Schedule method not available - using time-based update checks
 -- Fixed: Prevent ANY position changes when track is not mapped
 -- Performance optimized: Removed centralized logging, debug prints only when DEBUG=1
 -- Fixed: Parse parent tag for track info instead of accessing properties
@@ -8,7 +9,7 @@
 -- Preserved: ALL original fader functionality
 
 -- Version constant
-local VERSION = "2.5.3"
+local VERSION = "2.5.4"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -83,7 +84,9 @@ local double_tap_animation_active = false
 local double_tap_target_position = 0
 local double_tap_start_position = 0
 
--- Performance optimization: Schedule state for sync checking
+-- Performance optimization: Time-based sync checking
+local last_sync_check = 0
+local SYNC_CHECK_INTERVAL = 50  -- Check every 50ms
 local needs_sync_check = false
 
 -- CRITICAL: Track whether we have a valid position from Ableton
@@ -541,10 +544,7 @@ end
 
 -- PERFORMANCE OPTIMIZED: Only run expensive update logic when needed
 function update()
-  -- Skip update entirely if no sync or animation is needed
-  if synced and not double_tap_animation_active then
-    return
-  end
+  local now = getMillis()
   
   -- Handle double-tap animation (only if enabled)
   if ENABLE_DOUBLE_TAP and double_tap_animation_active then
@@ -620,31 +620,30 @@ function update()
           debugPrint("Current:", string.format("%.1f%%", proposed_new_position * 100), "Target:", string.format("%.1f%%", double_tap_target_position * 100))
       end
     end
+    return  -- Skip other update logic during animation
+  end
+  
+  -- Time-based sync checking (replaces scheduled callback)
+  if needs_sync_check and (now - last_sync_check) >= SYNC_CHECK_INTERVAL then
+    last_sync_check = now
+    
+    if touched and not self.values.touch then
+      last = now
+      touched = false
+      synced = false
+      needs_sync_check = false
+      debugPrint("*** TOUCH RELEASED - Starting sync delay ***")
+    end
   end
   
   -- Handle sync delay only when needed
   if not synced and not self.values.touch and not double_tap_animation_active then
-    local now = getMillis()
     if (now - last > delay) then
       debugPrint("*** SYNC DELAY COMPLETE - Updating to OSC position ***")
       debugPrint("Jumping from:", string.format("%.1f%%", self.values.x * 100), "to:", string.format("%.1f%%", last_osc_x * 100))
       self.values.x = last_osc_x
       last_position = last_osc_x
       synced = true
-    end
-  end
-end
-
--- Schedule check for touch release
-function onSchedule()
-  -- Only process if we might need to start sync
-  if needs_sync_check then
-    if touched and not self.values.touch then
-      last = getMillis()
-      touched = false
-      synced = false
-      needs_sync_check = false
-      debugPrint("*** TOUCH RELEASED - Starting sync delay ***")
     end
   end
 end
@@ -862,11 +861,7 @@ end
 -- VERIFICATION
 function init()
   -- VERSION LOGGING - Always log version at startup
-  print("Fader v" .. VERSION)
-  
-  -- PERFORMANCE OPTIMIZATION: Schedule sync checking at 50ms intervals
-  -- Only runs when needed (needs_sync_check flag)
-  self:schedule(50)
+  print("[" .. os.date("%H:%M:%S") .. "] CONTROL(fader) Fader v" .. VERSION)
   
   -- CRITICAL: Don't assume we have a valid position on startup
   has_valid_position = false
