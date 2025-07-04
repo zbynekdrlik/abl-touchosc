@@ -1,13 +1,11 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.6.2
--- Fixed: Don't set initial fader position - preserve existing position
+-- Version: 2.6.3
+-- Fixed: Boolean concat error in debug logging
+-- Fixed: Don't send volume changes during onValueChanged - breaks feedback loop
 -- Based on main branch v2.4.1 with performance optimizations
--- Fixed: Use correct onValueChanged() signature without parameters
--- Removed: Send control complexity that was breaking volume control
--- Optimized: Event-driven updates, removed continuous update() polling
 
 -- Version constant
-local VERSION = "2.6.2"
+local VERSION = "2.6.3"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -50,10 +48,14 @@ local DOUBLE_TAP_ANIMATION_SPEED = 0.005 -- Speed of animated movement (0.005 un
 local use_log_curve = true
 local log_exponent = 0.515
 
+-- OSC SYNC SETTINGS
+local delay = 1000                       -- Delay before syncing to OSC position after touch release
+
 -- State variables (do not modify)
 local touched = false
 local last_osc_x = 0
 local last_osc_audio = 0
+local last = 0 
 local synced = true
 local last_raw_position = 0
 local touch_session_active = false
@@ -78,11 +80,6 @@ local double_tap_animation_active = false
 local double_tap_target_position = 0
 local double_tap_start_position = 0
 
--- Performance optimization: Track if we need updates
-local needs_update = false
-local last_sync_request_time = 0
-local SYNC_REQUEST_INTERVAL = 5.0  -- Request position every 5 seconds when idle
-
 -- ===========================
 -- CENTRALIZED LOGGING
 -- ===========================
@@ -106,7 +103,11 @@ end
 function debugPrint(...)
   if DEBUG == 1 then
     local args = {...}
-    local msg = table.concat(args, " ")
+    local msg = ""
+    for i, v in ipairs(args) do
+        if i > 1 then msg = msg .. " " end
+        msg = msg .. tostring(v)  -- Convert everything to string, including booleans
+    end
     log(msg)
   end
 end
@@ -446,7 +447,7 @@ function applyFirstMovementScaling(raw_position, is_touching)
         debugPrint("Scaled movement:", string.format("%.4f", scaled_delta))
         debugPrint("Scale factor:", string.format("%.2f", scale_factor), "(", string.format("%.0f", scale_factor * 100), "%)")
         debugPrint("Progress:", string.format("%.1f", progress * 100), "%")
-        debugPrint("In linear range:", in_linear_range)
+        debugPrint("In linear range:", tostring(in_linear_range))  -- Convert boolean to string
         debugPrint("Movements remaining:", SCALED_MOVEMENTS_COUNT - movements_processed)
         
         last_position = new_position
@@ -461,6 +462,13 @@ function applyFirstMovementScaling(raw_position, is_touching)
   end
   
   return raw_position
+end
+
+-- MINIMAL DEAD ZONES - REMOVED TO ALLOW DOUBLE-TAP AT -INF
+function isInDeadZone(audio_value)
+  -- This function is modified to always return false,
+  -- effectively removing any "dead zone" that would disable double-tap.
+  return false, "No dead zone (double-tap enabled everywhere)" 
 end
 
 -- ===========================
@@ -504,10 +512,14 @@ function onReceiveOSC(message, connections)
     
     -- Only update if not touching to prevent jumps
     if not self.values.touch then
-      -- Update fader position
-      self.values.x = last_osc_x
-      last_position = last_osc_x
-      debugPrint("*** OSC UPDATE - Fader:", string.format("%.1f%%", last_osc_x * 100), "Audio:", string.format("%.3f", remote_audio_value))
+      -- Don't update if we're in the middle of a sync delay
+      if synced then
+        self.values.x = last_osc_x
+        last_position = last_osc_x
+        debugPrint("*** OSC UPDATE - Fader:", string.format("%.1f%%", last_osc_x * 100), "Audio:", string.format("%.3f", remote_audio_value))
+      else
+        debugPrint("*** OSC UPDATE DURING SYNC DELAY - Storing for later ***")
+      end
     else
       touched = true
       debugPrint("*** OSC RECEIVED WHILE TOUCHING - Ignoring to prevent jump ***")
@@ -524,31 +536,13 @@ local function sendOSCRouted(path, track, volume)
   sendOSC(path, track, volume, connections)
 end
 
--- Request current position (for periodic sync)
-local function requestCurrentPosition()
-  local trackNumber, trackType = getTrackInfo()
-  if not trackNumber then
-    return
-  end
-  
-  local path = trackType == "return" and '/live/return/get/volume' or '/live/track/get/volume'
-  sendOSCRouted(path, trackNumber)
-  debugPrint("Requested current position from Ableton")
-end
-
 function update()
-  -- Only run update if needed (performance optimization)
-  if not needs_update then
-    return
-  end
-  
   -- Handle double-tap animation (only if enabled)
   if ENABLE_DOUBLE_TAP and double_tap_animation_active then
     if self.values.touch then
       -- Touch detected - cancel animation
       double_tap_animation_active = false
       debugPrint("*** DOUBLE-TAP ANIMATION CANCELLED - Touch detected ***")
-      needs_update = false
     else
       -- Continue animation
       local current_pos = self.values.x
@@ -574,7 +568,6 @@ function update()
             local path = trackType == "return" and '/live/return/set/volume' or '/live/track/set/volume'
             sendOSCRouted(path, trackNumber, final_audio)
           end
-          needs_update = false
           return
       end
 
@@ -595,7 +588,6 @@ function update()
             local path = trackType == "return" and '/live/return/set/volume' or '/live/track/set/volume'
             sendOSCRouted(path, trackNumber, final_audio)
           end
-          needs_update = false
       else
           -- Move towards target with constant speed
           self.values.x = proposed_new_position
@@ -621,21 +613,41 @@ function update()
     end
   end
   
-  -- Periodic position sync when idle (performance optimization)
-  if not self.values.touch and not double_tap_animation_active then
-    local now = os.clock()
-    if now - last_sync_request_time > SYNC_REQUEST_INTERVAL then
-      requestCurrentPosition()
-      last_sync_request_time = now
-      needs_update = false  -- No more updates needed until something changes
+  -- Original sync delay code
+  if touched and not self.values.touch then
+    last = getMillis()
+    touched = false
+    synced = false
+    debugPrint("*** TOUCH RELEASED - Starting sync delay ***")
+  end
+  
+  -- Only sync if not currently touching AND not synced AND not animating
+  if not synced and not self.values.touch and not double_tap_animation_active then
+    local now = getMillis()
+    if (now - last > delay) then
+      debugPrint("*** SYNC DELAY COMPLETE - Updating to OSC position ***")
+      debugPrint("Jumping from:", string.format("%.1f%%", self.values.x * 100), "to:", string.format("%.1f%%", last_osc_x * 100))
+      self.values.x = last_osc_x
+      last_position = last_osc_x
+      synced = true
     end
   end
+  
+  -- Reset sync if touching again
+  if self.values.touch and not synced then
+    synced = true
+    debugPrint("*** Touch detected during sync delay - cancelling sync ***")
+  end
+  
+  -- REMOVED: Color changing code
+  -- The group script handles enabling/disabling interactivity
+  -- We should NOT change colors here
 end
 
 function onValueChanged()
   -- Safety check: only process if track is mapped
   if not isTrackMapped() then
-    -- Don't change fader position - just return
+    -- FIXED: Don't change fader position - just return
     debugPrint("Track not mapped - ignoring value change")
     return
   end
@@ -734,7 +746,6 @@ function onValueChanged()
     touch_start_time = current_time
     movement_detected = false
     touch_event_count = 1
-    needs_update = false  -- No updates needed while touching
     
     -- Cancel any ongoing double-tap animation (if enabled)
     if ENABLE_DOUBLE_TAP and double_tap_animation_active then
@@ -743,13 +754,6 @@ function onValueChanged()
     end
     
     debugPrint("*** TOUCH START - Position:", string.format("%.1f%%", touch_start_position * 100), formatDB(value2db(linearToLog(touch_start_position))))
-    
-    -- Send touch notification
-    if trackNumber then
-      local touchPath = trackType == "return" and '/live/return/set/volume/touched' or '/live/track/set/volume/touched'
-      sendOSCRouted(touchPath, trackNumber, true)
-      debugPrint("Sent touch ON notification")
-    end
     
   elseif self.values.touch and touch_started then
     local movement = math.abs(scaled_fader_position - touch_start_position)
@@ -769,17 +773,6 @@ function onValueChanged()
     debugPrint("Total movement:", string.format("%.4f", total_movement))
     debugPrint("Touch duration:", touch_duration, "ms")
     
-    -- Send touch off notification
-    if trackNumber then
-      local touchPath = trackType == "return" and '/live/return/set/volume/touched' or '/live/track/set/volume/touched'
-      sendOSCRouted(touchPath, trackNumber, false)
-      debugPrint("Sent touch OFF notification")
-    end
-    
-    -- Request current position after release
-    requestCurrentPosition()
-    last_sync_request_time = os.clock()
-    
     local is_tap = (total_movement < 0.01) and 
                    (touch_duration < 200) and 
                    (not movement_detected or time_since_movement > 100)
@@ -791,6 +784,9 @@ function onValueChanged()
         last_tap_time = 0
         return
       end
+      
+      -- CHECK MINIMAL DEAD ZONES (now modified to always allow double-tap)
+      local in_dead_zone, zone_reason = isInDeadZone(audio_value)
       
       debugPrint("*** VALID TAP DETECTED ***")
       debugPrint("Tap duration:", touch_duration, "ms")
@@ -810,7 +806,6 @@ function onValueChanged()
         
         double_tap_start_position = self.values.x
         double_tap_animation_active = true
-        needs_update = true  -- Enable update for animation
         
         debugPrint("*** STARTING ANIMATION TO 0dB ***")
         debugPrint("From:", string.format("%.1f%%", double_tap_start_position * 100), formatDB(db_value))
@@ -832,16 +827,13 @@ end
 function onReceiveNotify(key, value)
   -- Parent might notify us of track changes
   if key == "track_changed" then
-    -- Don't change fader position - just reset internal state
+    -- FIXED: Don't change fader position - just reset internal state
     touched = false
     synced = true
     last_position = self.values.x  -- Keep current position
     debugPrint("Track changed - state reset, position preserved")
-    -- Request new position
-    requestCurrentPosition()
-    last_sync_request_time = os.clock()
   elseif key == "track_unmapped" then
-    -- Don't change fader position
+    -- FIXED: Don't change fader position
     debugPrint("Track unmapped - fader position preserved")
   end
 end
@@ -869,12 +861,14 @@ function init()
     debugPrint("- Linear range:", formatDB(value2db(LINEAR_RANGE_START)), "to", formatDB(value2db(LINEAR_RANGE_END)))
     debugPrint("- Extra precision scaling (85%) applied in linear range")
   end
+  debugPrint("Dead zones (double-tap disabled):")
+  debugPrint("- NONE (Double-tap enabled everywhere including -inf and +6dB)") -- Reflects change
   debugPrint("Double-tap feature:", ENABLE_DOUBLE_TAP and "ENABLED" or "DISABLED")
   if ENABLE_DOUBLE_TAP then
     debugPrint("Double-tap timing:")
     debugPrint("- Maximum time between taps:", DOUBLE_TAP_MAX_TIME, "ms")
     debugPrint("- Minimum time between taps:", DOUBLE_TAP_MIN_TIME, "ms")
-    debugPrint("- Animation speed:", DOUBLE_TAP_ANIMATION_SPEED * 100, "% of full range per update (constant speed)")
+    debugPrint("- Animation speed:", DOUBLE_TAP_ANIMATION_SPEED * 100, "% of full range per update (constant speed)") -- Reflects change in interpretation
   end
   debugPrint("")
   debugPrint("Curve verification:")
@@ -885,13 +879,8 @@ function init()
   -- Initialize scaling variables - preserve current position
   last_position = self.values.x or 0
   
-  -- CRITICAL FIX: Don't set initial position - preserve whatever the fader has
-  -- The main branch NEVER sets self.values.x in init()
-  -- Setting it causes the fader to send that position to Ableton!
-  
-  -- Request initial position
-  requestCurrentPosition()
-  last_sync_request_time = os.clock()
+  -- REMOVED: Initial color setting
+  -- Let the group script handle interactivity
 end
 
 init()
