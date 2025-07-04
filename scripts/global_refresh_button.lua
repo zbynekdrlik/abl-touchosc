@@ -1,9 +1,10 @@
 -- TouchOSC Global Refresh Button Script
--- Version: 1.5.0
--- Performance optimized - removed centralized logging, scheduled updates
+-- Version: 1.5.1
+-- Fixed: Schedule method not available - using time-based update checks
+-- Performance optimized - removed centralized logging, time-based updates
 -- Added DEBUG guards
 
-local SCRIPT_VERSION = "1.5.0"
+local SCRIPT_VERSION = "1.5.1"
 
 -- Debug mode (set to 1 for debug output)
 local DEBUG = 0
@@ -11,6 +12,7 @@ local DEBUG = 0
 -- Store last tap time to prevent double triggers
 local lastTapTime = 0
 local needsColorReset = false
+local colorResetTime = 0
 
 -- Debug logging
 local function debug(message)
@@ -33,21 +35,24 @@ function onValueChanged(valueName)
         -- Visual feedback - bright yellow
         self.color = Color(1, 1, 0, 1)  -- Yellow while refreshing
         
-        -- Schedule color reset using TouchOSC's schedule feature
+        -- Schedule color reset using time tracking
         needsColorReset = true
-        self:schedule(300)  -- Schedule callback in 300ms
+        colorResetTime = currentTime + 0.3  -- Reset color after 300ms
         
         -- Notify document script to refresh all groups
         root:notify("refresh_all_groups")
     end
 end
 
-function onSchedule()
-    -- Reset color after scheduled delay
+function update()
+    -- Check if we need to reset color
     if needsColorReset then
-        self.color = Color(0.5, 0.5, 0.5, 1)  -- Back to gray
-        needsColorReset = false
-        debug("Color reset after refresh")
+        local currentTime = os.clock()
+        if currentTime >= colorResetTime then
+            self.color = Color(0.5, 0.5, 0.5, 1)  -- Back to gray
+            needsColorReset = false
+            debug("Color reset after refresh")
+        end
     end
 end
 
