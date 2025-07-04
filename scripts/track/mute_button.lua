@@ -1,19 +1,20 @@
 -- mute_button.lua
--- Version: 2.0.3
+-- Version: 2.0.4
+-- Performance: Added early return debug guard for zero overhead when DEBUG != 1
 -- Fixed: Removed automatic state reset when track unmapped - maintain last known state
 -- Fixed: Added notify handler to request state when track changes
--- Fixed: Set DEBUG = 1 for troubleshooting
 -- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
 
-local VERSION = "2.0.3"
+local VERSION = "2.0.4"
 
 -- Debug mode (set to 1 for debug output)
-local DEBUG = 1  -- Enable debug for troubleshooting
+local DEBUG = 0  -- Set to 0 for production (zero overhead)
 
 -- Debug logging
 local function debug(message)
-    if DEBUG == 0 then return end
+    -- Performance guard: early return for zero overhead when DEBUG != 1
+    if DEBUG ~= 1 then return end
     
     local context = "MUTE"
     if self.parent and self.parent.name then
@@ -80,9 +81,7 @@ local function requestMuteState()
         local path = trackType == "return" and "/live/return/get/mute" or "/live/track/get/mute"
         sendOSC(path, trackNumber, connections)
         
-        if DEBUG == 1 then
-            debug("Requested mute state for " .. trackType .. " track " .. trackNumber)
-        end
+        debug("Requested mute state for " .. trackType .. " track " .. trackNumber)
     end
 end
 
@@ -121,9 +120,7 @@ function onReceiveOSC(message, connections)
                 self.values.x = 1  -- Unmuted = released
             end
             
-            if DEBUG == 1 then
-                debug("Received mute state: " .. (arguments[2].value and "MUTED" or "UNMUTED"))
-            end
+            debug("Received mute state: " .. (arguments[2].value and "MUTED" or "UNMUTED"))
         end
     end
     
@@ -147,33 +144,25 @@ function onValueChanged(key)
             
             sendOSC(path, trackNumber, muteState, connections)
             
-            if DEBUG == 1 then
-                debug("Sent mute " .. (muteState and "ON" or "OFF") .. " for " .. trackType .. " track " .. trackNumber)
-            end
+            debug("Sent mute " .. (muteState and "ON" or "OFF") .. " for " .. trackType .. " track " .. trackNumber)
         end
     end
 end
 
 -- Handle notifications from parent group
 function onReceiveNotify(key, value)
-    if DEBUG == 1 then
-        debug("Received notify: " .. key .. " = " .. tostring(value))
-    end
+    debug("Received notify: " .. key .. " = " .. tostring(value))
     
     if key == "track_changed" then
         -- Request mute state when track changes
         requestMuteState()
     elseif key == "track_type" then
         -- Track type changed, might need to update
-        if DEBUG == 1 then
-            debug("Track type changed to: " .. tostring(value))
-        end
+        debug("Track type changed to: " .. tostring(value))
     elseif key == "track_unmapped" then
         -- DO NOT CHANGE STATE! Just log that track was unmapped
         -- The button should maintain its last known state until Ableton tells us otherwise
-        if DEBUG == 1 then
-            debug("Track unmapped - maintaining current state")
-        end
+        debug("Track unmapped - maintaining current state")
     end
 end
 
@@ -185,7 +174,5 @@ local trackNumber, trackType = getTrackInfo()
 if trackNumber then
     requestMuteState()
 else
-    if DEBUG == 1 then
-        debug("No track mapped yet - waiting for parent notification")
-    end
+    debug("No track mapped yet - waiting for parent notification")
 end
