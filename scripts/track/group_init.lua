@@ -1,5 +1,6 @@
 -- TouchOSC Track Group Initialization Script
 -- Version: 1.15.4
+-- Fixed: Removed 'enabled' property checks - TouchOSC doesn't have this property
 -- Fixed: Use 'locked' property instead of 'enabled' for controls
 -- Fixed: Removed child control handler modification that caused errors
 -- Fixed: Schedule method not available - using time-based update checks
@@ -129,7 +130,7 @@ local function updateTrackMapping()
             
             -- Enable all child controls (using 'locked' property)
             for _, control in ipairs(childControls) do
-                if control.name ~= "mute" and control.values then  -- Mute button visibility controlled separately
+                if control.name ~= "mute" and control.values and control.values.locked ~= nil then
                     control.values.locked = false  -- Unlock to enable
                 end
             end
@@ -142,7 +143,7 @@ local function updateTrackMapping()
             
             -- Disable interactive controls (using 'locked' property)
             for _, control in ipairs(childControls) do
-                if (control.name == "fader" or control.name == "pan") and control.values then
+                if (control.name == "fader" or control.name == "pan") and control.values and control.values.locked ~= nil then
                     control.values.locked = true  -- Lock to disable
                 end
             end
@@ -333,13 +334,13 @@ function init()
     -- Set initial enabled state (using 'locked' property)
     if trackNumber then
         for _, control in ipairs(childControls) do
-            if control.name ~= "mute" and control.values then
+            if control.name ~= "mute" and control.values and control.values.locked ~= nil then
                 control.values.locked = false  -- Unlock to enable
             end
         end
     else
         for _, control in ipairs(childControls) do
-            if (control.name == "fader" or control.name == "pan") and control.values then
+            if (control.name == "fader" or control.name == "pan") and control.values and control.values.locked ~= nil then
                 control.values.locked = true  -- Lock to disable
             end
         end
