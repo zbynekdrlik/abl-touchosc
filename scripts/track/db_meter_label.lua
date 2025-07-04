@@ -1,13 +1,12 @@
 -- TouchOSC dB Meter Label Display
--- Version: 2.5.1
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Added: Return track support using parent's trackType
+-- Version: 2.6.0
+-- Performance optimized - removed centralized logging, removed empty update()
 -- Shows actual peak dBFS level from track output meter
 -- Accurately calibrated to match Ableton Live's display
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "2.5.1"
+local VERSION = "2.6.0"
 
 -- State variables
 local lastDB = -70.0
@@ -15,6 +14,21 @@ local lastMeterValue = 0
 
 -- Debug mode
 local DEBUG = 0  -- Set to 1 for detailed logging
+
+-- ===========================
+-- DEBUG LOGGING
+-- ===========================
+
+local function debug(message)
+    if DEBUG == 0 then return end
+    
+    local context = "dBFS"
+    if self.parent and self.parent.name then
+        context = "dBFS(" .. self.parent.name .. ")"
+    end
+    
+    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
+end
 
 -- ===========================
 -- METER CALIBRATION TABLE
@@ -50,30 +64,6 @@ local METER_DB_CALIBRATION = {
     {0.980, 4.0},         
     {1.000, 6.0},         -- Verified (max headroom)
 }
-
--- ===========================
--- CENTRALIZED LOGGING
--- ===========================
-
-local function log(message)
-    -- Get parent name for context
-    local context = "dBFS"
-    if self.parent and self.parent.name then
-        context = "dBFS(" .. self.parent.name .. ")"
-    end
-    
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development
-    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
-end
-
-local function debugLog(message)
-    if DEBUG == 1 then
-        log("[DEBUG] " .. message)
-    end
-end
 
 -- ===========================
 -- CONNECTION HELPERS
@@ -175,8 +165,10 @@ function meterToDB(meter_normalized)
                 local interpolation_ratio = meter_offset / meter_range
                 local db_value = point1[2] + (db_range * interpolation_ratio)
                 
-                debugLog(string.format("Meter: %.4f → Between %.4f (%.1f dB) and %.4f (%.1f dB) → %.1f dB", 
-                    meter_normalized, point1[1], point1[2], point2[1], point2[2], db_value))
+                if DEBUG == 1 then
+                    debug(string.format("Meter: %.4f → Between %.4f (%.1f dB) and %.4f (%.1f dB) → %.1f dB", 
+                        meter_normalized, point1[1], point1[2], point2[1], point2[2], db_value))
+                end
                 
                 return db_value
             end
@@ -260,36 +252,30 @@ function onReceiveOSC(message, connections)
     self.values.text = formatDB(db_value)
     
     -- Enhanced logging for debugging
-    local shouldLog = false
-    
-    -- Always log if value changed significantly
-    if not lastDB or math.abs(db_value - lastDB) > 1.0 then
-        shouldLog = true
-    end
-    
-    -- Log clipping
-    if db_value > 0 and (not lastDB or lastDB <= 0) then
-        shouldLog = true
-    end
-    
-    if shouldLog then
-        log(string.format("%s track %d: %s (meter: %.4f)%s", 
-            trackType, trackNumber, formatDB(db_value), meter_level,
-            db_value > 0 and " [CLIPPING]" or ""))
+    if DEBUG == 1 then
+        local shouldLog = false
+        
+        -- Always log if value changed significantly
+        if not lastDB or math.abs(db_value - lastDB) > 1.0 then
+            shouldLog = true
+        end
+        
+        -- Log clipping
+        if db_value > 0 and (not lastDB or lastDB <= 0) then
+            shouldLog = true
+        end
+        
+        if shouldLog then
+            debug(string.format("%s track %d: %s (meter: %.4f)%s", 
+                trackType, trackNumber, formatDB(db_value), meter_level,
+                db_value > 0 and " [CLIPPING]" or ""))
+        end
     end
     
     lastDB = db_value
     lastMeterValue = meter_level
     
     return false  -- Don't block other receivers
-end
-
--- ===========================
--- UPDATE FUNCTION
--- ===========================
-
-function update()
-    -- No update needed - display updates on OSC messages
 end
 
 -- ===========================
@@ -303,13 +289,13 @@ function onReceiveNotify(key, value)
         self.values.text = "-∞ dBFS"
         lastDB = -math.huge
         lastMeterValue = 0
-        log("Track changed - display reset")
+        debug("Track changed - display reset")
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
         self.values.text = "-"
         lastDB = nil
         lastMeterValue = nil
-        log("Track unmapped - display shows dash")
+        debug("Track unmapped - display shows dash")
     elseif key == "control_enabled" then
         -- Show/hide based on track mapping status
         self.values.visible = value
@@ -322,7 +308,7 @@ end
 
 function init()
     -- Log version
-    log("Script v" .. VERSION .. " loaded")
+    print("[" .. os.date("%H:%M:%S") .. "] dBFS: Script v" .. VERSION .. " loaded")
     
     -- Set initial text
     if isTrackMapped() then
@@ -331,15 +317,11 @@ function init()
         self.values.text = "-"
     end
     
-    -- Log parent info
-    if self.parent and self.parent.name then
-        log("Initialized for parent: " .. self.parent.name)
-        log("Peak dBFS meter - accurately calibrated to match Ableton Live")
-        log("Range: -∞ to +6 dBFS (32-bit float headroom)")
-    end
-    
     if DEBUG == 1 then
-        log("DEBUG MODE ENABLED")
+        debug("Initialized for parent: " .. (self.parent and self.parent.name or "unknown"))
+        debug("Peak dBFS meter - accurately calibrated to match Ableton Live")
+        debug("Range: -∞ to +6 dBFS (32-bit float headroom)")
+        debug("DEBUG MODE ENABLED")
     end
 end
 
