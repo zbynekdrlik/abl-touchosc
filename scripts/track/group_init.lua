@@ -1,9 +1,9 @@
 -- TouchOSC Track Group Controller with Multi-Connection Support
--- Version: 1.16.1
--- Fixed: Version logging respects DEBUG flag
+-- Version: 1.17.0
+-- Fixed: Removed value_changed forwarding to eliminate notification chains
 -- Added: Return track support with auto-detection
 
-local VERSION = "1.16.1"
+local VERSION = "1.17.0"
 
 -- DEBUG MODE
 local DEBUG = 0  -- Set to 1 to see detailed logs
@@ -366,7 +366,7 @@ function onReceiveNotify(key, value)
         end
         
     elseif key == "child_touched" then
-        -- Forward to other controls
+        -- Forward touch notifications to siblings (these are lightweight)
         for name, control in pairs(childControls) do
             if name ~= value then  -- Don't notify the sender
                 control:notify("sibling_touched", value)
@@ -374,18 +374,16 @@ function onReceiveNotify(key, value)
         end
         
     elseif key == "child_released" then
-        -- Forward to other controls
+        -- Forward release notifications to siblings (these are lightweight)
         for name, control in pairs(childControls) do
             if name ~= value then  -- Don't notify the sender
                 control:notify("sibling_released", value)
             end
         end
         
-    elseif key == "value_changed" then
-        -- Forward value changes to relevant controls
-        for name, control in pairs(childControls) do
-            control:notify("sibling_value_changed", value)
-        end
+    -- CRITICAL FIX: REMOVED value_changed forwarding!
+    -- Each control receives its own OSC messages directly
+    -- No need for notification chains that cause lag
     end
 end
 
@@ -422,6 +420,7 @@ function init()
     setControlsEnabled(false)
     
     log("Ready - waiting for refresh")
+    log("CRITICAL FIX: Removed value_changed forwarding - each control receives OSC directly!")
 end
 
 init()

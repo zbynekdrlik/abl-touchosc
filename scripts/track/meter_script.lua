@@ -1,12 +1,12 @@
 -- TouchOSC Meter Script - Audio Level Display
--- Version: 2.6.1
--- Fixed: Removed notification throttling for better fluency
+-- Version: 2.6.2
+-- Fixed: Removed parent notification to eliminate lag-causing notification chains
 -- Fixed: Direct connection setup like main branch
 -- Purpose: Display audio levels from Ableton Live
 -- Optimized: Event-driven updates only - no continuous polling!
 
 -- Version constant
-local VERSION = "2.6.1"
+local VERSION = "2.6.2"
 
 -- Debug mode
 local DEBUG = 0  -- Set to 0 for production (zero overhead)
@@ -321,11 +321,9 @@ function onReceiveOSC(message, connections)
         -- Track activity state
         isActive = fader_position > 0.01
         
-        -- FIXED: Notify parent immediately without throttling (like main branch)
-        if parentGroup and parentGroup.notify and isActive then
-            parentGroup:notify("value_changed", "meter")
-            debug("Notified parent immediately")
-        end
+        -- CRITICAL FIX: REMOVED parent notification that was causing lag!
+        -- The db_meter_label receives its own OSC messages directly
+        -- No need for notification chains!
         
         lastMeterValue = normalized_meter
         
@@ -400,7 +398,7 @@ function init()
     debug("Parent:", parentGroup and parentGroup.name or "none")
     debug("Track:", trackNumber, "Type:", trackType)
     debug("Using calibrated meter conversion")
-    debug("Immediate parent notification enabled")
+    debug("Direct OSC updates only - no notification chains!")
 end
 
 -- Note: No update() function needed - fully event-driven!
