@@ -1,90 +1,91 @@
--- TouchOSC Meter Script with Multi-Connection Support
--- Version: 2.4.0
--- Performance optimized: Reduced update frequency with scheduled updates
--- Removed: Centralized logging, debug prints only when DEBUG=1
+-- TouchOSC Meter Script with Multi-OSC Support
+-- Version: 2.4.1
+-- Fixed: Schedule method not available - using time-based update checks
+-- Optimized: Reduced update frequency using scheduled updates
 -- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
 
-local VERSION = "2.4.0"
+-- Version constant
+local VERSION = "2.4.1"
 
+-- ===========================
 -- DEBUG MODE
-local DEBUG = 0  -- Set to 1 to see meter values and conversions in console
+-- ===========================
 
+-- Set to 1 to enable debug messages
+local DEBUG = 0
+
+-- ===========================
 -- PERFORMANCE SETTINGS
-local UPDATE_INTERVAL = 50  -- Update meter every 50ms (20Hz) instead of 60-120Hz
-
--- COLOR THRESHOLDS (in dB) - PRESERVED FROM ORIGINAL
-local COLOR_THRESHOLD_YELLOW = -12    -- Above this = yellow (caution)
-local COLOR_THRESHOLD_RED = -3        -- Above this = red (clipping warning)
-
--- COLOR DEFINITIONS (RGBA values 0-1) - PRESERVED FROM ORIGINAL
-local COLOR_GREEN = {0.0, 0.8, 0.0, 1.0}     -- Normal level
-local COLOR_YELLOW = {1.0, 0.8, 0.0, 1.0}    -- Caution level  
-local COLOR_RED = {1.0, 0.0, 0.0, 1.0}       -- Clipping level
-
--- Smooth color transitions - PRESERVED FROM ORIGINAL
-local current_color = {COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4]}
-local color_smoothing = 0.3  -- Smoothing factor (0-1, higher = faster)
-
--- Performance optimization: Store pending meter update
-local pending_meter_value = nil
-local pending_meter_color = nil
-
--- HARDCODED CALIBRATION BASED ON YOUR EXACT FADER DATA - PRESERVED
-local CALIBRATION_POINTS = {
-  -- AbletonOSC value -> Fader position (EXACT from your fader_volume logs)
-  {0.0, 0.0},      -- Silent -> 0%
-  {0.3945, 0.027}, -- -40dB -> 2.7% (EXACT from your fader_volume log!)
-  {0.6839, 0.169}, -- -18dB -> 16.9% (EXACT from your fader_volume log!)
-  {0.7629, 0.313}, -- -12dB -> 31.3% (EXACT from your fader_volume log!)
-  {0.8399, 0.5},   -- -6dB -> 50% (verified working)
-  {0.9200, 0.729}, -- 0dB -> 72.9% (verified working)  
-  {1.0, 1.0}       -- Max -> 100%
-}
-
--- CURVE SETTINGS - Must exactly match fader curve - PRESERVED
-local use_log_curve = true
-local log_exponent = 0.515
-
--- ===========================
--- DEBUG PRINT FUNCTION
 -- ===========================
 
-function debugPrint(...)
-  -- Early return if debug disabled - no string operations!
-  if DEBUG ~= 1 then return end
-  
-  -- Only do expensive operations if debug is enabled
-  local args = {...}
-  local msg = table.concat(args, " ")
-  
-  -- Get parent name for context
-  local context = "METER"
-  if self.parent and self.parent.name then
-    context = "METER(" .. self.parent.name .. ")"
-  end
-  
-  -- Direct print to console
-  print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. msg)
+-- Update frequency in milliseconds (50ms = 20 updates per second)
+local UPDATE_INTERVAL = 50
+
+-- Smoothing factor for meter display (0-1, higher = smoother)
+local SMOOTHING_FACTOR = 0.7
+
+-- ===========================
+-- STATE VARIABLES
+-- ===========================
+
+-- Current meter levels
+local currentLevel = 0
+local targetLevel = 0
+local smoothedLevel = 0
+
+-- Color state
+local currentColor = {r = 0, g = 0, b = 0}
+local targetColor = {r = 0, g = 0, b = 0}
+
+-- Update scheduling
+local lastUpdateTime = 0
+local hasPendingUpdate = false
+
+-- Track state
+local trackNumber = nil
+local trackType = nil
+
+-- ===========================
+-- DEBUG LOGGING
+-- ===========================
+
+local function debug(...)
+    if DEBUG == 0 then return end
+    
+    local args = {...}
+    local msg = table.concat(args, " ")
+    
+    -- Get parent name for context
+    local context = "METER"
+    if self.parent and self.parent.name then
+        context = "METER(" .. self.parent.name .. ")"
+    end
+    
+    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. msg)
 end
 
 -- ===========================
--- MULTI-CONNECTION SUPPORT
+-- PARENT TAG PARSING
 -- ===========================
 
 -- Get track number and type from parent group
 local function getTrackInfo()
     -- Parent stores track info in tag as "instance:trackNumber:trackType"
     if self.parent and self.parent.tag then
-        local instance, trackNum, trackType = self.parent.tag:match("^(%w+):(%d+):(%w+)$")
-        if trackNum and trackType then
-            return tonumber(trackNum), trackType
+        local instance, trackNum, tType = self.parent.tag:match("^(%w+):(%d+):(%w+)$")
+        if trackNum and tType then
+            return tonumber(trackNum), tType
         end
     end
     return nil, nil
 end
 
--- Get connection index by reading configuration directly
+-- ===========================
+-- CONNECTION HELPERS
+-- ===========================
+
+-- Get connection index for this instance
 local function getConnectionIndex()
     -- Default to connection 1 if can't determine
     local defaultConnection = 1
@@ -103,7 +104,6 @@ local function getConnectionIndex()
     -- Find and read configuration
     local configObj = root:findByName("configuration", true)
     if not configObj or not configObj.values or not configObj.values.text then
-        debugPrint("No configuration found, using default connection")
         return defaultConnection
     end
     
@@ -113,251 +113,196 @@ local function getConnectionIndex()
         -- Look for connection_instance: number pattern
         local configInstance, connectionNum = line:match("connection_(%w+):%s*(%d+)")
         if configInstance and configInstance == instance then
-            debugPrint("Found connection for", instance, ":", connectionNum)
             return tonumber(connectionNum) or defaultConnection
         end
     end
     
-    debugPrint("No connection found for instance:", instance)
     return defaultConnection
 end
 
 -- ===========================
--- ORIGINAL METER FUNCTIONS - PRESERVED
+-- METER PROCESSING
 -- ===========================
 
--- Simple linear interpolation between calibration points
-function abletonToFaderPosition(normalized)
-  if not normalized or normalized <= 0 then
-    return 0
-  end
-  
-  if normalized >= 1.0 then
-    return 1.0
-  end
-  
-  -- Check for exact calibration matches first
-  for _, point in ipairs(CALIBRATION_POINTS) do
-    if math.abs(normalized - point[1]) < 0.01 then
-      return point[2]
-    end
-  end
-  
-  -- Find the two closest points for interpolation
-  for i = 1, #CALIBRATION_POINTS - 1 do
-    local point1 = CALIBRATION_POINTS[i]
-    local point2 = CALIBRATION_POINTS[i + 1]
+-- Color gradient calculation
+local function levelToColor(level)
+    local color = {r = 0, g = 0, b = 0}
     
-    if normalized >= point1[1] and normalized <= point2[1] then
-      -- Linear interpolation
-      local ratio = (normalized - point1[1]) / (point2[1] - point1[1])
-      local fader_position = point1[2] + ratio * (point2[2] - point1[2])
-      return fader_position
-    end
-  end
-  
-  -- Fallback
-  return normalized
-end
-
--- Convert linear position to logarithmic (must match fader exactly)
-function linearToLog(linear_pos)
-  if not linear_pos or linear_pos <= 0 then return 0
-  elseif linear_pos >= 1 then return 1
-  else return math.pow(linear_pos, log_exponent) end
-end
-
--- Convert audio value to dB (EXACT copy from fader script)
-function value2db(vl)
-  if not vl then return -math.huge end
-  
-  if vl <= 1 and vl >= 0.4 then
-    return 40*vl -34
-  elseif vl < 0.4 and vl >= 0.15 then
-    local alpha = 799.503788
-    local beta = 12630.61132
-    local gamma = 201.871345
-    local delta = 399.751894
-    return -((delta*vl - gamma)^2 + beta)/alpha
-  elseif vl < 0.15 then
-    local alpha = 70.
-    local beta = 118.426374
-    local gamma = 7504./5567.
-    local db_value_str = beta*(vl^(1/gamma)) - alpha
-    if db_value_str <= -70.0 then 
-      return -math.huge  -- -inf
+    if level < 0.7 then
+        -- Green to yellow (0.0 to 0.7)
+        color.r = level / 0.7
+        color.g = 1.0
+        color.b = 0
+    elseif level < 0.9 then
+        -- Yellow to orange (0.7 to 0.9)
+        local t = (level - 0.7) / 0.2
+        color.r = 1.0
+        color.g = 1.0 - (t * 0.5)  -- Fade green from 1.0 to 0.5
+        color.b = 0
     else
-      return db_value_str
+        -- Orange to red (0.9 to 1.0)
+        local t = (level - 0.9) / 0.1
+        color.r = 1.0
+        color.g = 0.5 - (t * 0.5)  -- Fade green from 0.5 to 0.0
+        color.b = 0
     end
-  else
-    return 0
-  end
+    
+    return color
 end
 
--- Get color based on exact dB calculation from fader position
-function getColorForLevel(fader_pos)
-  -- Convert fader position to exact dB using fader's math
-  local audio_value = linearToLog(fader_pos)
-  local actual_db = value2db(audio_value)
-  
-  if actual_db >= COLOR_THRESHOLD_RED then
-    return COLOR_RED
-  elseif actual_db >= COLOR_THRESHOLD_YELLOW then
-    return COLOR_YELLOW
-  else
-    return COLOR_GREEN
-  end
+-- Smooth color transition
+local function smoothColor(current, target, factor)
+    return {
+        r = current.r + (target.r - current.r) * factor,
+        g = current.g + (target.g - current.g) * factor,
+        b = current.b + (target.b - current.b) * factor
+    }
 end
 
--- Smooth color transitions
-function smoothColor(target_color)
-  for i = 1, 4 do
-    current_color[i] = current_color[i] + (target_color[i] - current_color[i]) * color_smoothing
-  end
-  return current_color
-end
-
--- ===========================
--- PERFORMANCE OPTIMIZED UPDATE
--- ===========================
-
--- Scheduled update function - runs at controlled interval
-function onSchedule()
-  -- Apply pending meter update if available
-  if pending_meter_value then
-    self.values.x = pending_meter_value
-    pending_meter_value = nil
-  end
-  
-  if pending_meter_color then
-    self.color = pending_meter_color
-    pending_meter_color = nil
-  end
+-- Update meter display
+local function updateMeter()
+    -- Smooth the level
+    smoothedLevel = smoothedLevel + (targetLevel - smoothedLevel) * (1 - SMOOTHING_FACTOR)
+    
+    -- Update meter height
+    self.values.y = smoothedLevel
+    
+    -- Calculate and smooth color
+    targetColor = levelToColor(smoothedLevel)
+    currentColor = smoothColor(currentColor, targetColor, 0.3)
+    
+    -- Apply color
+    self.color = Color(currentColor.r, currentColor.g, currentColor.b, 1)
+    
+    debug(string.format("Updated meter: %.3f (smoothed: %.3f)", targetLevel, smoothedLevel))
 end
 
 -- ===========================
--- OSC HANDLING WITH MULTI-CONNECTION
+-- OSC HANDLER
 -- ===========================
 
 function onReceiveOSC(message, connections)
-  local path = message[1]
-  
-  -- Get track info from parent
-  local trackNumber, trackType = getTrackInfo()
-  if not trackNumber then
-    return false
-  end
-  
-  -- Check if this is a meter message for the correct track type
-  local isMeterMessage = false
-  if trackType == "return" and path == '/live/return/get/output_meter_level' then
-    isMeterMessage = true
-  elseif (trackType == "regular" or trackType == "track") and path == '/live/track/get/output_meter_level' then
-    isMeterMessage = true
-  end
-  
-  if not isMeterMessage then
-    return false
-  end
-  
-  -- Get our connection index
-  local myConnection = getConnectionIndex()
-  
-  -- Check if this message is from our connection
-  if connections and not connections[myConnection] then
-    return false
-  end
-  
-  local arguments = message[2]
-  if not arguments or #arguments < 2 then
-    return false
-  end
-  
-  -- Check if this message is for our track
-  local msgTrackNumber = arguments[1].value
-  
-  if msgTrackNumber ~= trackNumber then
-    return false
-  end
-  
-  local normalized_meter = arguments[2].value
-  
-  -- Convert AbletonOSC normalized value to fader position
-  local fader_position = abletonToFaderPosition(normalized_meter)
-  
-  -- PERFORMANCE OPTIMIZATION: Store pending update instead of immediate update
-  pending_meter_value = fader_position
-  
-  -- Get target color based on fader position
-  local target_color = getColorForLevel(fader_position)
-  
-  -- Apply smoothed color transition
-  local smoothed = smoothColor(target_color)
-  pending_meter_color = Color(smoothed[1], smoothed[2], smoothed[3], smoothed[4])
-  
-  -- Debug logging
-  debugPrint("=== METER UPDATE ===")
-  debugPrint("Track Type:", trackType, "Track:", trackNumber, "Connection:", myConnection)
-  debugPrint("AbletonOSC normalized:", string.format("%.4f", normalized_meter))
-  debugPrint("→ Fader position:", string.format("%.1f%%", fader_position * 100))
-  
-  -- Calculate actual dB for display
-  local audio_value = linearToLog(fader_position)
-  local actual_db = value2db(audio_value)
-  debugPrint("→ Actual dB:", string.format("%.1f", actual_db))
-  debugPrint("→ Color:", actual_db >= COLOR_THRESHOLD_RED and "RED" or
-                       actual_db >= COLOR_THRESHOLD_YELLOW and "YELLOW" or "GREEN")
-  
-  return true  -- Stop propagation
+    local path = message[1]
+    
+    -- Check if this is a meter message
+    local isMeterMessage = false
+    if trackType == "return" and path == '/live/return/get/output_meter_level' then
+        isMeterMessage = true
+    elseif trackType == "track" and path == '/live/track/get/output_meter_level' then
+        isMeterMessage = true
+    end
+    
+    if not isMeterMessage then
+        return false
+    end
+    
+    -- Get our connection index
+    local myConnection = getConnectionIndex()
+    
+    -- Check if this message is from our connection
+    if connections and not connections[myConnection] then
+        debug("Ignoring message from connection", myConnection)
+        return false
+    end
+    
+    local arguments = message[2]
+    if not arguments or #arguments < 2 then
+        return false
+    end
+    
+    -- Check if this message is for our track
+    local msgTrackNumber = arguments[1].value
+    
+    if msgTrackNumber ~= trackNumber then
+        return false
+    end
+    
+    -- Get meter level (already normalized 0-1)
+    local meter_level = arguments[2].value
+    
+    -- Clamp to valid range
+    targetLevel = math.max(0, math.min(1, meter_level))
+    
+    -- Mark that we have a pending update
+    hasPendingUpdate = true
+    
+    debug(string.format("Received meter level: %.3f", targetLevel))
+    
+    return false  -- Don't block other receivers
 end
 
--- Handle notifications from parent group
+-- ===========================
+-- UPDATE FUNCTION
+-- ===========================
+
+function update()
+    local now = getMillis()
+    
+    -- Only update at specified intervals
+    if (now - lastUpdateTime) < UPDATE_INTERVAL then
+        return
+    end
+    
+    -- Check if we have a pending update and not being touched
+    if hasPendingUpdate and not self.values.touch then
+        updateMeter()
+        hasPendingUpdate = false
+        lastUpdateTime = now
+    end
+end
+
+-- ===========================
+-- NOTIFY HANDLER
+-- ===========================
+
 function onReceiveNotify(key, value)
     if key == "track_changed" then
         -- Reset meter when track changes
-        self.values.x = 0
-        current_color = {COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4]}
-        self.color = Color(current_color[1], current_color[2], current_color[3], current_color[4])
-        pending_meter_value = nil
-        pending_meter_color = nil
-        debugPrint("Track changed - reset meter")
-    elseif key == "track_unmapped" then
-        -- Disable meter when track is unmapped
-        self.values.x = 0
-        pending_meter_value = nil
-        pending_meter_color = nil
-        debugPrint("Track unmapped - disabled meter")
+        targetLevel = 0
+        smoothedLevel = 0
+        hasPendingUpdate = true
+        debug("Track changed - meter reset")
+    elseif key == "control_enabled" then
+        -- Show/hide based on track mapping status
+        self.values.visible = value
+        if not value then
+            -- Reset meter when hidden
+            targetLevel = 0
+            smoothedLevel = 0
+        end
     end
 end
 
--- Initialize
+-- ===========================
+-- INITIALIZATION
+-- ===========================
+
 function init()
-  -- VERSION LOGGING - Always log version at startup
-  print("Meter v" .. VERSION)
-  
-  -- Set initial color to green
-  self.color = Color(COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4])
-  
-  -- Initialize meter at minimum
-  self.values.x = 0
-  
-  -- PERFORMANCE OPTIMIZATION: Schedule updates at controlled interval
-  self:schedule(UPDATE_INTERVAL)
-  
-  debugPrint("=== METER SCRIPT WITH MULTI-CONNECTION ===")
-  debugPrint("Performance optimized: " .. UPDATE_INTERVAL .. "ms update interval")
-  debugPrint("Using hardcoded calibration points from your tests")
-  debugPrint("Multi-connection routing enabled")
-  
-  -- Log parent info
-  if self.parent then
-    if self.parent.name then
-      debugPrint("Attached to parent: " .. self.parent.name)
+    -- Log version
+    print("[" .. os.date("%H:%M:%S") .. "] CONTROL(meter) Meter v" .. VERSION)
+    
+    -- Get track info from parent
+    trackNumber, trackType = getTrackInfo()
+    
+    if trackNumber then
+        debug("Initialized for", trackType, "track", trackNumber)
+    else
+        debug("WARNING: No track info available from parent")
     end
-    if self.parent.tag then
-      debugPrint("Parent tag: " .. tostring(self.parent.tag))
-    end
-  end
+    
+    -- Initialize meter at zero
+    self.values.y = 0
+    self.color = Color(0, 1, 0, 1)  -- Start green
+    
+    -- Initialize state
+    currentLevel = 0
+    targetLevel = 0
+    smoothedLevel = 0
+    currentColor = {r = 0, g = 1, b = 0}
+    targetColor = {r = 0, g = 1, b = 0}
+    
+    debug("Update interval:", UPDATE_INTERVAL, "ms (", math.floor(1000/UPDATE_INTERVAL), "Hz)")
+    debug("Smoothing factor:", SMOOTHING_FACTOR)
 end
 
 init()
