@@ -2,6 +2,32 @@
 
 All notable changes to the ABL TouchOSC project are documented here.
 
+## [1.3.0] - 2025-07-04
+### Performance Optimization Fix 🚀
+
+This release fixes critical architectural issues that were causing lag in meter updates due to unnecessary notification chains.
+
+### Major Changes
+
+#### Notification Chain Removal
+- **Root Cause**: Optimization branch incorrectly used notify() chains instead of direct OSC
+- **Fixed Scripts**: Removed all unnecessary notification forwarding
+- **Result**: Meters now update in real-time without lag
+
+#### Script Updates
+- **meter_script.lua [2.6.2]**: Removed parent notification on meter updates
+- **group_init.lua [1.17.0]**: Removed value_changed forwarding that created notification chains
+- **db_meter_label.lua [2.7.0]**: Already fixed - receives OSC directly (no changes needed)
+
+### Performance Impact
+- **Before**: Meter → notifies parent → parent forwards to all children → LAG
+- **After**: Each control receives OSC directly → NO LAG
+
+### Key Principle Restored
+**"Every control that needs data should receive it directly via OSC, NOT through notify chains!"**
+
+---
+
 ## [1.2.0] - 2025-07-03
 ### Return Track Support Release 🎚️
 
