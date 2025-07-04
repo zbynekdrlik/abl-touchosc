@@ -1,15 +1,16 @@
 -- TouchOSC dB Value Label Display
--- Version: 1.3.2
+-- Version: 1.3.3
+-- Performance: Added early return debug guard for zero overhead when DEBUG != 1
 -- Fixed: Added notify handler to request volume when track changes
 -- Performance optimized - removed centralized logging, added DEBUG guards
 -- Shows the current fader value in dB
 -- Multi-connection routing support
 
 -- Version constant
-local VERSION = "1.3.2"
+local VERSION = "1.3.3"
 
 -- Debug mode (set to 1 for debug output)
-local DEBUG = 1  -- Enable debug for troubleshooting
+local DEBUG = 0  -- Set to 0 for production (zero overhead)
 
 -- State variable (must be local, not on self)
 local lastDB = -math.huge
@@ -20,7 +21,8 @@ local hasTrackedStarted = false
 -- ===========================
 
 local function debug(message)
-    if DEBUG == 0 then return end
+    -- Performance guard: early return for zero overhead when DEBUG != 1
+    if DEBUG ~= 1 then return end
     
     local context = "DB_LABEL"
     if self.parent and self.parent.name then
@@ -97,9 +99,7 @@ local function requestVolume()
         local path = trackType == "return" and "/live/return/get/volume" or "/live/track/get/volume"
         sendOSC(path, trackNumber, connections)
         
-        if DEBUG == 1 then
-            debug("Requested volume for " .. trackType .. " track " .. trackNumber)
-        end
+        debug("Requested volume for " .. trackType .. " track " .. trackNumber)
         
         -- Start volume listening
         if not hasTrackedStarted then
@@ -107,9 +107,7 @@ local function requestVolume()
             sendOSC(listenPath, trackNumber, connections)
             hasTrackedStarted = true
             
-            if DEBUG == 1 then
-                debug("Started volume listener for " .. trackType .. " track " .. trackNumber)
-            end
+            debug("Started volume listener for " .. trackType .. " track " .. trackNumber)
         end
     end
 end
@@ -202,9 +200,7 @@ end
 -- ===========================
 
 function onReceiveNotify(key, value)
-    if DEBUG == 1 then
-        debug("Received notify: " .. key .. " = " .. tostring(value))
-    end
+    debug("Received notify: " .. key .. " = " .. tostring(value))
     
     -- Handle track changes
     if key == "track_changed" then
@@ -247,10 +243,8 @@ function init()
         self.values.text = "-"
     end
     
-    if DEBUG == 1 then
-        debug("Initialized for parent: " .. (self.parent and self.parent.name or "unknown"))
-        debug("DEBUG MODE ENABLED")
-    end
+    debug("Initialized for parent: " .. (self.parent and self.parent.name or "unknown"))
+    debug("DEBUG MODE ENABLED")
 end
 
 init()
