@@ -1,10 +1,10 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.7.3
+-- Version: 2.7.4
 -- Purpose: Main document script with configuration and track management
--- Fixed: Group discovery mechanism to find groups by name pattern
--- Added: DEBUG = 1 for troubleshooting
+-- Fixed: Use original findAllByProperty method for groups
+-- Removed: Custom findGroups function that caused errors
 
-local VERSION = "2.7.3"
+local VERSION = "2.7.4"
 local SCRIPT_NAME = "Document Script"
 local DEBUG = 1  -- Enable debug output
 
@@ -98,36 +98,6 @@ local function parseConfiguration()
     return true
 end
 
--- === FIND GROUPS ===
-local function findGroups()
-    local groups = {}
-    
-    -- Find all controls that match track group pattern
-    -- Groups are named like "master_TrackName" or "band_TrackName"
-    local function checkControl(control)
-        if control.name and (control.name:match("^master_") or control.name:match("^band_")) then
-            -- Check if it has a script (which would make it a group)
-            if control.script and control.script ~= "" then
-                table.insert(groups, control)
-                debug("Found group: " .. control.name)
-            end
-        end
-        
-        -- Recursively check children
-        if control.children then
-            for _, child in ipairs(control.children) do
-                checkControl(child)
-            end
-        end
-    end
-    
-    -- Start from root
-    checkControl(root)
-    
-    debug("Found " .. #groups .. " groups total")
-    return groups
-end
-
 -- === NOTIFY HANDLER ===
 function onReceiveNotify(action, value)
     if action == "register_configuration" then
@@ -163,25 +133,35 @@ function refreshAllGroups()
         status.values.text = "Refreshing..."
     end
     
-    -- Find all groups using name pattern
-    local groups = findGroups()
+    -- Find all groups with trackGroup tag (as per original implementation)
+    local groups = root:findAllByProperty("tag", "trackGroup", true)
     
-    debug("Refreshing " .. #groups .. " groups")
-    
-    -- Clear all track mappings first
-    for _, group in ipairs(groups) do
-        -- Notify group to clear its mapping
-        debug("Clearing mapping for group: " .. group.name)
-        group:notify("clear_mapping")
+    if groups then
+        debug("Found " .. #groups .. " groups with tag 'trackGroup'")
+        
+        -- Clear all track mappings first
+        for i = 1, #groups do
+            local group = groups[i]
+            if group then
+                debug("Clearing mapping for group: " .. (group.name or "unnamed"))
+                group:notify("clear_mapping")
+            end
+        end
+        
+        -- Trigger refresh on all groups
+        for i = 1, #groups do
+            local group = groups[i]
+            if group then
+                debug("Refreshing group: " .. (group.name or "unnamed"))
+                group:notify("refresh_tracks")
+            end
+        end
+        
+        print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. ": Refreshed " .. #groups .. " groups")
+    else
+        debug("No groups found with tag 'trackGroup'")
+        print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. ": Refreshed 0 groups")
     end
-    
-    -- Trigger refresh on all groups
-    for _, group in ipairs(groups) do
-        debug("Refreshing group: " .. group.name)
-        group:notify("refresh_tracks")
-    end
-    
-    print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. ": Refreshed " .. #groups .. " groups")
     
     -- Update status
     if status then
