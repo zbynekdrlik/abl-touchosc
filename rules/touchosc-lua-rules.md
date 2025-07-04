@@ -111,7 +111,7 @@ local groups = root:findAllByProperty("tag", "trackGroup", true)
 ```lua
 local VERSION = "1.2.3"
 function init()
-    log("Script v" .. VERSION .. " loaded")  -- Use centralized logging
+    log("Script v" .. VERSION .. " loaded")  -- Use local logging
 end
 ```
 
@@ -130,57 +130,34 @@ function getConnectionForInstance(instance)
 end
 ```
 
-## 11. Centralized Logging Pattern (CRITICAL)
+## 11. Local Logging Pattern (CRITICAL)
 ```lua
--- ❌ WRONG - Each script implementing its own logger lookup
-local function log(msg)
-    local logger = root:findByName("logger", true)
-    if logger then
-        logger.values.text = msg  -- Direct access won't work consistently
-    end
-end
+-- ✅ CORRECT - Each script has its own local logging function
+-- Debug flag - set to 1 to enable logging
+local DEBUG = 0  -- Default to off for performance
 
--- ✅ CORRECT - Use notify() to send logs to document script
--- In ANY script that needs logging:
+-- Local logging function
 local function log(message)
-    -- Add context to identify which control sent the log
-    local context = "SCRIPTNAME"
-    if self.parent and self.parent.name then
-        context = "SCRIPTNAME(" .. self.parent.name .. ")"
-    end
-    
-    -- Send to document script for proper logging
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
-    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
-end
-
--- Document script (attached to root) handles all logging:
-function onReceiveNotify(action, value)
-    if action == "log_message" then
-        if value then
-            log(tostring(value))  -- Document script's internal log function
+    if DEBUG == 1 then
+        local context = "SCRIPTNAME"
+        if self.parent and self.parent.name then
+            context = "SCRIPTNAME(" .. self.parent.name .. ")"
         end
+        print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
     end
 end
 
--- Document script's internal log function manages the logger text:
-local function log(message)
-    local logMessage = os.date("%H:%M:%S") .. " " .. message
-    print(logMessage)
-    
-    -- Buffer management
-    table.insert(logLines, logMessage)
-    if #logLines > maxLogLines then
-        table.remove(logLines, 1)
-    end
-    
-    -- Update logger control
-    if logger and logger.values then
-        logger.values.text = table.concat(logLines, "\n")
-    end
+-- Usage
+function init()
+    log("Script v" .. VERSION .. " loaded")
 end
+
+-- ❌ WRONG - Don't use notify for logging anymore
+root:notify("log_message", context .. ": " .. message)  -- Old pattern
+
+-- Performance optimization
+-- The DEBUG check happens immediately, avoiding string operations when disabled
+-- Each script controls its own logging independently
 ```
 
 ## 12. Control Type Differences (CRITICAL)
@@ -258,28 +235,28 @@ end
 ## 15. Document Script Pattern
 Create a main "document script" that handles:
 - Configuration parsing
-- **Centralized logging for ALL scripts**
+- **Global functionality (like auto-refresh)**
 - Helper functions (exposed via globals)
 - Coordination between scripts
-- Buffering messages before logger is available
 
 ```lua
--- Document script pattern (v2.5.9+)
-local VERSION = "2.5.9"
-local logLines = {}  -- Buffer messages
-local logger = nil   -- Found later
+-- Document script pattern (v2.8.1+)
+local VERSION = "2.8.1"
+local DEBUG = 0  -- Local debug flag
 
-function init()
-    log("Document Script v" .. VERSION .. " loaded")
+local function log(message)
+    if DEBUG == 1 then
+        print("[" .. os.date("%H:%M:%S") .. "] Document Script: " .. message)
+    end
 end
 
--- CRITICAL: Handle log messages from other scripts
+function init()
+    log("Script v" .. VERSION .. " loaded")
+end
+
+-- Handle coordination messages from other scripts
 function onReceiveNotify(action, value)
-    if action == "log_message" then
-        if value then
-            log(tostring(value))  -- Process log from other script
-        end
-    elseif action == "refresh_all_groups" then
+    if action == "refresh_all_groups" then
         refreshAllGroups()
     end
 end
@@ -397,9 +374,9 @@ end
 8. **Messages have structure** - `message[2][1].value`
 9. **Control types differ** - buttons vs labels have different values
 10. **Visual changes need delays** - use update() for timing
-11. **Logger access requires notify()** - never direct access
+11. **Local logging only** - each script handles its own logging
 12. **No pcall function** - use explicit nil checks
-13. **Document script v2.5.9+** required for centralized logging
+13. **Document script v2.8.1+** for configuration and coordination
 14. **Each script reads config** - no shared config functions
 15. **Tag formats can change** - handle multiple formats
 16. **OSC parameter order matters** - be explicit with connections
@@ -412,9 +389,9 @@ end
 - [ ] Verify all notify() handlers
 - [ ] Check version logging
 - [ ] Test visual feedback visibility
-- [ ] Verify logger updates properly via notify
+- [ ] Verify local logging works with DEBUG=1
 - [ ] Test with controls in pagers
-- [ ] Confirm document script handles log_message
+- [ ] Confirm no log messages appear with DEBUG=0
 - [ ] Test configuration reading in each script
 - [ ] Verify tag format handling
 - [ ] Check OSC parameter order
