@@ -1,23 +1,21 @@
 -- mute_button.lua
--- Version: 1.9.1
--- Fixed: Parse parent tag for track info instead of accessing properties
--- Added: Return track support using parent's trackType
--- Use root:notify for logger output
+-- Version: 2.0.0
+-- Changed: Local logging, reduced log verbosity
 
-local VERSION = "1.9.1"
+local VERSION = "2.0.0"
 
--- Logging
+-- Debug flag - set to 1 to enable logging
+local debug = 1
+
+-- Local logging function
 local function log(message)
-    local context = "MUTE"
-    if self.parent and self.parent.name then
-        context = "MUTE(" .. self.parent.name .. ")"
+    if debug == 1 then
+        local context = "MUTE"
+        if self.parent and self.parent.name then
+            context = "MUTE(" .. self.parent.name .. ")"
+        end
+        print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
     end
-    
-    -- Send to document script for logger text update
-    root:notify("log_message", context .. ": " .. message)
-    
-    -- Also print to console for development/debugging
-    print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
 end
 
 -- Get track number and type from parent group
@@ -102,8 +100,6 @@ function onReceiveOSC(message, connections)
             else
                 self.values.x = 1  -- Unmuted = released
             end
-            
-            log("Received mute state: " .. (arguments[2].value and "MUTED" or "UNMUTED"))
         end
     end
     
@@ -126,7 +122,6 @@ function onValueChanged(key)
             local path = trackType == "return" and "/live/return/set/mute" or "/live/track/set/mute"
             
             sendOSC(path, trackNumber, muteState, connections)
-            log("Sent mute " .. (muteState and "ON" or "OFF") .. " for " .. trackType .. " track " .. trackNumber)
         end
     end
 end
