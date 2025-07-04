@@ -1,181 +1,126 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**⚠️ FIXED - READY FOR TESTING AGAIN**
+**⚠️ FADER FIXED - READY FOR FINAL TEST**
 - [x] Fixed: Document script error (bad argument to ipairs)
 - [x] Fixed: Groups now set initial tag = "trackGroup" for discovery
 - [x] Fixed: Document script uses original findAllByProperty method
-- [ ] Currently working on: Awaiting user test with fixed group discovery
-- [ ] Waiting for: User testing to verify track mapping works
+- [x] Fixed: Fader pcall error (TouchOSC doesn't have pcall)
+- [ ] Currently working on: Awaiting user test with fixed fader
+- [ ] Waiting for: User to update fader v2.5.7 and test
 - [ ] Blocked by: None
 
-## Current Status (2025-07-04 14:33 UTC)
+## Current Status (2025-07-04 14:43 UTC)
 
-### Critical Fixes Applied (Round 5)
-1. **document_script.lua** (v2.7.3 → v2.7.4)
-   - **Fixed**: Runtime error "bad argument #1 to 'ipairs' (table expected, got userdata)"
-   - Removed custom findGroups() function that caused errors
-   - Restored original findAllByProperty("tag", "trackGroup", true) method
-   - Result: No more runtime errors
+### Latest Fix (Round 6)
+1. **fader_script.lua** (v2.5.6 → v2.5.7)
+   - **Fixed**: Runtime error "attempt to call global 'pcall' (a nil value)"
+   - Removed pcall usage in setupConnections()
+   - Replaced with direct checks (TouchOSC doesn't have pcall)
+   - Result: Fader should now initialize properly
 
-2. **group_init.lua** (v1.15.7 → v1.15.8)
-   - **CRITICAL**: Added `self.tag = "trackGroup"` in init()
-   - This allows document script to find groups
-   - Groups still update tag later with track info
-   - Result: Groups are now discoverable
+### User's Latest Test Results (14:37)
+**What's Working:**
+- ✅ Group discovery working (found 1 group)
+- ✅ Track mapping successful (mapped to Return Track 0: A-Repro LR #)
+- ✅ Controls enabled (7 controls)
+- ✅ Pan control received position from Ableton
+- ✅ Group tag system working
 
-### Error Analysis
-The issue was:
-- Groups weren't setting initial tag = "trackGroup"
-- Document script couldn't find any groups (0 groups)
-- My attempt to fix with custom function caused ipairs error
-- Solution: Restore original implementation from main branch
+**What Failed:**
+- ❌ Fader crashed with pcall error (NOW FIXED)
+- ⚠️ Meter still showing v2.5.2 (needs v2.5.3)
 
-### Previous Fixes (Still Active)
-All fixes from Rounds 1-4 remain in place:
-- Track discovery mechanism restored
-- Property errors fixed (value → x, enabled → interactive)
-- Schedule() replaced with time-based checks
-- Fader position checks removed
+### All Previous Fixes (Still Active)
+1. Document script v2.7.4 - Fixed group finding
+2. Group_init v1.15.8 - Added initial tag
+3. All property errors fixed
+4. Schedule() replaced with time-based checks
+5. Event-driven meter updates
+
+## Scripts Needing Update
+
+### Critical Update:
+- **fader_script.lua**: Update to v2.5.7 (fixes pcall error)
+
+### Also Check:
+- **meter_script.lua**: Should be v2.5.3 (user has v2.5.2)
+
+## Expected Results After Update
+
+With fader v2.5.7:
+- Fader should initialize without errors
+- Volume control should work
+- Should request and receive volume from Ableton
+- Touch on/off should work
+- Activity monitoring should trigger fade effects
+
+## Testing Checklist
+
+1. [ ] Update fader_script.lua to v2.5.7
+2. [ ] Update meter_script.lua to v2.5.3 (if not done)
+3. [ ] Restart TouchOSC
+4. [ ] Connect to Ableton
+5. [ ] Verify no runtime errors
+6. [ ] Test fader movement
+7. [ ] Check meter display
+8. [ ] Verify performance improvement
+
+## Technical Summary
+
+### TouchOSC Rule Violations Fixed:
+1. **ipairs on userdata** - Fixed by using proper TouchOSC methods
+2. **Missing initial tag** - Fixed by setting tag = "trackGroup"
+3. **pcall usage** - Fixed by removing pcall (doesn't exist)
+
+### Performance Optimizations Applied:
+- Removed continuous update() loops
 - Event-driven meter updates
-- DEBUG = 1 enabled for troubleshooting
+- Time-based sync instead of schedule()
+- Logger system removed
+- All 9 scripts optimized
 
-## Implementation Status - PERFORMANCE
-- Phase: 1 of 4 - Quick Wins + Critical Fix + Complete Script Coverage
-- Step: FIXED group discovery - awaiting test
-- Status: READY FOR USER TESTING
+### Expected Performance Gains:
+- CPU Usage: 70-85% reduction
+- Response Time: < 100ms
+- Frame Rate: Consistent 30+ FPS
+- Track Capacity: 32+ tracks smooth
 
-## Testing Status Matrix - FIXED
-| Component | Version | Status | Key Fix |
-|-----------|---------|---------|---------|
-| document_script | v2.7.4 | ✅ Fixed | Uses correct findAllByProperty |
-| group_init | v1.15.8 | ✅ Fixed | Sets tag = "trackGroup" |
-| fader_script | v2.5.6 | ✅ Ready | DEBUG enabled |
-| meter_script | v2.5.3 | ✅ Ready | DEBUG enabled |
-| pan_control | v1.4.2 | ✅ Ready | Position stability |
-| db_label | v1.3.0 | ✅ Ready | Logger removed |
-| db_meter_label | v2.6.0 | ✅ Ready | No empty update() |
-| mute_button | v2.0.0 | ✅ Ready | Logger removed |
-| global_refresh_button | v1.5.1 | ✅ Ready | Time-based reset |
+## All Script Versions
 
-## User's Last Test Results
-From logs at 14:24:48:
-- Document script loaded correctly (v2.7.3)
-- Group loaded with correct configuration
-- Runtime error occurred: "bad argument #1 to 'ipairs'"
-- 0 groups were found for refresh
-- This has been FIXED in v2.7.4
+### Updated in This Session:
+- document_script.lua: v2.7.4
+- group_init.lua: v1.15.8
+- fader_script.lua: v2.5.7 ← NEW!
+- meter_script.lua: v2.5.3
 
-## Expected Debug Output (FIXED)
-
-### On Startup:
-```
-Document Script v2.7.4
-[DEBUG]: Found 1 groups with tag 'trackGroup'
-=== AUTOMATIC STARTUP REFRESH ===
-[DEBUG]: Refreshing group: master_A-Repro LR #
-GROUP(master_A-Repro LR #): Refreshing track mapping
-```
-
-### Track Discovery:
-```
-GROUP(master_A-Repro LR #): Received track names, checking for: A-Repro LR #
-GROUP(master_A-Repro LR #): Track 0: [actual track name]
-GROUP(master_A-Repro LR #): Mapped to Regular Track X
-```
-
-## Next Steps
-
-### 1. User Testing Required 🎯
-1. **Update these scripts**:
-   - document_script.lua (v2.7.4)
-   - group_init.lua (v1.15.8)
-   - fader_script.lua (v2.5.6) - user still has v2.5.5
-2. **Restart TouchOSC**
-3. **Connect to Ableton Live**
-4. **Verify**:
-   - No runtime errors
-   - Groups are found (not 0 groups)
-   - Track discovery works
-   - Controls become enabled
-
-### 2. Expected Working Flow:
-1. Group sets tag = "trackGroup" on init
-2. Document script finds group with this tag
-3. Refresh triggers track discovery
-4. Group finds its track and updates tag
-5. Controls become enabled
-6. Faders/meters start working
-
-### 3. If Working:
-- Performance should be significantly improved
-- Ready to set DEBUG = 0 and merge
-
-## Technical Solution Summary
-
-### Problem:
-- Groups didn't have initial tag for discovery
-- Custom findGroups() function incompatible with TouchOSC
-
-### Solution:
-- Restored original tag-based discovery
-- Groups set tag = "trackGroup" initially
-- Document script uses findAllByProperty (TouchOSC native)
-
-### Key Learning:
-- Must follow TouchOSC Lua rules strictly
-- Can't use ipairs on control collections
-- Initial tag required for discovery pattern
-
-## All Script Versions Summary
-
-### Core Scripts (Updated):
-- document_script.lua: v2.7.4 (fixed group finding)
-- group_init.lua: v1.15.8 (added initial tag)
-- fader_script.lua: v2.5.6 (DEBUG enabled)
-- meter_script.lua: v2.5.3 (DEBUG enabled)
-
-### Other Optimized Scripts:
+### Previously Optimized:
 - pan_control.lua: v1.4.2
 - db_label.lua: v1.3.0
 - db_meter_label.lua: v2.6.0
 - mute_button.lua: v2.0.0
 - global_refresh_button.lua: v1.5.1
 
-## Performance Optimization Summary
-
-### Achieved:
-- Removed all continuous update() loops where possible
-- Event-driven meter updates (zero CPU when no data)
-- Time-based sync instead of schedule()
-- Logger system completely removed
-- All scripts optimized
-
-### Expected Gains:
-- CPU Usage: 70-85% reduction
-- Response Time: < 100ms
-- Frame Rate: Consistent 30+ FPS
-- Track Capacity: Smooth with 32+ tracks
-
 ## Branch Status
 
 - Implementation: ✅ Complete
-- Bug fixes: ✅ Complete (5 rounds)
+- Bug fixes: ✅ Complete (6 rounds)
 - Documentation: ✅ Updated
-- Testing: ❌ Awaiting test with fixes
-- **Ready for merge: Almost** (needs working test)
+- Testing: ❌ Awaiting final test
+- **Ready for merge: Almost** (needs fader test)
 
-## Session Summary
-- Started with performance optimization request
-- Fixed 5 rounds of bugs and errors
-- Currently all scripts updated and ready
-- Waiting for user to test final fixes
-- Once confirmed working, can disable DEBUG and merge
+## Next Steps
+
+1. **Update fader to v2.5.7**
+2. **Test all functionality**
+3. **If working**: Set DEBUG = 0 in all scripts
+4. **Merge PR #9**
 
 ---
 
-## Last Actions
-- Fixed runtime error in document script
-- Added initial tag setting in group script
-- Ready for testing with proper group discovery
-- State saved at 2025-07-04 14:33 UTC
+## Session Summary
+- Fixed 6 rounds of bugs
+- All TouchOSC rule violations fixed
+- Performance optimizations complete
+- Waiting for final test with working fader
+- Once confirmed, ready to disable DEBUG and merge
