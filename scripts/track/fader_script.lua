@@ -1,12 +1,12 @@
 -- TouchOSC Fader Script - Advanced Volume and Send Control
--- Version: 2.5.9
+-- Version: 2.6.0
+-- Fixed: Removed sync delay that was causing fader to jump back
 -- Added: Double-tap to jump to 0dB functionality
--- Fixed: Added proper dB conversion function
 -- Fixed: Use simple connection detection like main branch
 -- Optimized: Event-driven updates, no continuous polling
 
 -- Version constant
-local VERSION = "2.5.9"
+local VERSION = "2.6.0"
 
 -- Debug mode (set to 1 for debug output)
 local DEBUG = 1  -- Enable debug for troubleshooting
@@ -59,12 +59,7 @@ local currentAbletonValue = nil
 local lastSentValue = nil
 local lastReceivedValue = nil
 local isInternalUpdate = false
-local isUserInteracting = false  -- Track active user interaction
-local last_osc_x = 0
-local last_osc_audio = 0
-local synced = true
-local touched = false
-local last = 0
+local isUserInteracting = false
 
 -- Touch state
 local isTouched = false
@@ -77,7 +72,6 @@ local touch_start_time = 0
 local last_tap_time = 0
 local movement_detected = false
 local last_movement_time = 0
-local touch_event_count = 0
 
 -- Double-tap animation state
 local double_tap_animation_active = false
@@ -87,7 +81,6 @@ local double_tap_start_position = 0
 -- Timing variables for position sync
 local lastPositionSyncTime = 0
 local POSITION_SYNC_INTERVAL = 5.0  -- 5 seconds between syncs
-local SYNC_DELAY = 1000  -- 1 second delay after touch release
 
 -- Send control variables
 local sendNames = {}  -- Table to store send names
@@ -363,17 +356,12 @@ local function updateFaderPosition(value, source)
         isInternalUpdate = true
         currentAbletonValue = value
         lastReceivedValue = value
-        last_osc_audio = value
         
-        if use_log_curve then
-            last_osc_x = logToLinear(value)
-        else
-            last_osc_x = value
-        end
-        
-        -- Only update if user is not touching and we're synced
-        if not isTouched and synced then
-            self.values.x = last_osc_x
+        -- Only update visual position if user is not touching
+        if not isTouched and not double_tap_animation_active then
+            local fader_pos = use_log_curve and logToLinear(value) or value
+            self.values.x = fader_pos
+            
             if CONTROL_TYPE == "send" then
                 debug(string.format("Send %d position from Ableton: %.3f", SEND_INDEX, value))
             else
@@ -381,7 +369,7 @@ local function updateFaderPosition(value, source)
                 debug(string.format("Volume from Ableton: %.3f (%.1f dB)", value, db))
             end
         else
-            debug("Ignored Ableton update - user is touching or not synced")
+            debug("Ignored Ableton update - user is touching or animating")
         end
         
         isInternalUpdate = false
@@ -494,7 +482,6 @@ function onValueChanged(valueName)
             touch_start_position = self.values.x
             touch_start_time = current_time
             movement_detected = false
-            touch_event_count = 1
             isUserInteracting = true
             
             -- Cancel any ongoing double-tap animation
@@ -526,9 +513,6 @@ function onValueChanged(valueName)
             -- Touch released
             touch_started = false
             isUserInteracting = false
-            touched = true  -- Mark for sync delay
-            synced = false
-            last = getMillis()
             
             local total_movement = math.abs(self.values.x - touch_start_position)
             local touch_duration = current_time - touch_start_time
@@ -613,10 +597,6 @@ function onReceiveNotify(key, value)
         trackNumber = value
         debug("Track number updated to: " .. tostring(trackNumber))
         
-        -- Reset state
-        touched = false
-        synced = true
-        
         -- Request current position and send names
         requestCurrentPosition()
         if CONTROL_TYPE == "send" then
@@ -690,28 +670,8 @@ function update()
         end
     end
     
-    -- Handle sync delay after touch release
-    if touched and not self.values.touch and not synced and not double_tap_animation_active then
-        local now = getMillis()
-        if (now - last > SYNC_DELAY) then
-            debug("*** SYNC DELAY COMPLETE - Updating to OSC position ***")
-            debug("Jumping from:", string.format("%.1f%%", self.values.x * 100), 
-                  "to:", string.format("%.1f%%", last_osc_x * 100))
-            self.values.x = last_osc_x
-            synced = true
-            touched = false
-        end
-    end
-    
-    -- Reset sync if touching again
-    if self.values.touch and not synced then
-        synced = true
-        touched = false
-        debug("*** Touch detected during sync delay - cancelling sync ***")
-    end
-    
     -- Periodic position sync when not touched
-    if not isTouched and trackNumber and connections and synced then
+    if not isTouched and trackNumber and connections and not double_tap_animation_active then
         local now = os.clock()
         if now - lastPositionSyncTime > POSITION_SYNC_INTERVAL then
             requestCurrentPosition()
