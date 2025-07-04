@@ -1,11 +1,12 @@
 -- mute_button.lua
--- Version: 2.0.2
+-- Version: 2.0.3
+-- Fixed: Removed automatic state reset when track unmapped - maintain last known state
 -- Fixed: Added notify handler to request state when track changes
 -- Fixed: Set DEBUG = 1 for troubleshooting
 -- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
 
-local VERSION = "2.0.2"
+local VERSION = "2.0.3"
 
 -- Debug mode (set to 1 for debug output)
 local DEBUG = 1  -- Enable debug for troubleshooting
@@ -168,10 +169,10 @@ function onReceiveNotify(key, value)
             debug("Track type changed to: " .. tostring(value))
         end
     elseif key == "track_unmapped" then
-        -- Reset button to default state when unmapped
-        self.values.x = 1  -- Unmuted state
+        -- DO NOT CHANGE STATE! Just log that track was unmapped
+        -- The button should maintain its last known state until Ableton tells us otherwise
         if DEBUG == 1 then
-            debug("Track unmapped - reset to unmuted state")
+            debug("Track unmapped - maintaining current state")
         end
     end
 end
