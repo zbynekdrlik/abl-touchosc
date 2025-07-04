@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.15.1
--- Changed: Standardized DEBUG flag (uppercase) and disabled by default
+-- Version: 1.16.0
+-- Changed: Removed unnecessary fader monitoring - status indicator now only shows receive activity
 
 -- Version constant
-local SCRIPT_VERSION = "1.15.1"
+local SCRIPT_VERSION = "1.16.0"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -20,10 +20,8 @@ local lastEnabledState = nil
 local trackType = nil  -- "track" or "return"
 local listenersActive = false  -- Track if listeners are active
 
--- Activity tracking
-local lastSendTime = 0
+-- Activity tracking - simplified to only track receiving
 local lastReceiveTime = 0
-local lastFaderValue = nil
 
 -- Local logging function
 local function log(message)
@@ -79,41 +77,28 @@ local function getChild(parent, name)
     return nil
 end
 
--- Forward declaration for monitorActivity
-local monitorActivity
-
 -- Update status indicator based on activity
 local function updateStatusIndicator()
     local indicator = getChild(self, "status_indicator")
     if not indicator then return end
     
-    local currentTime = getMillis()
-    local timeSinceSend = currentTime - lastSendTime
-    local timeSinceReceive = currentTime - lastReceiveTime
-    
     -- Check if mapped
     if trackMapped and trackNumber ~= nil then
         indicator.visible = true
         
-        -- Determine current state based on activity
-        if timeSinceSend < 150 then
-            -- Recently sent data - blue
-            indicator.color = Color(0, 0.5, 1, 1)
-        elseif timeSinceReceive < 150 then
+        -- Determine current state based on receive activity only
+        local currentTime = getMillis()
+        local timeSinceReceive = currentTime - lastReceiveTime
+        
+        if timeSinceReceive < 150 then
             -- Recently received data - yellow
             indicator.color = Color(1, 1, 0, 1)
-        elseif timeSinceSend < 500 or timeSinceReceive < 500 then
-            -- Fading from active to idle
-            local fadeTime = math.min(timeSinceSend, timeSinceReceive) - 150
+        elseif timeSinceReceive < 500 then
+            -- Fading from yellow to green
+            local fadeTime = timeSinceReceive - 150
             local fade = fadeTime / 350  -- 0 to 1 over 350ms
-            
-            if timeSinceSend < timeSinceReceive then
-                -- Fade from blue to green
-                indicator.color = Color(0, 0.5 * (1 - fade) + fade, 1 * (1 - fade) + fade * 0, 1)
-            else
-                -- Fade from yellow to green
-                indicator.color = Color(1 * (1 - fade), 1, 0, 1)
-            end
+            -- Fade from yellow to green
+            indicator.color = Color(1 * (1 - fade), 1, 0, 1)
         else
             -- Idle - solid green
             indicator.color = Color(0, 1, 0, 1)
@@ -123,24 +108,6 @@ local function updateStatusIndicator()
         indicator.visible = true
         indicator.color = Color(1, 0, 0, 1)
     end
-end
-
--- Monitor fader for outgoing activity
-monitorActivity = function()
-    local currentTime = getMillis()
-    
-    -- Check fader for changes (outgoing data)
-    local fader = getChild(self, "fader")
-    if fader and fader.values and fader.values.x then
-        local currentValue = fader.values.x
-        if lastFaderValue and math.abs(currentValue - lastFaderValue) > 0.001 then
-            lastSendTime = currentTime
-        end
-        lastFaderValue = currentValue
-    end
-    
-    -- Update status indicator
-    updateStatusIndicator()
 end
 
 -- Enable/disable all controls in the group - ONLY INTERACTIVITY
@@ -255,10 +222,13 @@ function init()
     updateStatusIndicator()
 end
 
--- Use update() function instead of schedule for periodic monitoring
+-- Simplified update function - only check for fade animation
 function update()
-    -- Monitor activity periodically
-    monitorActivity()
+    -- Only update if we're in the fade window (150-500ms after receive)
+    local timeSinceReceive = getMillis() - lastReceiveTime
+    if timeSinceReceive >= 150 and timeSinceReceive <= 500 then
+        updateStatusIndicator()
+    end
 end
 
 function refreshTrackMapping()
@@ -291,12 +261,14 @@ function onReceiveOSC(message, connections)
             local trackIndex = message[2] and message[2][1] and message[2][1].value
             if trackIndex == trackNumber then
                 lastReceiveTime = getMillis()
+                updateStatusIndicator()
             end
         -- Check for volume data
         elseif path == oscPrefix .. 'get/volume' then
             local trackIndex = message[2] and message[2][1] and message[2][1].value
             if trackIndex == trackNumber then
                 lastReceiveTime = getMillis()
+                updateStatusIndicator()
             end
         end
     end
