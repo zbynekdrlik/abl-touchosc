@@ -1,12 +1,11 @@
 -- TouchOSC Meter Script with Multi-OSC Support
--- Version: 2.4.1
--- Fixed: Schedule method not available - using time-based update checks
--- Optimized: Reduced update frequency using scheduled updates
+-- Version: 2.5.0
+-- Optimized: Removed update() function - fully event-driven
 -- Fixed: Parse parent tag for track info instead of accessing properties
 -- Added: Return track support using parent's trackType
 
 -- Version constant
-local VERSION = "2.4.1"
+local VERSION = "2.5.0"
 
 -- ===========================
 -- DEBUG MODE
@@ -19,9 +18,6 @@ local DEBUG = 0
 -- PERFORMANCE SETTINGS
 -- ===========================
 
--- Update frequency in milliseconds (50ms = 20 updates per second)
-local UPDATE_INTERVAL = 50
-
 -- Smoothing factor for meter display (0-1, higher = smoother)
 local SMOOTHING_FACTOR = 0.7
 
@@ -30,16 +26,13 @@ local SMOOTHING_FACTOR = 0.7
 -- ===========================
 
 -- Current meter levels
-local currentLevel = 0
 local targetLevel = 0
 local smoothedLevel = 0
 
 -- Color state
 local currentColor = {r = 0, g = 0, b = 0}
-local targetColor = {r = 0, g = 0, b = 0}
 
--- Update scheduling
-local lastUpdateTime = 0
+-- Touch state
 local hasPendingUpdate = false
 
 -- Track state
@@ -160,21 +153,18 @@ local function smoothColor(current, target, factor)
 end
 
 -- Update meter display
-local function updateMeter()
-    -- Smooth the level
-    smoothedLevel = smoothedLevel + (targetLevel - smoothedLevel) * (1 - SMOOTHING_FACTOR)
-    
+local function updateMeterDisplay()
     -- Update meter height
     self.values.y = smoothedLevel
     
     -- Calculate and smooth color
-    targetColor = levelToColor(smoothedLevel)
+    local targetColor = levelToColor(smoothedLevel)
     currentColor = smoothColor(currentColor, targetColor, 0.3)
     
     -- Apply color
     self.color = Color(currentColor.r, currentColor.g, currentColor.b, 1)
     
-    debug(string.format("Updated meter: %.3f (smoothed: %.3f)", targetLevel, smoothedLevel))
+    debug(string.format("Updated meter display: %.3f", smoothedLevel))
 end
 
 -- ===========================
@@ -223,31 +213,35 @@ function onReceiveOSC(message, connections)
     -- Clamp to valid range
     targetLevel = math.max(0, math.min(1, meter_level))
     
-    -- Mark that we have a pending update
-    hasPendingUpdate = true
+    -- Apply smoothing immediately
+    smoothedLevel = smoothedLevel + (targetLevel - smoothedLevel) * (1 - SMOOTHING_FACTOR)
     
-    debug(string.format("Received meter level: %.3f", targetLevel))
+    debug(string.format("Received meter level: %.3f (smoothed: %.3f)", targetLevel, smoothedLevel))
+    
+    -- Update display immediately if not being touched
+    if not self.values.touch then
+        updateMeterDisplay()
+    else
+        -- Mark pending update for when touch is released
+        hasPendingUpdate = true
+        debug("Touch active - deferring display update")
+    end
     
     return false  -- Don't block other receivers
 end
 
 -- ===========================
--- UPDATE FUNCTION
+-- TOUCH HANDLER
 -- ===========================
 
-function update()
-    local now = getMillis()
-    
-    -- Only update at specified intervals
-    if (now - lastUpdateTime) < UPDATE_INTERVAL then
-        return
-    end
-    
-    -- Check if we have a pending update and not being touched
-    if hasPendingUpdate and not self.values.touch then
-        updateMeter()
-        hasPendingUpdate = false
-        lastUpdateTime = now
+function onValueChanged(valueName)
+    if valueName == "touch" and not self.values.touch then
+        -- Touch released - process any pending update
+        if hasPendingUpdate then
+            updateMeterDisplay()
+            hasPendingUpdate = false
+            debug("Touch released - applying pending update")
+        end
     end
 end
 
@@ -260,7 +254,7 @@ function onReceiveNotify(key, value)
         -- Reset meter when track changes
         targetLevel = 0
         smoothedLevel = 0
-        hasPendingUpdate = true
+        updateMeterDisplay()
         debug("Track changed - meter reset")
     elseif key == "control_enabled" then
         -- Show/hide based on track mapping status
@@ -269,6 +263,7 @@ function onReceiveNotify(key, value)
             -- Reset meter when hidden
             targetLevel = 0
             smoothedLevel = 0
+            updateMeterDisplay()
         end
     end
 end
@@ -295,14 +290,12 @@ function init()
     self.color = Color(0, 1, 0, 1)  -- Start green
     
     -- Initialize state
-    currentLevel = 0
     targetLevel = 0
     smoothedLevel = 0
     currentColor = {r = 0, g = 1, b = 0}
-    targetColor = {r = 0, g = 1, b = 0}
     
-    debug("Update interval:", UPDATE_INTERVAL, "ms (", math.floor(1000/UPDATE_INTERVAL), "Hz)")
     debug("Smoothing factor:", SMOOTHING_FACTOR)
+    debug("Event-driven updates - no continuous polling")
 end
 
 init()
