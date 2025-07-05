@@ -1,9 +1,9 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.5.2
--- Changed: Standardized DEBUG flag (uppercase) and disabled by default
+-- Version: 2.5.3
+-- Changed: Use parent's getTrackInfo() function instead of parsing tag
 
 -- Version constant
-local VERSION = "2.5.2"
+local VERSION = "2.5.3"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -99,9 +99,9 @@ end
 
 -- Get connection configuration (read directly from config text)
 local function getConnectionIndex()
-    -- Check if parent has tag with instance:trackNumber:trackType format
-    if self.parent and self.parent.tag then
-        local instance = self.parent.tag:match("^(%w+):")
+    -- Try to get mapping info from parent
+    if self.parent and self.parent.mappingInfo then
+        local instance = self.parent.mappingInfo:match("^(%w+):")
         if instance then
             -- Find configuration object
             local configObj = root:findByName("configuration", true)
@@ -140,13 +140,19 @@ end
 
 -- Get track number and type from parent group
 local function getTrackInfo()
-    -- Parent stores track info in tag as "instance:trackNumber:trackType"
-    if self.parent and self.parent.tag then
-        local instance, trackNum, trackType = self.parent.tag:match("^(%w+):(%d+):(%w+)$")
+    -- Use parent's getTrackInfo function if available
+    if self.parent and self.parent.getTrackInfo then
+        return self.parent.getTrackInfo()
+    end
+    
+    -- Fallback: try to parse from mappingInfo
+    if self.parent and self.parent.mappingInfo then
+        local instance, trackNum, trackType = self.parent.mappingInfo:match("^(%w+):(%d+):(%w+)$")
         if trackNum and trackType then
             return tonumber(trackNum), trackType
         end
     end
+    
     return nil, nil
 end
 
