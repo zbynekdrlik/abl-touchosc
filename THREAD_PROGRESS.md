@@ -1,87 +1,53 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**✅ DEAD CODE REMOVED - PR Ready**
-- [x] Currently working on: Removing dead configuration_updated handler
-- [x] Code updated - document_script.lua v2.8.2
-- [ ] Waiting for: User review and merge approval
+**⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
+- [x] Currently working on: Fix refresh all button for track renumbering
+- [ ] Waiting for: User to test the fix
 - [ ] Blocked by: None
 
-## Current Task: Notify Usage Analysis & Cleanup
-**Started**: 2025-07-04
-**Branch**: feature/notify-usage-analysis  
-**Status**: CODE_UPDATED
-**PR**: #12 updated
+## Current Task: Fix Refresh All Track Renumbering
+**Started**: 2025-07-05
+**Branch**: fix/refresh-track-renumbering
+**Status**: CODE_COMPLETE
+**PR**: Ready to create
 
-### Completed:
-1. ✅ Analyzed all scripts for notify() usage
-2. ✅ Created comprehensive report on current usage
-3. ✅ Documented why notify is still needed
-4. ✅ Provided alternative approaches
-5. ✅ Made recommendations
-6. ✅ **Verified NO high-frequency notify calls**
-7. ✅ **Removed dead configuration_updated handler**
+### Problem:
+When inserting a new track at the beginning in Ableton Live, all tracks get renumbered (track 0 becomes track 1, etc.). The refresh all button doesn't properly reassign groups to the correct track numbers, causing faders to control the wrong tracks.
 
-### Dead Code Removal:
-- **What:** Removed `configuration_updated` handler from document_script.lua
-- **Why:** 
-  - No script ever sends this notification
-  - TouchOSC text objects are read-only at runtime
-  - Config changes require document reload anyway
-- **Impact:** Cleaner code, simplified notify protocol
-- **Version:** document_script.lua updated to v2.8.2
+### Solution Implemented:
+1. **document_script.lua v2.8.3**:
+   - Added refresh sequencing with delay between clear and refresh
+   - Send global stop_listen commands to ensure clean state
+   - Use state machine for proper sequencing
 
-### Key Findings:
-- **Notify is NO LONGER used for logging** (removed in v2.8.1)
-- **Notify IS used for inter-script communication:**
-  - Configuration registration (once at startup)
-  - Global refresh coordination (user-triggered)
-  - Parent-child track mapping updates (during refresh only)
-  - Event broadcasting (infrequent)
-- **NO HIGH-FREQUENCY USAGE FOUND:**
-  - ✅ No notify in update() loops
-  - ✅ No notify in frequent OSC handlers (volume/meter/mute/pan)
-  - ✅ No notify in onValueChanged for frequent events
-  - ✅ Only triggered by user actions (refresh button)
+2. **group_init.lua v1.16.1**:
+   - Improved clear_mapping to fully reset all state variables
+   - Added logging to track the clearing/refresh process
+   - Ensure tag is reset when unmapped
 
-### Performance Impact:
-- **Startup:** 1-2 notify calls
-- **User Refresh:** ~40 calls for 8-track setup
-- **Normal Operation:** 0 calls
-- **During Performance:** 0 calls
+### Changes Made:
+- ✅ Updated document_script.lua with refresh sequencing
+- ✅ Updated group_init.lua with improved clear_mapping
+- ✅ Version bumps applied
 
-### Report Location:
-- `/docs/notify-usage-analysis.md` (updated with dead code removal)
-
-## Previous Task: Remove Centralized Logging (COMPLETE)
-**Completed**: 2025-07-04
-**Branch**: feature/remove-centralized-logging (merged)
-**PR**: #11 - Merged
-
-### Summary:
-- Removed all centralized logging via notify()
-- Each script now has local log() function with DEBUG=0
-- All functionality preserved
-- Production ready
+### Testing Needed:
+1. Set up TouchOSC with multiple tracks (e.g., 8 tracks)
+2. Verify all faders control correct tracks
+3. Insert a new track at position 0 in Ableton
+4. Press "Refresh All" button
+5. Verify all faders now control the correct renumbered tracks
 
 ## Implementation Status
-- Phase: Code Cleanup & Documentation
-- Step: Dead code removed, documentation updated
+- Phase: Bug Fix
+- Step: Code complete, awaiting test
 - Status: CODE_COMPLETE
 
-## Testing Status Matrix
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Notify Analysis | ✅ | All scripts analyzed |
-| Frequency Check | ✅ | No high-frequency usage found |
-| Dead Code Removal | ✅ | configuration_updated removed |
-| Documentation | ✅ | Report updated with changes |
-| Code Testing | ⏳ | Ready for user testing |
-
 ## Next Steps:
-1. User tests updated document_script.lua v2.8.2
-2. Verify configuration still works properly
-3. Merge PR #12
+1. User tests the fix with track renumbering scenario
+2. If successful, create and merge PR
+3. If issues remain, debug based on logs (set DEBUG=1)
 
-## Recommendation:
-**Keep notify() for inter-script communication** - it's working well, uses TouchOSC's intended mechanism, maintains clean architecture with loose coupling, and has NO performance impact since it's never used in high-frequency scenarios. Dead code has been removed for cleaner implementation.
+## Previous Completed Tasks:
+- Notify usage analysis (branch exists but seems abandoned)
+- Remove centralized logging (PR #11 merged)
