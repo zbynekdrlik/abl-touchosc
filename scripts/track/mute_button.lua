@@ -1,9 +1,10 @@
 -- TouchOSC Mute Button Script
--- Version: 2.0.1
--- Changed: Standardized DEBUG flag (uppercase) and disabled by default
+-- Version: 2.1.0
+-- Fixed: Removed script color control - colors now managed by TouchOSC editor
+-- Restored: User control over button colors via TouchOSC editor settings
 
 -- Version constant
-local VERSION = "2.0.1"
+local VERSION = "2.1.0"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -91,12 +92,11 @@ end
 local function updateVisualState()
     -- Buttons use values.x for pressed/released state
     -- 0 = pressed/on, 1 = released/off
+    -- Let TouchOSC handle the colors based on these states
     if isMuted then
         self.values.x = 0  -- Pressed state (muted)
-        self.color = Color(1, 0, 0, 1)  -- Red when muted
     else
         self.values.x = 1  -- Released state (unmuted)
-        self.color = Color(0.5, 0.5, 0.5, 1)  -- Gray when unmuted
     end
 end
 
