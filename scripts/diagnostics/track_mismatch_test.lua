@@ -1,10 +1,10 @@
--- TouchOSC Track Mismatch Diagnostic Script
--- Version: 1.0.0
--- Purpose: Diagnose why track 8 sends respond as track 10
+-- TouchOSC Listener Diagnostic Script
+-- Version: 1.1.0
+-- Purpose: Test AbletonOSC listener behavior
 
-local VERSION = "1.0.0"
+local VERSION = "1.1.0"
 
--- Connection configuration
+-- Configuration
 local connectionIndex = 1  -- Adjust if using multiple connections
 
 -- Build connection table
@@ -18,125 +18,146 @@ end
 
 -- Log helper
 local function log(message)
-    print("[" .. os.date("%H:%M:%S") .. "] TRACK_DIAG: " .. message)
+    print("[" .. os.date("%H:%M:%S") .. "] LISTENER_TEST: " .. message)
 end
 
 -- State tracking
-local trackNames = {}
-local volumeRequests = {}
-local volumeResponses = {}
-local testInProgress = false
-local currentTestTrack = 0
+local testPhase = "idle"
 local maxTracks = 0
+local currentTestTrack = 0
+local volumeResponses = {}
+local activeListeners = {}
 
 function init()
     log("Script v" .. VERSION .. " loaded")
-    log("Press button to start diagnostic")
-    self.children.status.values.text = "Ready to test"
+    log("This test will check for cross-wired listeners")
+    self.children.status.values.text = "Press to test listeners"
     self.children.status.color = Color.WHITE
 end
 
 function onValueChanged(key)
     if key == "x" and self.values.x == 1 then
-        -- Button pressed, start test
-        startDiagnostic()
+        if testPhase == "idle" then
+            startTest()
+        elseif testPhase == "cleanup" then
+            cleanupListeners()
+        end
     end
 end
 
-function startDiagnostic()
-    log("Starting track diagnostic...")
+function startTest()
+    log("=== STARTING LISTENER TEST ===")
+    testPhase = "get_count"
     self.children.status.values.text = "Getting track count..."
     self.children.status.color = Color.YELLOW
     
     -- Reset state
-    trackNames = {}
-    volumeRequests = {}
     volumeResponses = {}
-    testInProgress = true
+    activeListeners = {}
     currentTestTrack = 0
     
-    -- Get track information
+    -- Get track count
     local connections = buildConnectionTable(connectionIndex)
     sendOSC('/live/song/get/num_tracks', connections)
-    sendOSC('/live/song/get/track_names', connections)
+end
+
+function setupListeners()
+    testPhase = "setup_listeners"
+    self.children.status.values.text = "Setting up listeners..."
+    
+    local connections = buildConnectionTable(connectionIndex)
+    
+    -- Set up volume listeners for ALL tracks
+    for i = 0, maxTracks - 1 do
+        sendOSC('/live/track/start_listen/volume', i, connections)
+        activeListeners[i] = true
+        log("Started listener on track " .. i)
+    end
+    
+    -- Wait a bit then start testing
+    runAfter(function()
+        testPhase = "testing"
+        testNextTrack()
+    end, 1.0)
 end
 
 function testNextTrack()
     if currentTestTrack >= maxTracks then
-        -- All tracks tested, show results
         showResults()
         return
     end
     
     self.children.status.values.text = "Testing track " .. currentTestTrack .. "..."
     
-    -- Send volume request for this track
-    volumeRequests[currentTestTrack] = getMillis()
+    -- Clear previous responses
+    volumeResponses = {}
+    
+    -- Send a unique volume to this track
+    local testVolume = 0.5 + (currentTestTrack * 0.02)
     local connections = buildConnectionTable(connectionIndex)
     
-    -- Send a specific volume value to identify responses
-    local testVolume = 0.5 + (currentTestTrack * 0.01)  -- Unique value per track
+    log("Sending volume " .. string.format("%.3f", testVolume) .. " to track " .. currentTestTrack)
     sendOSC('/live/track/set/volume', currentTestTrack, testVolume, connections)
     
-    -- Move to next track after delay
+    -- Wait for responses then check
+    runAfter(function()
+        checkResponses(currentTestTrack, testVolume)
+    end, 0.3)
+end
+
+function checkResponses(sentTrack, sentVolume)
+    log("Responses for track " .. sentTrack .. ":")
+    
+    local respondingTracks = {}
+    for track, volume in pairs(volumeResponses) do
+        -- Check if volume matches (within small tolerance)
+        if math.abs(volume - sentVolume) < 0.001 then
+            table.insert(respondingTracks, track)
+            log("  - Track " .. track .. " responded with matching volume")
+        end
+    end
+    
+    if #respondingTracks == 0 then
+        log("  - NO RESPONSES!")
+    elseif #respondingTracks == 1 and respondingTracks[1] == sentTrack then
+        log("  - Correct response only")
+    else
+        log("  - CROSS-WIRED LISTENERS DETECTED!")
+    end
+    
+    -- Move to next track
     currentTestTrack = currentTestTrack + 1
-    runAfter(testNextTrack, 0.2)  -- 200ms delay between tests
+    testNextTrack()
 end
 
 function showResults()
-    testInProgress = false
+    testPhase = "cleanup"
+    self.children.status.values.text = "Test complete - press to cleanup"
+    self.children.status.color = Color.CYAN
+    
+    log("=== TEST COMPLETE ===")
+    log("Check the log for cross-wired listeners")
+    log("Press button again to stop all listeners")
+end
+
+function cleanupListeners()
+    testPhase = "idle"
+    self.children.status.values.text = "Cleaning up..."
+    self.children.status.color = Color.YELLOW
+    
+    local connections = buildConnectionTable(connectionIndex)
+    
+    -- Stop all listeners
+    for track, _ in pairs(activeListeners) do
+        sendOSC('/live/track/stop_listen/volume', track, connections)
+    end
+    
+    activeListeners = {}
+    
+    self.children.status.values.text = "Test complete"
     self.children.status.color = Color.GREEN
-    self.children.status.values.text = "Test complete - check logs"
     
-    log("=== DIAGNOSTIC RESULTS ===")
-    log("Total tracks in Ableton: " .. maxTracks)
-    
-    -- Show track names
-    log("\nTrack Names:")
-    for i = 0, maxTracks - 1 do
-        local name = trackNames[i] or "[Unknown]"
-        log("  Track " .. i .. ": " .. name)
-    end
-    
-    -- Show volume response mismatches
-    log("\nVolume Response Analysis:")
-    local mismatches = {}
-    
-    for sentTrack, sentTime in pairs(volumeRequests) do
-        local foundResponse = false
-        for respTrack, respTime in pairs(volumeResponses) do
-            -- Check if response came shortly after request
-            if respTime > sentTime and respTime < sentTime + 200 then
-                if sentTrack ~= respTrack then
-                    table.insert(mismatches, {
-                        sent = sentTrack,
-                        received = respTrack,
-                        offset = respTrack - sentTrack
-                    })
-                end
-                foundResponse = true
-                break
-            end
-        end
-        
-        if not foundResponse then
-            log("  Track " .. sentTrack .. ": NO RESPONSE")
-        end
-    end
-    
-    -- Report mismatches
-    if #mismatches > 0 then
-        log("\nMISMATCHES FOUND:")
-        for _, mismatch in ipairs(mismatches) do
-            log("  Sent to track " .. mismatch.sent .. 
-                " -> Received from track " .. mismatch.received .. 
-                " (offset: " .. mismatch.offset .. ")")
-        end
-    else
-        log("\nNo mismatches detected")
-    end
-    
-    log("\n=== END RESULTS ===")
+    log("All listeners stopped")
 end
 
 function onReceiveOSC(message, connections)
@@ -146,30 +167,20 @@ function onReceiveOSC(message, connections)
     -- Track count response
     if path == '/live/song/get/num_tracks' then
         maxTracks = args[1].value
-        log("Ableton reports " .. maxTracks .. " tracks")
-        return
-    end
-    
-    -- Track names response
-    if path == '/live/song/get/track_names' then
-        for i = 1, #args do
-            trackNames[i - 1] = args[i].value
-        end
+        log("Ableton has " .. maxTracks .. " tracks")
         
-        -- Start testing tracks
-        if testInProgress then
-            runAfter(testNextTrack, 0.5)
-        end
+        -- Start setting up listeners
+        setupListeners()
         return
     end
     
-    -- Volume response
-    if path == '/live/track/get/volume' and testInProgress then
+    -- Volume response during testing
+    if path == '/live/track/get/volume' and testPhase == "testing" then
         local trackNum = args[1].value
         local volume = args[2].value
         
-        volumeResponses[trackNum] = getMillis()
-        log("Received volume from track " .. trackNum .. ": " .. string.format("%.4f", volume))
+        -- Store this response
+        volumeResponses[trackNum] = volume
     end
 end
 
