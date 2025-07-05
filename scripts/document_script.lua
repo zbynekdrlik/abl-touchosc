@@ -1,9 +1,9 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.8.4
+-- Version: 2.8.5
 -- Purpose: Main document script with configuration and track management
--- Changed: Fixed group finding to work with mapped groups (using name pattern instead of tag)
+-- Changed: Fixed group finding to work properly by checking all controls recursively
 
-local VERSION = "2.8.4"
+local VERSION = "2.8.5"
 local SCRIPT_NAME = "Document Script"
 
 -- Debug flag - set to 1 to enable logging
@@ -39,20 +39,26 @@ end
 -- === HELPER TO FIND TRACK GROUPS ===
 local function findTrackGroups()
     local groups = {}
-    local allControls = root:findAllByProperty("name", "*", true)  -- Find all controls
     
-    -- Look for groups that match our naming pattern
-    for _, control in ipairs(allControls) do
-        if control.name then
+    -- Function to recursively search for groups
+    local function searchControl(control)
+        if control and control.name then
             -- Check if name starts with "band_" or "master_"
-            if control.name:match("^band_") or control.name:match("^master_") then
-                -- Additional check: must be a group (have children)
-                if control.children then
-                    table.insert(groups, control)
-                end
+            if (control.name:match("^band_") or control.name:match("^master_")) and control.children then
+                table.insert(groups, control)
+            end
+        end
+        
+        -- Recursively search children
+        if control and control.children then
+            for name, child in pairs(control.children) do
+                searchControl(child)
             end
         end
     end
+    
+    -- Start searching from root
+    searchControl(root)
     
     return groups
 end
