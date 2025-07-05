@@ -6,7 +6,7 @@
 local SCRIPT_VERSION = "1.16.2"
 
 -- Debug flag - set to 1 to enable logging
-local DEBUG = 1
+local DEBUG = 0
 
 -- Script-level variables to store group data
 local instance = nil
