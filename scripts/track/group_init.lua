@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.16.2
--- Changed: Register group with document script on init for reliable refresh
+-- Version: 1.16.3
+-- Changed: Fix interactivity - meter and labels remain non-interactive when group is mapped
 
 -- Version constant
-local SCRIPT_VERSION = "1.16.2"
+local SCRIPT_VERSION = "1.16.3"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -126,15 +126,28 @@ local function setGroupEnabled(enabled, silent)
     
     local childCount = 0
     
-    -- Only check for controls we know exist (fixed db_label -> db)
-    local controlsToCheck = {"fader", "mute", "pan", "meter", "track_label", "db"}
+    -- Only these controls should become interactive when group is mapped
+    local interactiveControls = {"fader", "mute", "pan"}
     
-    for _, name in ipairs(controlsToCheck) do
+    -- These controls should always remain non-interactive
+    local nonInteractiveControls = {"meter", "track_label", "db"}
+    
+    -- Set interactivity for controls that should change
+    for _, name in ipairs(interactiveControls) do
         local child = getChild(self, name)
-        if child and name ~= "status_indicator" and name ~= "connection_label" then
-            -- ONLY CHANGE INTERACTIVITY - NO VISUAL CHANGES!
+        if child then
             child.interactive = enabled
             childCount = childCount + 1
+            log("Set " .. name .. " interactive: " .. tostring(enabled))
+        end
+    end
+    
+    -- Ensure non-interactive controls stay non-interactive
+    for _, name in ipairs(nonInteractiveControls) do
+        local child = getChild(self, name)
+        if child then
+            child.interactive = false
+            log("Keeping " .. name .. " non-interactive")
         end
     end
     
