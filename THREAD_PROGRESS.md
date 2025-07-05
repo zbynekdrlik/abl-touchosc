@@ -1,68 +1,50 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**✅ READY FOR MERGE - PRODUCTION READY:**
-- [x] Currently working on: COMPLETE - Fix refresh all button track renumbering issue
-- [x] All scripts have DEBUG = 0 for production (VERIFIED)
-- [x] Testing confirmed successful
-- [x] Final pre-merge checks completed
-- [ ] Waiting for: User to merge PR #15
+**⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
+- [x] Currently working on: Fix group interactivity bug - IMPLEMENTED
+- [ ] Waiting for: User to test the fix
+- [ ] Blocked by: None
 
-## Current Task: Fix Refresh Track Renumbering - COMPLETE
-**Started**: 2025-07-05
-**Branch**: feature/fix-refresh-track-renumbering  
-**Status**: PRODUCTION_READY
-**PR**: #15 - Ready to merge
+## Current Task: Fix Group Interactivity Bug
+**Started**: 2025-07-05  
+**Branch**: feature/fix-group-interactivity
+**Status**: IMPLEMENTED_NOT_TESTED
+**PR**: #16 - Created, waiting for testing
 
-### Solution Summary:
-Implemented a registration system where track groups self-register with the document script during initialization. This avoids the issues with searching TouchOSC's control hierarchy and ensures refresh works regardless of tag changes.
+### Problem Description:
+When a group is enabled/mapped, the meter control was incorrectly becoming interactive along with the fader, mute, and pan controls. Meter and labels should always remain non-interactive.
 
-### Final Changes:
-1. ✅ **group_init.lua v1.16.2**:
-   - Each group registers itself with document script on init
-   - Properly handles clear_mapping and refresh_tracks
-   - Resets tag and notifies children on clear
-   - **DEBUG = 0** (verified)
+### Solution Implemented:
+Modified `setGroupEnabled` function in `group_init.lua` to:
+1. Split controls into two categories:
+   - Interactive controls: fader, mute, pan (change with group state)
+   - Non-interactive controls: meter, track_label, db (always non-interactive)
+2. Added explicit logic to keep non-interactive controls non-interactive
+3. Added debug logging to track interactivity changes
 
-2. ✅ **document_script.lua v2.8.7**:
-   - Maintains registry of track groups
-   - No searching required - groups self-register
-   - 100ms delay between clear and refresh operations
-   - **DEBUG = 0** (verified)
+### Changes Made:
+1. ✅ **group_init.lua v1.16.3**:
+   - Fixed `setGroupEnabled` function
+   - Split control lists into interactive and non-interactive
+   - Added logging for interactivity changes
+   - **DEBUG = 0** (production ready)
 
-3. ✅ **fader_script.lua v2.5.3**:
-   - Handles mapping_cleared notification
-   - Cancels animations when mapping is cleared
-   - Always reads fresh track info from parent tag
-   - **DEBUG = 0** (verified)
-
-4. ✅ **Additional scripts verified**:
-   - global_refresh_button.lua v1.5.1 - **DEBUG = 0**
-   - mute_button.lua v2.0.1 - **DEBUG = 0**
-   - meter_script.lua v2.4.1 - **DEBUG = 0**
-   - All other track scripts - **DEBUG = 0**
-
-### Testing Results:
-- ✅ Groups register successfully on startup
-- ✅ Refresh finds and clears all groups (not 0)
-- ✅ Track renumbering works correctly (track 7 → track 6 confirmed)
-- ✅ Faders control correct tracks after refresh
-- ✅ No controls stuck on wrong tracks
-
-### Production Ready Checklist:
-- ✅ All scripts have DEBUG = 0 (verified 2025-07-05)
-- ✅ CHANGELOG.md updated
-- ✅ Documentation complete
-- ✅ PR description updated
-- ✅ Testing successful
-- ✅ No DEBUG flags or development artifacts remain
+### Testing Required:
+- [ ] Load TouchOSC with updated script
+- [ ] Verify meters and labels are non-interactive initially
+- [ ] Map a group to a track in Ableton
+- [ ] Verify fader, mute, pan become interactive
+- [ ] Verify meter and labels remain non-interactive
+- [ ] Test with DEBUG=1 to see logging
 
 ## Previous Tasks Completed:
-1. **Notify Usage Analysis** - Merged PR #12
-2. **Remove Centralized Logging** - Merged PR #11
-3. **Dead Code Removal** - Completed in PR #12
+1. **Refresh Track Renumbering Fix** - PR #15 ready to merge (from previous thread)
+2. **Notify Usage Analysis** - Merged PR #12
+3. **Remove Centralized Logging** - Merged PR #11
+4. **Dead Code Removal** - Completed in PR #12
 
 ## Next Steps:
-1. **Merge PR #15** to main branch
-2. Close issue related to track renumbering
-3. Update main branch documentation if needed
+1. User tests the interactivity fix
+2. If successful, merge PR #16
+3. Check if PR #15 should still be merged
