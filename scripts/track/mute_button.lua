@@ -6,7 +6,7 @@
 local VERSION = "2.1.4"
 
 -- Debug flag - set to 1 to enable logging
-local DEBUG = 1  -- ENABLED FOR DEBUGGING
+local DEBUG = 0  -- Production mode
 
 -- State variables
 local trackNumber = nil
@@ -215,15 +215,7 @@ end
 -- ===========================
 
 function init()
-    print("=== MUTE BUTTON INIT START ===")
     log("Script v" .. VERSION .. " loaded")
-    
-    -- Check parent
-    if self.parent then
-        log("Parent found: " .. tostring(self.parent.name))
-    else
-        log("WARNING: No parent found!")
-    end
     
     -- Get initial track info
     trackNumber, trackType = getTrackInfo()
@@ -236,8 +228,6 @@ function init()
     
     -- Set initial visual state
     updateVisualState()
-    
-    print("=== MUTE BUTTON INIT COMPLETE ===")
 end
 
 -- Call init
