@@ -1,16 +1,19 @@
 -- TouchOSC dB Value Label Display
--- Version: 1.4.0
--- Restored: Multi-connection routing support
--- Maintained: All existing functionality
+-- Version: 1.4.1
+-- Fixed: Cache connection index to avoid repeated lookups
+-- Improved: Performance optimization for multi-connection support
 
 -- Version constant
-local VERSION = "1.4.0"
+local VERSION = "1.4.1"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
 
 -- State variable (must be local, not on self)
 local lastDB = -math.huge
+
+-- CACHED CONNECTION INDEX (Performance optimization)
+local cachedConnectionIndex = nil
 
 -- ===========================
 -- LOCAL LOGGING
@@ -42,19 +45,26 @@ local function getTrackInfo()
     return nil, nil
 end
 
--- Get connection index by reading configuration directly (RESTORED)
+-- Get connection index by reading configuration (CACHED)
 local function getConnectionIndex()
+    -- Return cached value if available
+    if cachedConnectionIndex then
+        return cachedConnectionIndex
+    end
+    
     -- Default to connection 1 if can't determine
     local defaultConnection = 1
     
     -- Check parent tag for instance name
     if not self.parent or not self.parent.tag then
+        cachedConnectionIndex = defaultConnection
         return defaultConnection
     end
     
     -- Extract instance name from tag
     local instance = self.parent.tag:match("^(%w+):")
     if not instance then
+        cachedConnectionIndex = defaultConnection
         return defaultConnection
     end
     
@@ -64,6 +74,7 @@ local function getConnectionIndex()
         if DEBUG == 1 then
             log("No configuration found, using default connection")
         end
+        cachedConnectionIndex = defaultConnection
         return defaultConnection
     end
     
@@ -73,16 +84,19 @@ local function getConnectionIndex()
         -- Look for connection_instance: number pattern
         local configInstance, connectionNum = line:match("connection_(%w+):%s*(%d+)")
         if configInstance and configInstance == instance then
+            local index = tonumber(connectionNum) or defaultConnection
+            cachedConnectionIndex = index
             if DEBUG == 1 then
-                log("Found connection for " .. instance .. ": " .. connectionNum)
+                log("Cached connection for " .. instance .. ": " .. index)
             end
-            return tonumber(connectionNum) or defaultConnection
+            return index
         end
     end
     
     if DEBUG == 1 then
         log("No connection found for instance: " .. instance)
     end
+    cachedConnectionIndex = defaultConnection
     return defaultConnection
 end
 
@@ -131,7 +145,7 @@ function formatDB(db_value)
 end
 
 -- ===========================
--- OSC HANDLER WITH MULTI-CONNECTION
+-- OSC HANDLER WITH MULTI-CONNECTION (OPTIMIZED)
 -- ===========================
 
 function onReceiveOSC(message, connections)
@@ -156,7 +170,7 @@ function onReceiveOSC(message, connections)
         return false
     end
     
-    -- Get our connection index (MULTI-CONNECTION SUPPORT)
+    -- Get our connection index (CACHED FOR PERFORMANCE)
     local myConnection = getConnectionIndex()
     
     -- Check if this message is from our connection
@@ -170,13 +184,16 @@ function onReceiveOSC(message, connections)
         local audio_value = arguments[2].value
         local db_value = value2db(audio_value)
         
-        -- Update label text
-        self.values.text = formatDB(db_value)
-        lastDB = db_value
-        
-        if DEBUG == 1 then
-            log(string.format("%s track %d (conn %d): %.1f dB", 
-                trackType, trackNumber, myConnection, db_value))
+        -- Only update if value changed significantly
+        if math.abs(db_value - lastDB) > 0.1 then
+            -- Update label text
+            self.values.text = formatDB(db_value)
+            lastDB = db_value
+            
+            if DEBUG == 1 then
+                log(string.format("%s track %d (conn %d): %.1f dB", 
+                    trackType, trackNumber, myConnection, db_value))
+            end
         end
     end
     
@@ -193,10 +210,20 @@ function onReceiveNotify(key, value)
         -- Clear the display when track changes
         self.values.text = "-inf"
         lastDB = -math.huge
+        -- Clear cached connection index as track may have changed instance
+        cachedConnectionIndex = nil
+        if DEBUG == 1 then
+            log("Track changed - cleared cache")
+        end
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
         self.values.text = "-"
         lastDB = nil
+        -- Clear cached connection index
+        cachedConnectionIndex = nil
+        if DEBUG == 1 then
+            log("Track unmapped - cleared cache")
+        end
     elseif key == "control_enabled" then
         -- Show/hide based on track mapping status
         self.values.visible = value
@@ -218,9 +245,12 @@ function init()
         self.values.text = "-"
     end
     
+    -- Cache connection index at startup
+    getConnectionIndex()
+    
     if DEBUG == 1 then
-        log("=== DB LABEL WITH MULTI-CONNECTION RESTORED ===")
-        log("Multi-connection routing enabled")
+        log("=== DB LABEL WITH OPTIMIZED MULTI-CONNECTION ===")
+        log("Connection caching enabled for performance")
     end
 end
 
