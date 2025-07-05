@@ -169,9 +169,9 @@ The system uses a unified script architecture:
 | fader_script.lua | 2.5.3 | Volume control with mapping_cleared handling |
 | meter_script.lua | 2.4.1 | Level metering unified |
 | mute_button.lua | 2.0.1 | Mute control unified |
-| pan_control.lua | 1.4.1 | Pan control unified |
+| pan_control.lua | 1.5.1 | Pan control unified |
 | db_label.lua | 1.2.0 | dB display unified |
-| db_meter_label.lua | 2.5.1 | Peak meter unified |
+| db_meter_label.lua | 2.6.1 | Peak meter unified |
 | global_refresh_button.lua | 1.5.1 | Manual refresh trigger |
 
 ### Unified Architecture Details
