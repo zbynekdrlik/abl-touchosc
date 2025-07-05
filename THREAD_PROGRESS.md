@@ -5,11 +5,11 @@
 - [x] Issue identified: Multiple tracks receiving same listener events
 - [x] Pattern found: Track 5 broadcasts to tracks 5,6,7; Track 8 responds as track 10
 - [x] Root cause: AbletonOSC listener system bug (not TouchOSC issue)
-- [ ] Next step: Investigate AbletonOSC fork to fix the bug at source
+- [ ] Next step: Fork AbletonOSC and investigate the bug
 
 ## Implementation Status
 - Phase: BUG ROOT CAUSE IDENTIFIED
-- Status: PIVOTING TO ABLETONOSC FORK INVESTIGATION
+- Status: NEED TO FORK ABLETONOSC
 - Branch: feature/track-8-10-mismatch
 
 ## Issue Analysis
@@ -35,12 +35,24 @@ RECEIVE: /live/track/get/volume FLOAT(10) FLOAT(0.7574361)
 3. No hidden tracks, no group tracks - pure AbletonOSC bug
 4. Pattern suggests listeners are being registered to wrong track indices
 
-## Next Steps
-1. Access user's AbletonOSC fork
-2. Investigate listener registration in track.py
-3. Check how start_listen/stop_listen manages track indices
-4. Fix the cross-wiring bug in AbletonOSC
-5. Test fix with user's Ableton setup
+## Next Steps for User
+1. Fork https://github.com/ideoforms/AbletonOSC
+2. Share the fork URL so we can investigate
+3. We'll look into:
+   - `track.py` - how listeners are registered
+   - `handler.py` - how messages are routed
+   - The start_listen/stop_listen implementation
+
+## Likely Bug Location
+Based on the pattern, the bug is probably in how AbletonOSC:
+- Registers volume listeners to track objects
+- Routes responses back with track indices
+- Manages the listener callback registry
+
+## Temporary Workarounds
+1. Avoid using tracks that exhibit this behavior
+2. Rename tracks in Ableton to work around the issue
+3. Use only tracks that respond correctly
 
 ## Diagnostic Tools Created
 - track_mismatch_test.lua v1.1.0 - Tests for listener cross-wiring
