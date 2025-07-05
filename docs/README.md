@@ -6,9 +6,6 @@ Welcome to the ABL TouchOSC documentation. This guide will help you find the inf
 
 ### Getting Started
 - **[README.md](../README.md)** - Project overview, features, and quick start guide
-- **[Configuration Guide](#)** - Detailed configuration options and examples
-
-### Using the System
 - **[User Guide](../README.md#-user-guide)** - How to use the controls
 - **[Troubleshooting](../README.md#-troubleshooting)** - Common issues and solutions
 
@@ -21,41 +18,34 @@ Welcome to the ABL TouchOSC documentation. This guide will help you find the inf
 
 ### Development
 - **[Contributing Guidelines](CONTRIBUTING.md)** - How to contribute to the project
-- **[Script Template](touchosc-script-template.md)** - Template for new scripts
 - **[TouchOSC Lua Rules](../rules/touchosc-lua-rules.md)** - Critical TouchOSC knowledge
+- **[AbletonOSC Meter Calibration](../rules/abletonosc-meter-calibration.md)** - Meter calibration reference
 
 ## 📋 Additional Resources
 
-### Migration and Setup
-- **[Production Migration Guide](production-migration-guide.md)** - Moving to production
+### Technical Analysis
+- **[Notify Usage Analysis](notify-usage-analysis.md)** - Inter-script communication patterns
+- **[Performance Optimization](performance-optimization-phases.md)** - Performance improvement strategies
+- **[Performance Issues Reference](performance-issues-quick-reference.md)** - Quick troubleshooting guide
 
-### Development History
-These documents track the development process and are kept for reference:
-
-#### Phase Documentation
-- [Development Phases Overview](development-phases.md)
-- [Phase 1: Foundation](01-selective-connection-routing-phase.md)
-- [Phase 3: Testing](phase-3-script-testing.md)
-- [Implementation Progress](implementation-progress.md)
-
-#### Testing Documentation
-- [Test Group Setup](test-group-setup.md)
-- [Single Track Test](single-track-complete-test.md)
-- [Verification Checklist](verification-checklist.md)
+### Implementation Details
+- **[Return Track Issue Documentation](abletonosc-return-track-issue.md)** - AbletonOSC return track support
 
 ## 🗂️ Documentation Structure
 
 ```
 docs/
-├── README.md                    # This index file
-├── TECHNICAL.md                 # Technical documentation
-├── CONTRIBUTING.md              # Contributing guidelines
-├── touchosc-script-template.md  # Script development template
-├── production-migration-guide.md # Production setup guide
-└── development/                 # Development history (archived)
-    ├── development-phases.md
-    ├── implementation-progress.md
-    └── testing/
+├── README.md                             # This index file
+├── TECHNICAL.md                          # Technical documentation
+├── CONTRIBUTING.md                       # Contributing guidelines
+├── notify-usage-analysis.md              # Script communication analysis
+├── performance-optimization-phases.md    # Performance strategies
+├── performance-issues-quick-reference.md # Quick fixes
+├── abletonosc-return-track-issue.md     # Return track details
+└── archive/                              # Historical development docs
+    ├── README.md                         # Archive index
+    ├── moved-files.md                    # File relocation log
+    └── [various phase docs]              # Development history
 ```
 
 ## 🔍 Quick Links
@@ -68,14 +58,16 @@ docs/
 ### For Developers
 1. Read [Contributing Guidelines](CONTRIBUTING.md)
 2. Study the [Technical Documentation](TECHNICAL.md)
-3. Use the [Script Template](touchosc-script-template.md)
-4. Understand [TouchOSC Rules](../rules/touchosc-lua-rules.md)
+3. Understand [TouchOSC Rules](../rules/touchosc-lua-rules.md)
+4. Review [Script Communication](notify-usage-analysis.md)
 
 ### For Production Setup
-1. Complete testing with single group
-2. Follow [Production Migration Guide](production-migration-guide.md)
-3. Scale to multiple groups
+1. Complete testing with DEBUG = 0 in all scripts
+2. Verify all features working as expected
+3. Use the release version from the main branch
 
 ---
 
+**Current Version:** v1.3.0 with group registration system  
+**Latest Update:** Fixed refresh button track renumbering issue  
 **Need help?** Open an issue on GitHub with your question!
