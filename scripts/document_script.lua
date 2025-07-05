@@ -1,13 +1,13 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.8.5
+-- Version: 2.8.6
 -- Purpose: Main document script with configuration and track management
--- Changed: Fixed group finding to work properly by checking all controls recursively
+-- Changed: Added debug logging to diagnose group finding issue
 
-local VERSION = "2.8.5"
+local VERSION = "2.8.6"
 local SCRIPT_NAME = "Document Script"
 
 -- Debug flag - set to 1 to enable logging
-local DEBUG = 0
+local DEBUG = 1  -- TEMPORARILY ENABLED FOR DEBUGGING
 
 -- Configuration storage
 local config = {
@@ -39,26 +39,45 @@ end
 -- === HELPER TO FIND TRACK GROUPS ===
 local function findTrackGroups()
     local groups = {}
+    local searchCount = 0
     
     -- Function to recursively search for groups
-    local function searchControl(control)
+    local function searchControl(control, depth)
+        searchCount = searchCount + 1
+        
         if control and control.name then
+            -- Debug: log what we're checking
+            if depth <= 2 then  -- Only log first few levels to avoid spam
+                log("Checking control: " .. control.name .. " (depth: " .. depth .. ")")
+            end
+            
             -- Check if name starts with "band_" or "master_"
-            if (control.name:match("^band_") or control.name:match("^master_")) and control.children then
-                table.insert(groups, control)
+            if (control.name:match("^band_") or control.name:match("^master_")) then
+                log("Found potential group: " .. control.name .. " - has children: " .. tostring(control.children ~= nil))
+                if control.children then
+                    table.insert(groups, control)
+                    log("Added group: " .. control.name)
+                end
             end
         end
         
         -- Recursively search children
         if control and control.children then
             for name, child in pairs(control.children) do
-                searchControl(child)
+                searchControl(child, depth + 1)
             end
         end
     end
     
     -- Start searching from root
-    searchControl(root)
+    log("Starting group search from root...")
+    searchControl(root, 0)
+    log("Search complete. Checked " .. searchCount .. " controls, found " .. #groups .. " groups")
+    
+    -- Log the names of found groups
+    for i, group in ipairs(groups) do
+        log("Group " .. i .. ": " .. group.name)
+    end
     
     return groups
 end
