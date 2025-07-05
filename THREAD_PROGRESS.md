@@ -4,7 +4,7 @@
 **⚠️ MULTI-CONNECTION SUPPORT RESTORED - CLEAN VERSION:**
 - [x] Issue identified: Meter scripts lost multi-connection support after v1.2.0
 - [x] Root cause: getConnectionIndex() function and connection filtering removed
-- [x] Fixed: meter_script.lua v2.5.1 (with caching for performance)
+- [x] Fixed: meter_script.lua v2.5.2 (with caching + cleaned up logging)
 - [x] Fixed: db_meter_label.lua v2.6.2 (minimal changes only)
 - [x] Fixed: db_label.lua v1.3.2 (minimal changes only)
 - [x] PR #20 updated with clean versions
@@ -24,10 +24,13 @@ After user feedback about unwanted changes, created minimal versions that ONLY a
 2. Connection filtering in `onReceiveOSC()`
 3. No other behavior changes
 
+Additional cleanup:
+- meter_script.lua now uses consistent logging function (removed debugPrint)
+
 ## Scripts Fixed
 | Script | Old Version | Clean Version | Changes |
 |--------|-------------|---------------|---------|
-| meter_script.lua | 2.4.1 | 2.5.1 | Multi-connection + caching (performance critical) |
+| meter_script.lua | 2.4.1 | 2.5.2 | Multi-connection + caching + clean logging |
 | db_meter_label.lua | 2.6.1 | 2.6.2 | Multi-connection only (no other changes) |
 | db_label.lua | 1.3.1 | 1.3.2 | Multi-connection only (no other changes) |
 
@@ -62,3 +65,4 @@ When fixing bugs:
 2. Don't add "helpful" optimizations unless requested
 3. Preserve existing behavior exactly
 4. Keep version increments minimal (patch level for bug fixes)
+5. Use consistent coding patterns (one log function, not multiple)
