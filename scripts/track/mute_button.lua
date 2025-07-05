@@ -1,13 +1,12 @@
 -- TouchOSC Mute Button Script
--- Version: 2.1.0
--- Fixed: Removed script color control - colors now managed by TouchOSC editor
--- Restored: User control over button colors via TouchOSC editor settings
+-- Version: 2.1.1
+-- Debug version with enhanced logging to diagnose issues
 
 -- Version constant
-local VERSION = "2.1.0"
+local VERSION = "2.1.1"
 
 -- Debug flag - set to 1 to enable logging
-local DEBUG = 0
+local DEBUG = 1  -- ENABLED FOR DEBUGGING
 
 -- State variables
 local trackNumber = nil
@@ -75,12 +74,19 @@ end
 
 -- Get track number and type from parent group
 local function getTrackInfo()
+    log("Getting track info from parent...")
     -- Parent stores track info in tag as "instance:trackNumber:trackType"
     if self.parent and self.parent.tag then
+        log("Parent tag: " .. tostring(self.parent.tag))
         local instance, trackNum, trackType = self.parent.tag:match("^(%w+):(%d+):(%w+)$")
         if trackNum and trackType then
+            log("Parsed track info - number: " .. trackNum .. ", type: " .. trackType)
             return tonumber(trackNum), trackType
+        else
+            log("Failed to parse parent tag")
         end
+    else
+        log("No parent or parent tag found")
     end
     return nil, nil
 end
@@ -93,11 +99,9 @@ local function updateVisualState()
     -- Buttons use values.x for pressed/released state
     -- 0 = pressed/on, 1 = released/off
     -- Let TouchOSC handle the colors based on these states
-    if isMuted then
-        self.values.x = 0  -- Pressed state (muted)
-    else
-        self.values.x = 1  -- Released state (unmuted)
-    end
+    local newState = isMuted and 0 or 1
+    log("Updating visual state - muted: " .. tostring(isMuted) .. ", x: " .. newState)
+    self.values.x = newState
 end
 
 -- ===========================
@@ -108,6 +112,7 @@ end
 local function sendOSCRouted(path, track, mute)
     local connectionIndex = getConnectionIndex()
     local connections = buildConnectionTable(connectionIndex)
+    log("Sending OSC - path: " .. path .. ", track: " .. track .. ", mute: " .. mute .. ", connection: " .. connectionIndex)
     sendOSC(path, track, mute, connections)
 end
 
@@ -115,8 +120,12 @@ function onReceiveOSC(message, connections)
     local path = message[1]
     local arguments = message[2]
     
+    -- Log all incoming OSC messages for debugging
+    log("Received OSC: " .. path)
+    
     -- Check if we have track info
     if not trackNumber or not trackType then
+        log("No track info available, ignoring OSC")
         return false
     end
     
@@ -132,10 +141,13 @@ function onReceiveOSC(message, connections)
         return false
     end
     
+    log("Mute message for track " .. arguments[1].value .. ", our track: " .. trackNumber)
+    
     -- Check if this message is for our track
     if arguments[1].value == trackNumber then
         -- Update mute state (1 = muted, 0 = unmuted in Ableton)
         isMuted = (arguments[2].value == 1)
+        log("Updated mute state to: " .. tostring(isMuted))
         updateVisualState()
     end
     
@@ -147,15 +159,21 @@ end
 -- ===========================
 
 function onValueChanged(valueName)
+    log("Value changed: " .. valueName .. " = " .. tostring(self.values[valueName]))
+    
     -- Handle touch events
     if valueName == "touch" and self.values.touch == 1 then
+        log("Touch detected")
+        
         -- Check if track is mapped
         if not trackNumber or not trackType then
+            log("No track mapped, ignoring touch")
             return
         end
         
         -- Toggle mute state
         isMuted = not isMuted
+        log("Toggled mute state to: " .. tostring(isMuted))
         
         -- Send OSC based on track type
         local path = trackType == "return" and '/live/return/set/mute' or '/live/track/set/mute'
@@ -163,6 +181,22 @@ function onValueChanged(valueName)
         
         -- Update visual state immediately for responsiveness
         updateVisualState()
+    
+    -- Also handle x value changes (for compatibility)
+    elseif valueName == "x" then
+        log("X value changed to: " .. self.values.x)
+        -- If x changed externally (user pressing button), treat as toggle
+        if trackNumber and trackType then
+            -- Only respond to user input, not our own updates
+            local expectedX = isMuted and 0 or 1
+            if self.values.x ~= expectedX then
+                log("X changed by user interaction, toggling mute")
+                isMuted = not isMuted
+                local path = trackType == "return" and '/live/return/set/mute' or '/live/track/set/mute'
+                sendOSCRouted(path, trackNumber, isMuted and 1 or 0)
+                updateVisualState()
+            end
+        end
     end
 end
 
@@ -171,6 +205,8 @@ end
 -- ===========================
 
 function onReceiveNotify(key, value)
+    log("Received notify: " .. key .. " = " .. tostring(value))
+    
     if key == "track_changed" then
         trackNumber = value
         -- Reset mute state when track changes
@@ -191,13 +227,30 @@ end
 -- ===========================
 
 function init()
+    print("=== MUTE BUTTON INIT START ===")
     log("Script v" .. VERSION .. " loaded")
+    
+    -- Check parent
+    if self.parent then
+        log("Parent found: " .. tostring(self.parent.name))
+    else
+        log("WARNING: No parent found!")
+    end
     
     -- Get initial track info
     trackNumber, trackType = getTrackInfo()
     
+    if trackNumber then
+        log("Initialized with track " .. trackNumber .. " type " .. trackType)
+    else
+        log("No track assigned at init")
+    end
+    
     -- Set initial visual state
     updateVisualState()
+    
+    print("=== MUTE BUTTON INIT COMPLETE ===")
 end
 
+-- Call init
 init()
