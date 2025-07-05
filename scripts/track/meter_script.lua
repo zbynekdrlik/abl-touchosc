@@ -1,10 +1,9 @@
 -- TouchOSC Meter Script with Multi-Connection Support
--- Version: 2.5.0
--- Restored: Multi-connection routing from v2.3.1
--- Added: Animation from v2.4.1
--- Fixed: Proper logging and connection handling
+-- Version: 2.5.1
+-- Fixed: Cache connection index to avoid repeated lookups
+-- Improved: Performance optimization for multi-connection support
 
-local VERSION = "2.5.0"
+local VERSION = "2.5.1"
 
 -- DEBUG MODE
 local DEBUG = 0  -- Set to 1 to see meter values and conversions in console
@@ -47,6 +46,9 @@ local lastMeterValue = 0
 local ANIMATION_DURATION = 0.3  -- 300ms for smooth animation
 local FALL_SPEED_FACTOR = 1.5   -- Falls 1.5x faster than it rises
 
+-- CACHED CONNECTION INDEX (Performance optimization)
+local cachedConnectionIndex = nil
+
 -- ===========================
 -- LOGGING
 -- ===========================
@@ -73,7 +75,7 @@ function debugPrint(...)
 end
 
 -- ===========================
--- MULTI-CONNECTION SUPPORT (RESTORED)
+-- MULTI-CONNECTION SUPPORT (OPTIMIZED)
 -- ===========================
 
 -- Get track number and type from parent group
@@ -88,19 +90,26 @@ local function getTrackInfo()
     return nil, nil
 end
 
--- Get connection index by reading configuration directly (RESTORED)
+-- Get connection index by reading configuration (CACHED)
 local function getConnectionIndex()
+    -- Return cached value if available
+    if cachedConnectionIndex then
+        return cachedConnectionIndex
+    end
+    
     -- Default to connection 1 if can't determine
     local defaultConnection = 1
     
     -- Check parent tag for instance name
     if not self.parent or not self.parent.tag then
+        cachedConnectionIndex = defaultConnection
         return defaultConnection
     end
     
     -- Extract instance name from tag
     local instance = self.parent.tag:match("^(%w+):")
     if not instance then
+        cachedConnectionIndex = defaultConnection
         return defaultConnection
     end
     
@@ -108,6 +117,7 @@ local function getConnectionIndex()
     local configObj = root:findByName("configuration", true)
     if not configObj or not configObj.values or not configObj.values.text then
         debugPrint("No configuration found, using default connection")
+        cachedConnectionIndex = defaultConnection
         return defaultConnection
     end
     
@@ -117,12 +127,15 @@ local function getConnectionIndex()
         -- Look for connection_instance: number pattern
         local configInstance, connectionNum = line:match("connection_(%w+):%s*(%d+)")
         if configInstance and configInstance == instance then
-            debugPrint("Found connection for", instance, ":", connectionNum)
-            return tonumber(connectionNum) or defaultConnection
+            local index = tonumber(connectionNum) or defaultConnection
+            cachedConnectionIndex = index
+            debugPrint("Cached connection for", instance, ":", index)
+            return index
         end
     end
     
     debugPrint("No connection found for instance:", instance)
+    cachedConnectionIndex = defaultConnection
     return defaultConnection
 end
 
@@ -270,7 +283,7 @@ function update()
 end
 
 -- ===========================
--- OSC HANDLING WITH MULTI-CONNECTION (RESTORED)
+-- OSC HANDLING WITH MULTI-CONNECTION (OPTIMIZED)
 -- ===========================
 
 function onReceiveOSC(message, connections)
@@ -294,7 +307,7 @@ function onReceiveOSC(message, connections)
     return false
   end
   
-  -- Get our connection index (MULTI-CONNECTION SUPPORT)
+  -- Get our connection index (CACHED FOR PERFORMANCE)
   local myConnection = getConnectionIndex()
   
   -- Check if this message is from our connection
@@ -327,18 +340,20 @@ function onReceiveOSC(message, connections)
     animationActive = true
   end
   
-  -- Debug logging
-  debugPrint("=== METER UPDATE ===")
-  debugPrint("Track Type:", trackType, "Track:", trackNumber, "Connection:", myConnection)
-  debugPrint("AbletonOSC normalized:", string.format("%.4f", normalized_meter))
-  debugPrint("→ Fader position:", string.format("%.1f%%", fader_position * 100))
-  
-  -- Calculate actual dB for display
-  local audio_value = linearToLog(fader_position)
-  local actual_db = value2db(audio_value)
-  debugPrint("→ Actual dB:", string.format("%.1f", actual_db))
-  debugPrint("→ Color:", actual_db >= COLOR_THRESHOLD_RED and "RED" or
-                       actual_db >= COLOR_THRESHOLD_YELLOW and "YELLOW" or "GREEN")
+  -- Debug logging (reduced frequency)
+  if DEBUG == 1 and math.abs(fader_position - lastMeterValue) > 0.01 then
+    debugPrint("=== METER UPDATE ===")
+    debugPrint("Track Type:", trackType, "Track:", trackNumber, "Connection:", myConnection)
+    debugPrint("AbletonOSC normalized:", string.format("%.4f", normalized_meter))
+    debugPrint("→ Fader position:", string.format("%.1f%%", fader_position * 100))
+    
+    -- Calculate actual dB for display
+    local audio_value = linearToLog(fader_position)
+    local actual_db = value2db(audio_value)
+    debugPrint("→ Actual dB:", string.format("%.1f", actual_db))
+    debugPrint("→ Color:", actual_db >= COLOR_THRESHOLD_RED and "RED" or
+                         actual_db >= COLOR_THRESHOLD_YELLOW and "YELLOW" or "GREEN")
+  end
   
   return true  -- Stop propagation
 end
@@ -352,13 +367,17 @@ function onReceiveNotify(key, value)
         animationActive = false
         current_color = {COLOR_GREEN[1], COLOR_GREEN[2], COLOR_GREEN[3], COLOR_GREEN[4]}
         self.color = Color(current_color[1], current_color[2], current_color[3], current_color[4])
-        debugPrint("Track changed - reset meter")
+        -- Clear cached connection index as track may have changed instance
+        cachedConnectionIndex = nil
+        debugPrint("Track changed - reset meter and cleared cache")
     elseif key == "track_unmapped" then
         -- Disable meter when track is unmapped
         self.values.x = 0
         lastMeterValue = 0
         animationActive = false
-        debugPrint("Track unmapped - disabled meter")
+        -- Clear cached connection index
+        cachedConnectionIndex = nil
+        debugPrint("Track unmapped - disabled meter and cleared cache")
     end
 end
 
@@ -374,9 +393,12 @@ function init()
   self.values.x = 0
   lastMeterValue = 0
   
-  log("=== METER SCRIPT WITH MULTI-CONNECTION RESTORED ===")
-  log("Multi-connection routing enabled")
-  log("Animation support added")
+  -- Cache connection index at startup
+  getConnectionIndex()
+  
+  log("=== METER SCRIPT WITH OPTIMIZED MULTI-CONNECTION ===")
+  log("Connection caching enabled for performance")
+  log("Animation support active")
   
   -- Log parent info
   if self.parent then
