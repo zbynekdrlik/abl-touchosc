@@ -1,9 +1,9 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.5.2
--- Changed: Standardized DEBUG flag (uppercase) and disabled by default
+-- Version: 2.5.3
+-- Changed: Added handling for mapping_cleared notification to prevent stale track references
 
 -- Version constant
-local VERSION = "2.5.2"
+local VERSION = "2.5.3"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -681,6 +681,12 @@ function onReceiveNotify(key, value)
     last_position = self.values.x  -- Keep current position
   elseif key == "track_unmapped" then
     -- Don't change fader position
+  elseif key == "mapping_cleared" then
+    -- Mapping has been cleared - reset any ongoing animations
+    double_tap_animation_active = false
+    touched = false
+    synced = true
+    log("Mapping cleared - animations cancelled")
   end
 end
 
