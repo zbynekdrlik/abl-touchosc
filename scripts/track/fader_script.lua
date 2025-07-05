@@ -1,9 +1,9 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.5.4
--- Changed: Use parent's getInstance() for connection lookup
+-- Version: 2.5.5
+-- Changed: Store track info locally when notified by parent
 
 -- Version constant
-local VERSION = "2.5.4"
+local VERSION = "2.5.5"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -78,6 +78,10 @@ local double_tap_animation_active = false
 local double_tap_target_position = 0
 local double_tap_start_position = 0
 
+-- TRACK INFO STORAGE (received from parent via notify)
+local trackNumber = nil
+local trackType = nil
+
 -- ===========================
 -- LOCAL LOGGING
 -- ===========================
@@ -97,35 +101,46 @@ end
 -- CONNECTION HELPERS
 -- ===========================
 
+-- Parse instance from parent name
+local function getInstanceFromParent()
+    if self.parent and self.parent.name then
+        local name = self.parent.name
+        if name:sub(1, 5) == "band_" then
+            return "band"
+        elseif name:sub(1, 7) == "master_" then
+            return "master"
+        else
+            return "band"  -- default
+        end
+    end
+    return nil
+end
+
 -- Get connection configuration (read directly from config text)
 local function getConnectionIndex()
-    -- Try to get instance from parent
-    if self.parent and self.parent.getInstance then
-        local instance = self.parent.getInstance()
-        if instance then
-            -- Find configuration object
-            local configObj = root:findByName("configuration", true)
-            if not configObj or not configObj.values or not configObj.values.text then
-                return 1
-            end
-            
-            local configText = configObj.values.text
-            local searchKey = "connection_" .. instance .. ":"
-            
-            -- Parse configuration text
-            for line in configText:gmatch("[^\r\n]+") do
-                line = line:match("^%s*(.-)%s*$")  -- Trim whitespace
-                if line:sub(1, #searchKey) == searchKey then
-                    local value = line:sub(#searchKey + 1):match("^%s*(.-)%s*$")
-                    return tonumber(value) or 1
-                end
-            end
-            
-            return 1
+    local instance = getInstanceFromParent()
+    if not instance then
+        return 1
+    end
+    
+    -- Find configuration object
+    local configObj = root:findByName("configuration", true)
+    if not configObj or not configObj.values or not configObj.values.text then
+        return 1
+    end
+    
+    local configText = configObj.values.text
+    local searchKey = "connection_" .. instance .. ":"
+    
+    -- Parse configuration text
+    for line in configText:gmatch("[^\r\n]+") do
+        line = line:match("^%s*(.-)%s*$")  -- Trim whitespace
+        if line:sub(1, #searchKey) == searchKey then
+            local value = line:sub(#searchKey + 1):match("^%s*(.-)%s*$")
+            return tonumber(value) or 1
         end
     end
     
-    -- Fallback to default
     return 1
 end
 
@@ -138,19 +153,13 @@ local function buildConnectionTable(index)
     return connections
 end
 
--- Get track number and type from parent group
+-- Get track number and type from stored values
 local function getTrackInfo()
-    -- Use parent's getTrackInfo function if available
-    if self.parent and self.parent.getTrackInfo then
-        return self.parent.getTrackInfo()
-    end
-    
-    return nil, nil
+    return trackNumber, trackType
 end
 
 -- Check if track is properly mapped
 local function isTrackMapped()
-    local trackNumber, trackType = getTrackInfo()
     return trackNumber ~= nil
 end
 
@@ -414,8 +423,7 @@ function onReceiveOSC(message, connections)
   local arguments = message[2]
   local path = message[1]
   
-  -- Get track info from parent
-  local trackNumber, trackType = getTrackInfo()
+  -- Get track info from stored values
   if not trackNumber then
     return false
   end
@@ -492,7 +500,6 @@ function update()
           last_position = double_tap_target_position
           double_tap_animation_active = false
           local final_audio = use_log_curve and linearToLog(double_tap_target_position) or double_tap_target_position
-          local trackNumber, trackType = getTrackInfo()
           if trackNumber then
             local path = trackType == "return" and '/live/return/set/volume' or '/live/track/set/volume'
             sendOSCRouted(path, trackNumber, final_audio)
@@ -511,7 +518,6 @@ function update()
           last_position = double_tap_target_position
           double_tap_animation_active = false
           local final_audio = use_log_curve and linearToLog(double_tap_target_position) or double_tap_target_position
-          local trackNumber, trackType = getTrackInfo()
           if trackNumber then
             local path = trackType == "return" and '/live/return/set/volume' or '/live/track/set/volume'
             sendOSCRouted(path, trackNumber, final_audio)
@@ -523,7 +529,6 @@ function update()
           
           -- Send OSC update
           local new_audio = use_log_curve and linearToLog(proposed_new_position) or proposed_new_position
-          local trackNumber, trackType = getTrackInfo()
           if trackNumber then
             local path = trackType == "return" and '/live/return/set/volume' or '/live/track/set/volume'
             sendOSCRouted(path, trackNumber, new_audio)
@@ -598,7 +603,6 @@ function onValueChanged()
   last_logged_position = scaled_fader_position
   
   -- Send OSC with routing based on track type
-  local trackNumber, trackType = getTrackInfo()
   if trackNumber then
     local path = trackType == "return" and '/live/return/set/volume' or '/live/track/set/volume'
     sendOSCRouted(path, trackNumber, audio_value)
@@ -673,12 +677,19 @@ end
 function onReceiveNotify(key, value)
   -- Parent might notify us of track changes
   if key == "track_changed" then
+    -- Store the track number locally
+    trackNumber = value
     -- Don't change fader position - just reset internal state
     touched = false
     synced = true
     last_position = self.values.x  -- Keep current position
+  elseif key == "track_type" then
+    -- Store the track type locally
+    trackType = value
   elseif key == "track_unmapped" then
-    -- Don't change fader position
+    -- Clear our stored info
+    trackNumber = nil
+    trackType = nil
   end
 end
 
