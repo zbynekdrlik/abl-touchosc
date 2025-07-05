@@ -1,9 +1,9 @@
 -- TouchOSC Pan Control Script
--- Version: 1.5.2
--- Restored: Color change and double-tap functionality
+-- Version: 1.5.3
+-- Optimized: Moved color change to onValueChanged for better performance
 
 -- Version constant
-local VERSION = "1.5.2"
+local VERSION = "1.5.3"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -114,6 +114,21 @@ local function abletonToTouchOSCPan(value)
 end
 
 -- ===========================
+-- VISUAL HELPERS
+-- ===========================
+
+-- Update color based on pan position
+local function updateColor(value)
+    if math.abs(value - 0.5) > 0.01 then
+        -- Pan is off-center
+        self.color = COLOR_OFF_CENTER
+    else
+        -- Pan is centered
+        self.color = COLOR_CENTERED
+    end
+end
+
+-- ===========================
 -- OSC HANDLERS
 -- ===========================
 
@@ -155,6 +170,8 @@ function onReceiveOSC(message, connections)
         if not isTouching then
             currentPan = lastOscPan
             self.values.x = currentPan
+            -- Update color when value changes from OSC
+            updateColor(currentPan)
         end
     end
     
@@ -185,6 +202,9 @@ function onValueChanged(valueName)
                     lastTapTime = 0
                     touchOnFirst = false
                     
+                    -- Update color immediately
+                    updateColor(0.5)
+                    
                     -- Send center value to Ableton
                     if trackNumber and trackType then
                         local path = trackType == "return" and '/live/return/set/panning' or '/live/track/set/panning'
@@ -203,37 +223,28 @@ function onValueChanged(valueName)
             if lastTapTime == 0 then
                 currentPan = lastOscPan
                 self.values.x = currentPan
+                updateColor(currentPan)
             end
         end
-    elseif valueName == "x" and isTouching then
-        -- Check if track is mapped
-        if not trackNumber or not trackType then
-            return
+    elseif valueName == "x" then
+        -- Update color whenever x value changes
+        updateColor(self.values.x)
+        
+        -- Only send to Ableton if touching
+        if isTouching then
+            -- Check if track is mapped
+            if not trackNumber or not trackType then
+                return
+            end
+            
+            -- Update pan value
+            currentPan = self.values.x
+            
+            -- Convert to Ableton range and send
+            local abletonPan = touchOSCToAbletonPan(currentPan)
+            local path = trackType == "return" and '/live/return/set/panning' or '/live/track/set/panning'
+            sendOSCRouted(path, trackNumber, abletonPan)
         end
-        
-        -- Update pan value
-        currentPan = self.values.x
-        
-        -- Convert to Ableton range and send
-        local abletonPan = touchOSCToAbletonPan(currentPan)
-        local path = trackType == "return" and '/live/return/set/panning' or '/live/track/set/panning'
-        sendOSCRouted(path, trackNumber, abletonPan)
-    end
-end
-
--- ===========================
--- VISUAL UPDATE
--- ===========================
-
--- Update visual color based on pan position
-function update()
-    local value = self.values.x
-    if math.abs(value - 0.5) > 0.01 then
-        -- Pan is off-center
-        self.color = COLOR_OFF_CENTER
-    else
-        -- Pan is centered
-        self.color = COLOR_CENTERED
     end
 end
 
@@ -247,6 +258,7 @@ function onReceiveNotify(key, value)
         -- Reset to center when track changes
         currentPan = 0.5
         self.values.x = currentPan
+        updateColor(currentPan)
     elseif key == "track_type" then
         trackType = value
     elseif key == "track_unmapped" then
@@ -254,6 +266,7 @@ function onReceiveNotify(key, value)
         trackType = nil
         currentPan = 0.5
         self.values.x = currentPan
+        updateColor(currentPan)
     end
 end
 
@@ -271,7 +284,7 @@ function init()
     self.values.x = currentPan
     
     -- Set initial color
-    self.color = COLOR_CENTERED
+    updateColor(currentPan)
 end
 
 init()
