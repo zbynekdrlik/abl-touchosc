@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.16.2
--- Changed: Store mapping info separately, keep tag as "trackGroup" for refresh to work
+-- Version: 1.16.3
+-- Changed: Use script variables instead of custom properties for better compatibility
 
 -- Version constant
-local SCRIPT_VERSION = "1.16.2"
+local SCRIPT_VERSION = "1.16.3"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -181,24 +181,6 @@ local function notifyChildren(event, value)
     end
 end
 
--- Helper to store mapping info
-local function storeMappingInfo()
-    -- Store mapping info as a custom property instead of changing tag
-    -- This allows the tag to remain "trackGroup" for finding during refresh
-    self.mappingInfo = instance .. ":" .. trackNumber .. ":" .. trackType
-end
-
--- Helper to get track info from stored mapping
-local function getStoredTrackInfo()
-    if self.mappingInfo then
-        local inst, trackNum, tType = self.mappingInfo:match("^(%w+):(%d+):(%w+)$")
-        if trackNum and tType then
-            return tonumber(trackNum), tType
-        end
-    end
-    return trackNumber, trackType  -- Fallback to script variables
-end
-
 function init()
     -- Set tag programmatically - KEEP THIS AS trackGroup!
     self.tag = "trackGroup"
@@ -322,8 +304,7 @@ function onReceiveOSC(message, connections)
                             
                             setGroupEnabled(true)
                             
-                            -- Store mapping info separately (don't change tag!)
-                            storeMappingInfo()
+                            -- DON'T CHANGE TAG - keep it as trackGroup
                             
                             -- Notify children
                             notifyChildren("track_changed", trackNumber)
@@ -376,8 +357,7 @@ function onReceiveOSC(message, connections)
                             
                             setGroupEnabled(true)
                             
-                            -- Store mapping info separately (don't change tag!)
-                            storeMappingInfo()
+                            -- DON'T CHANGE TAG - keep it as trackGroup
                             
                             -- Notify children
                             notifyChildren("track_changed", trackNumber)
@@ -408,9 +388,6 @@ function onReceiveOSC(message, connections)
                 trackType = nil
                 needsRefresh = false
                 
-                -- Clear mapping info
-                self.mappingInfo = nil
-                
                 -- Notify children
                 notifyChildren("track_unmapped", nil)
             end
@@ -438,9 +415,6 @@ function onReceiveNotify(action)
         lastVerified = 0
         lastReceiveTime = 0
         
-        -- Clear mapping info (but keep tag as trackGroup!)
-        self.mappingInfo = nil
-        
         -- Disable controls
         setGroupEnabled(false)
         
@@ -459,6 +433,11 @@ end
 
 -- Function to get track info (called by children, especially fader)
 function getTrackInfo()
-    -- Return the stored mapping info if available
-    return getStoredTrackInfo()
+    -- Return the script variables directly
+    return trackNumber, trackType
+end
+
+-- Function to get instance (called by children for connection lookup)
+function getInstance()
+    return instance
 end
