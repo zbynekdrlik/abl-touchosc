@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.16.2
--- Changed: Register group with document script on init for reliable refresh
+-- Version: 1.16.4
+-- Changed: Simplified interactivity - only set fader, mute, pan as interactive
 
 -- Version constant
-local SCRIPT_VERSION = "1.16.2"
+local SCRIPT_VERSION = "1.16.4"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -110,7 +110,7 @@ local function updateStatusIndicator()
     end
 end
 
--- Enable/disable all controls in the group - ONLY INTERACTIVITY
+-- Enable/disable interactive controls in the group
 local function setGroupEnabled(enabled, silent)
     -- Skip if state hasn't changed to prevent spam
     if lastEnabledState == enabled then
@@ -124,17 +124,13 @@ local function setGroupEnabled(enabled, silent)
         return
     end
     
-    local childCount = 0
+    -- Only set interactivity for controls that need it
+    local interactiveControls = {"fader", "mute", "pan"}
     
-    -- Only check for controls we know exist (fixed db_label -> db)
-    local controlsToCheck = {"fader", "mute", "pan", "meter", "track_label", "db"}
-    
-    for _, name in ipairs(controlsToCheck) do
+    for _, name in ipairs(interactiveControls) do
         local child = getChild(self, name)
-        if child and name ~= "status_indicator" and name ~= "connection_label" then
-            -- ONLY CHANGE INTERACTIVITY - NO VISUAL CHANGES!
+        if child then
             child.interactive = enabled
-            childCount = childCount + 1
         end
     end
     
