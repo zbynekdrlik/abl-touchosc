@@ -164,15 +164,15 @@ The system uses a unified script architecture:
 
 | Script | Current Version | Purpose |
 |--------|----------------|---------|
-| document_script.lua | 2.7.1 | Configuration, logging, auto-refresh |
-| group_init.lua | 1.14.5 | Track group with auto-detection |
-| fader_script.lua | 2.4.1 | Volume control for all track types |
-| meter_script.lua | 2.3.1 | Level metering unified |
-| mute_button.lua | 1.9.1 | Mute control unified |
-| pan_control.lua | 1.4.1 | Pan control unified |
+| document_script.lua | 2.8.7 | Configuration, group registry, auto-refresh |
+| group_init.lua | 1.16.2 | Track group with auto-detection and registration |
+| fader_script.lua | 2.5.3 | Volume control with mapping_cleared handling |
+| meter_script.lua | 2.4.1 | Level metering unified |
+| mute_button.lua | 2.0.1 | Mute control unified |
+| pan_control.lua | 1.5.1 | Pan control unified |
 | db_label.lua | 1.2.0 | dB display unified |
-| db_meter_label.lua | 2.5.1 | Peak meter unified |
-| global_refresh_button.lua | 1.4.0 | Manual refresh trigger |
+| db_meter_label.lua | 2.6.1 | Peak meter unified |
+| global_refresh_button.lua | 1.5.1 | Manual refresh trigger |
 
 ### Unified Architecture Details
 
@@ -212,6 +212,7 @@ The forked AbletonOSC adds these endpoints:
 - **Direct Configuration Reading**: Each script reads config independently
 - **Connection Filtering**: OSC messages filtered by connection
 - **State Machine Design**: Robust state tracking for all controls
+- **Group Registration**: Groups self-register with document script for reliable refresh
 
 ## 🔧 Troubleshooting
 
@@ -233,7 +234,7 @@ The forked AbletonOSC adds these endpoints:
 - Try manual refresh
 
 **Track label shows wrong text:**
-- Update to group_init.lua v1.14.5 or later
+- Update to group_init.lua v1.16.2 or later
 - Script now handles return prefixes intelligently
 
 ### Debug Mode
@@ -266,6 +267,6 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 ---
 
-**Current Status**: v1.2.0 - Production ready with full return track support using unified architecture. All controls tested and working perfectly for both regular and return tracks.
+**Current Status**: v1.3.0 - Production ready with group registration system for reliable refresh. All controls tested and working perfectly for both regular and return tracks.
 
 For development documentation and future plans, see the [docs](docs/) directory.

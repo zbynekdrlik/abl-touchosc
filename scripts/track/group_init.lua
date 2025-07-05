@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.16.0
--- Changed: Removed unnecessary fader monitoring - status indicator now only shows receive activity
+-- Version: 1.16.2
+-- Changed: Register group with document script on init for reliable refresh
 
 -- Version constant
-local SCRIPT_VERSION = "1.16.0"
+local SCRIPT_VERSION = "1.16.2"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -190,6 +190,9 @@ function init()
     
     -- Log initialization
     log("Script v" .. SCRIPT_VERSION .. " loaded")
+    
+    -- Register this group with the document script
+    root:notify("register_track_group", self)
     
     -- SAFETY: Disable all controls until properly mapped
     setGroupEnabled(false, true)  -- Silent
@@ -400,11 +403,28 @@ function onReceiveNotify(action)
     if action == "refresh" or action == "refresh_tracks" then
         refreshTrackMapping()
     elseif action == "clear_mapping" then
+        -- Clear listeners
         clearListeners()
+        
+        -- Reset state
         trackMapped = false
         trackNumber = nil
         trackType = nil
         listenersActive = false
+        
+        -- IMPORTANT: Reset tag to prevent stale references
+        self.tag = "trackGroup"
+        
+        -- Notify children that mapping has been cleared
+        notifyChildren("mapping_cleared", nil)
+        
+        -- Disable controls
+        setGroupEnabled(false)
+        
+        -- Update status indicator
+        updateStatusIndicator()
+        
+        log("Mapping cleared")
     end
 end
 

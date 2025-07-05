@@ -11,9 +11,10 @@ The ABL TouchOSC system uses a distributed script architecture where each contro
 TouchOSC Runtime
 ├── Document Script (Central Management)
 │   ├── Configuration Parser
+│   ├── Group Registry (Registration System)
 │   └── Auto-Refresh Timer
 ├── Track Groups
-│   ├── Group Script (Track Discovery)
+│   ├── Group Script (Self-Registration & Track Discovery)
 │   └── Controls
 │       ├── Fader Script
 │       ├── Meter Script
@@ -27,14 +28,28 @@ TouchOSC Runtime
 ## Core Components
 
 ### Document Script (`document_script.lua`)
-**Version:** 2.8.1  
-**Purpose:** Central configuration management and automatic refresh
+**Version:** 2.8.7  
+**Purpose:** Central configuration management, group registry, and automatic refresh
 
 **Key Features:**
 - Parses configuration from text control
+- Maintains registry of track groups (registration system)
 - Implements automatic startup refresh (1 second delay)
 - Frame-based timing for reliability
 - Local debug logging
+- 100ms delay between clear and refresh operations
+
+**Group Registration System:**
+```lua
+-- Groups self-register on initialization
+local trackGroups = {}
+
+function onReceiveNotify(action, value)
+    if action == "register_track_group" then
+        trackGroups[value.name] = value
+    end
+end
+```
 
 **Configuration Format:**
 ```yaml
@@ -45,45 +60,61 @@ unfold_master: 'Master'
 ```
 
 ### Group Script (`group_init.lua`)
-**Version:** 1.15.1  
-**Purpose:** Track discovery and control management
+**Version:** 1.16.2  
+**Purpose:** Track discovery, control management, and self-registration
 
 **Key Features:**
-- Discovers tracks via AbletonOSC
+- Self-registers with document script on init
+- Discovers tracks via AbletonOSC (both regular and return tracks)
 - Maps tracks to control groups
 - Manages control enable/disable states
+- Handles clear_mapping and refresh_tracks notifications
 - Preserves visual design (no color/style changes)
 
-**Tag Format:** `instance:trackNumber:trackType` (e.g., "band:39:regular")
+**Registration on Init:**
+```lua
+function init()
+    -- Register this group with the document script
+    root:notify("register_track_group", self)
+end
+```
+
+**Tag Format:** `instance:trackNumber:trackType` (e.g., "band:39:track", "master:0:return")
 
 ### Control Scripts
 
 #### Fader Script (`fader_script.lua`)
-**Version:** 2.5.2  
+**Version:** 2.5.3  
 **Features:**
 - Professional movement scaling algorithm
 - 0.1dB minimum movement detection
 - Double-tap to 0dB functionality
 - Emergency movement detection
 - Exact dB curve matching Ableton
+- Handles mapping_cleared notification
 
 **Technical Details:**
 - Uses logarithmic curve with exponent 0.515
 - Implements reaction time compensation
 - Frame-based animation for double-tap
+- Cancels animations on mapping clear
 
 #### Meter Script (`meter_script.lua`)
 **Version:** 2.4.1  
 **Features:**
 - Calibrated response matching Ableton
-- Color thresholds at -12dB and -3dB
+- Color thresholds at -20dB, -6dB, and 0dB
 - Connection-specific filtering
 - Smooth visual transitions
+- Support for both track types
 
 **Calibration Points:**
 ```lua
-{0.0, 0.0}, {0.3945, 0.027}, {0.6839, 0.169}, 
-{0.7629, 0.313}, {0.8399, 0.5}, {0.9200, 0.729}, {1.0, 1.0}
+{0.000, -60.0},   -- Minimum displayed
+{0.600, -24.4},   -- Verified by user
+{0.631, -22.0},   -- Verified by user
+{0.842, -6.0},    -- Verified by user
+{1.000, 0.0},     -- Unity (0 dB)
 ```
 
 #### Mute Button Script (`mute_button.lua`)
@@ -92,27 +123,36 @@ unfold_master: 'Master'
 - State tracking with feedback prevention
 - Visual-only indication (buttons have no text property)
 - Touch detection for immediate response
+- Works with both track types
 
 #### Pan Control Script (`pan_control.lua`)
-**Version:** 1.5.1  
+**Version:** 1.4.1  
 **Features:**
 - Double-tap to center (0.5)
 - Color feedback for position
 - Simple, efficient implementation
+- Unified for all track types
 
 #### dB Label Script (`db_label.lua`)
-**Version:** 1.3.1  
+**Version:** 1.2.0  
 **Features:**
 - Real-time dB value display
 - Shows "-∞ dBFS" for minimum values
 - Shows "-" when track unmapped
 
 #### dB Meter Label Script (`db_meter_label.lua`)
-**Version:** 2.6.1  
+**Version:** 2.5.1  
 **Features:**
 - Meter level to dBFS conversion
 - Calibrated response matching meters
 - Shows "-∞ dBFS" for silence
+
+#### Global Refresh Button Script (`global_refresh_button.lua`)
+**Version:** 1.5.1  
+**Features:**
+- Triggers document script refresh
+- Visual feedback (yellow during refresh)
+- Prevents double-triggers
 
 ## Communication Architecture
 
@@ -137,12 +177,23 @@ sendOSC(path, trackNum, value, buildConnectionTable(connectionIndex))
 
 ### Script Communication
 Scripts communicate via TouchOSC's notify system:
+- `register_track_group`: Group registers with document script
+- `refresh_all_groups`: Trigger group refresh
+- `clear_mapping`: Clear track mappings
+- `refresh_tracks`: Re-discover tracks
+- `mapping_cleared`: Notify children of cleared mapping
 - `track_changed`: Track mapping updates
 - `track_unmapped`: Control disabled
-- `control_enabled`: Show/hide controls
-- `refresh_all_groups`: Trigger group refresh
+- `track_type`: Inform children of track type
 
 ## Key Technical Concepts
+
+### Registration System
+**New in v2.8.7:** Groups self-register with the document script:
+- Avoids issues with TouchOSC's userdata control hierarchy
+- Works regardless of tag changes during runtime
+- Ensures reliable refresh operations
+- No searching required - direct references maintained
 
 ### Script Isolation
 **Critical:** TouchOSC scripts are completely isolated:
@@ -161,8 +212,9 @@ Scripts communicate via TouchOSC's notify system:
 ### Performance Optimization
 - Minimal OSC message processing
 - Efficient connection filtering
-- Logarithmic calculations cached where possible
+- Direct group references via registration
 - Frame-based timing instead of timers
+- Local logging with DEBUG=0 by default
 
 ## Configuration System
 
@@ -208,8 +260,9 @@ end
 
 Example:
 ```
-[06:16:48] FADER(band_CG #): Script v2.5.2 loaded
-[06:16:49] GROUP(band_CG #): Mapped to Track 39
+[06:16:48] FADER(band_CG #): Script v2.5.3 loaded
+[06:16:49] GROUP(band_CG #): Registered with document script
+[06:16:49] GROUP(band_CG #): Mapped to track 39
 ```
 
 ### Debug Control
@@ -221,20 +274,36 @@ Example:
 ## Auto-Refresh System
 
 ### Implementation
-Uses frame counting for reliable timing:
+Uses frame counting for reliable timing with two-phase refresh:
 ```lua
 local STARTUP_DELAY_FRAMES = 60  -- 1 second at 60 FPS
+local REFRESH_WAIT_TIME = 100    -- 100ms between clear and refresh
 
 function update()
-    if not startupRefreshDone then
+    -- Handle refresh sequence timing
+    if refreshState == "waiting" then
+        local elapsed = getMillis() - refreshWaitStart
+        if elapsed >= REFRESH_WAIT_TIME then
+            refreshState = "refreshing"
+            completeRefreshSequence()
+        end
+    end
+    
+    -- Startup refresh
+    if frameCount < STARTUP_DELAY_FRAMES + 10 then
         frameCount = frameCount + 1
         if frameCount == STARTUP_DELAY_FRAMES then
-            refreshAllGroups()
-            startupRefreshDone = true
+            startRefreshSequence()
         end
     end
 end
 ```
+
+### Refresh Sequence
+1. Clear all track mappings
+2. Wait 100ms (ensures clean state)
+3. Trigger track re-discovery
+4. Groups re-map to correct tracks
 
 ### Why Frame-Based?
 - More reliable than clock-based timing
@@ -248,22 +317,25 @@ end
 2. Update VERSION constant
 3. Implement local logging function
 4. Implement connection routing
-5. Test with multiple connections
-6. Document OSC patterns
+5. Handle parent notifications
+6. Test with multiple connections
+7. Document OSC patterns
 
 ### Debugging
 1. Set `DEBUG = 1` in specific scripts
 2. Check console output in TouchOSC
 3. Verify version numbers in logs
-4. Test connection isolation
-5. Monitor performance impact
+4. Monitor registration messages
+5. Test connection isolation
+6. Verify refresh sequence
 
 ### Common Pitfalls
 - Forgetting buttons don't have text property
 - Assuming shared variables work
 - Modifying visual properties in scripts
-- Not validating property access
+- Not handling mapping_cleared notification
 - Missing connection filtering
+- Not registering groups with document script
 
 ## OSC Reference
 
@@ -289,9 +361,10 @@ end
 - (Similar patterns for other parameters)
 
 **Track Discovery:**
+- `/live/song/get/track_names` - Get track names
+- `/live/song/get/return_track_names` - Get return names
 - `/live/song/get/num_tracks` - Get track count
 - `/live/song/get/num_return_tracks` - Get return count
-- `/live/song/get/track_data` - Get track details
 
 ### Message Format
 All messages use: `[trackNumber, value]`
