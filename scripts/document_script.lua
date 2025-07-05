@@ -1,9 +1,9 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.8.3
+-- Version: 2.8.4
 -- Purpose: Main document script with configuration and track management
--- Changed: Added delay between clear and refresh to ensure proper track renumbering
+-- Changed: Fixed group finding to work with mapped groups (using name pattern instead of tag)
 
-local VERSION = "2.8.3"
+local VERSION = "2.8.4"
 local SCRIPT_NAME = "Document Script"
 
 -- Debug flag - set to 1 to enable logging
@@ -34,6 +34,27 @@ local function log(message)
     if DEBUG == 1 then
         print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. ": " .. message)
     end
+end
+
+-- === HELPER TO FIND TRACK GROUPS ===
+local function findTrackGroups()
+    local groups = {}
+    local allControls = root:findAllByProperty("name", "*", true)  -- Find all controls
+    
+    -- Look for groups that match our naming pattern
+    for _, control in ipairs(allControls) do
+        if control.name then
+            -- Check if name starts with "band_" or "master_"
+            if control.name:match("^band_") or control.name:match("^master_") then
+                -- Additional check: must be a group (have children)
+                if control.children then
+                    table.insert(groups, control)
+                end
+            end
+        end
+    end
+    
+    return groups
 end
 
 -- === CONFIGURATION PARSING ===
@@ -128,8 +149,8 @@ function startRefreshSequence()
         status.values.text = "Clearing..."
     end
     
-    -- Find all groups with trackGroup tag
-    refreshGroups = root:findAllByProperty("tag", "trackGroup", true)
+    -- Find all track groups by name pattern
+    refreshGroups = findTrackGroups()
     
     -- Clear all track mappings first
     for _, group in ipairs(refreshGroups) do
