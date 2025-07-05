@@ -1,9 +1,9 @@
 -- TouchOSC Pan Control Script
--- Version: 1.5.1
--- Changed: Standardized DEBUG flag (uppercase) and disabled by default
+-- Version: 1.5.3
+-- Optimized: Moved color change to onValueChanged for better performance
 
 -- Version constant
-local VERSION = "1.5.1"
+local VERSION = "1.5.3"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -14,6 +14,15 @@ local trackType = nil  -- "track" or "return"
 local currentPan = 0.5  -- Center (0.5 = center in TouchOSC, 0 = center in Ableton)
 local lastOscPan = 0.5
 local isTouching = false
+
+-- Double-tap configuration
+local DOUBLE_TAP_DELAY = 300 -- Maximum time between taps in milliseconds
+local lastTapTime = 0
+local touchOnFirst = false
+
+-- Color constants
+local COLOR_CENTERED = Color(0.39, 0.39, 0.39, 1.0)  -- #646464FF when at center
+local COLOR_OFF_CENTER = Color(0.20, 0.76, 0.86, 1.0) -- #34C1DC when off center
 
 -- ===========================
 -- LOCAL LOGGING
@@ -105,6 +114,21 @@ local function abletonToTouchOSCPan(value)
 end
 
 -- ===========================
+-- VISUAL HELPERS
+-- ===========================
+
+-- Update color based on pan position
+local function updateColor(value)
+    if math.abs(value - 0.5) > 0.01 then
+        -- Pan is off-center
+        self.color = COLOR_OFF_CENTER
+    else
+        -- Pan is centered
+        self.color = COLOR_CENTERED
+    end
+end
+
+-- ===========================
 -- OSC HANDLERS
 -- ===========================
 
@@ -146,6 +170,8 @@ function onReceiveOSC(message, connections)
         if not isTouching then
             currentPan = lastOscPan
             self.values.x = currentPan
+            -- Update color when value changes from OSC
+            updateColor(currentPan)
         end
     end
     
@@ -159,26 +185,66 @@ end
 function onValueChanged(valueName)
     -- Handle touch state
     if valueName == "touch" then
-        isTouching = self.values.touch
+        local nowTouching = self.values.touch
         
-        -- Sync with last OSC value when releasing
-        if not isTouching then
-            currentPan = lastOscPan
-            self.values.x = currentPan
+        -- Touch started
+        if nowTouching then
+            touchOnFirst = true
+            isTouching = true
+        else
+            -- Touch ended - check for double-tap
+            if touchOnFirst then
+                local now = getMillis()
+                if now - lastTapTime < DOUBLE_TAP_DELAY then
+                    -- Double-tap detected - center the pan
+                    self.values.x = 0.5
+                    currentPan = 0.5
+                    lastTapTime = 0
+                    touchOnFirst = false
+                    
+                    -- Update color immediately
+                    updateColor(0.5)
+                    
+                    -- Send center value to Ableton
+                    if trackNumber and trackType then
+                        local path = trackType == "return" and '/live/return/set/panning' or '/live/track/set/panning'
+                        sendOSCRouted(path, trackNumber, 0) -- 0 is center in Ableton
+                    end
+                    
+                    log("Double-tap detected - pan centered")
+                else
+                    lastTapTime = now
+                end
+            end
+            
+            isTouching = false
+            
+            -- Sync with last OSC value when releasing (if not double-tap)
+            if lastTapTime == 0 then
+                currentPan = lastOscPan
+                self.values.x = currentPan
+                updateColor(currentPan)
+            end
         end
-    elseif valueName == "x" and isTouching then
-        -- Check if track is mapped
-        if not trackNumber or not trackType then
-            return
+    elseif valueName == "x" then
+        -- Update color whenever x value changes
+        updateColor(self.values.x)
+        
+        -- Only send to Ableton if touching
+        if isTouching then
+            -- Check if track is mapped
+            if not trackNumber or not trackType then
+                return
+            end
+            
+            -- Update pan value
+            currentPan = self.values.x
+            
+            -- Convert to Ableton range and send
+            local abletonPan = touchOSCToAbletonPan(currentPan)
+            local path = trackType == "return" and '/live/return/set/panning' or '/live/track/set/panning'
+            sendOSCRouted(path, trackNumber, abletonPan)
         end
-        
-        -- Update pan value
-        currentPan = self.values.x
-        
-        -- Convert to Ableton range and send
-        local abletonPan = touchOSCToAbletonPan(currentPan)
-        local path = trackType == "return" and '/live/return/set/panning' or '/live/track/set/panning'
-        sendOSCRouted(path, trackNumber, abletonPan)
     end
 end
 
@@ -192,6 +258,7 @@ function onReceiveNotify(key, value)
         -- Reset to center when track changes
         currentPan = 0.5
         self.values.x = currentPan
+        updateColor(currentPan)
     elseif key == "track_type" then
         trackType = value
     elseif key == "track_unmapped" then
@@ -199,6 +266,7 @@ function onReceiveNotify(key, value)
         trackType = nil
         currentPan = 0.5
         self.values.x = currentPan
+        updateColor(currentPan)
     end
 end
 
@@ -214,6 +282,9 @@ function init()
     
     -- Set initial position to center
     self.values.x = currentPan
+    
+    -- Set initial color
+    updateColor(currentPan)
 end
 
 init()
