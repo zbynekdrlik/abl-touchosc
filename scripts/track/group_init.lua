@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.16.0
--- Changed: Removed unnecessary fader monitoring - status indicator now only shows receive activity
+-- Version: 1.16.1
+-- Changed: Improved clear_mapping to fully reset state before refresh
 
 -- Version constant
-local SCRIPT_VERSION = "1.16.0"
+local SCRIPT_VERSION = "1.16.1"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -164,6 +164,7 @@ local function clearListeners()
         sendOSC(oscPrefix .. 'stop_listen/panning', trackNumber, targetConnections)
         
         listenersActive = false
+        log("Stopped listeners for " .. oscPrefix .. " track " .. trackNumber)
     end
 end
 
@@ -240,6 +241,8 @@ function refreshTrackMapping()
     trackMapped = false
     trackNumber = nil
     trackType = nil
+    
+    log("Starting track mapping refresh for: " .. trackName)
     
     -- Build connection table for our specific connection
     local connections = buildConnectionTable(connectionIndex)
@@ -400,11 +403,31 @@ function onReceiveNotify(action)
     if action == "refresh" or action == "refresh_tracks" then
         refreshTrackMapping()
     elseif action == "clear_mapping" then
+        log("Clearing mapping for: " .. trackName)
+        
+        -- Clear listeners first
         clearListeners()
+        
+        -- Reset all state variables
         trackMapped = false
         trackNumber = nil
         trackType = nil
         listenersActive = false
+        needsRefresh = false
+        lastVerified = 0
+        lastReceiveTime = 0
+        
+        -- Reset tag to default
+        self.tag = "trackGroup"
+        
+        -- Disable controls
+        setGroupEnabled(false)
+        
+        -- Update status indicator
+        updateStatusIndicator()
+        
+        -- Notify children that mapping is cleared
+        notifyChildren("track_unmapped", nil)
     end
 end
 
