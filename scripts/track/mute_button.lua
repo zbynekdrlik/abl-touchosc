@@ -1,9 +1,9 @@
 -- TouchOSC Mute Button Script
--- Version: 2.1.2
--- Fixed: Send boolean values instead of integers to match Ableton's expectations
+-- Version: 2.1.3
+-- Fixed: Force integer values for OSC as TouchOSC converts booleans to floats
 
 -- Version constant
-local VERSION = "2.1.2"
+local VERSION = "2.1.3"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 1  -- ENABLED FOR DEBUGGING
@@ -108,26 +108,12 @@ end
 -- OSC HANDLERS
 -- ===========================
 
--- Send OSC with connection routing
-local function sendOSCRouted(path, track, mute)
-    local connectionIndex = getConnectionIndex()
-    local connections = buildConnectionTable(connectionIndex)
-    -- CRITICAL: Send boolean value, not integer!
-    local muteValue = mute  -- mute should already be boolean
-    log("Sending OSC - path: " .. path .. ", track: " .. track .. ", mute: " .. tostring(muteValue) .. " (type: " .. type(muteValue) .. "), connection: " .. connectionIndex)
-    sendOSC(path, track, muteValue, connections)
-end
-
 function onReceiveOSC(message, connections)
     local path = message[1]
     local arguments = message[2]
     
-    -- Log all incoming OSC messages for debugging
-    log("Received OSC: " .. path)
-    
     -- Check if we have track info
     if not trackNumber or not trackType then
-        log("No track info available, ignoring OSC")
         return false
     end
     
@@ -143,20 +129,23 @@ function onReceiveOSC(message, connections)
         return false
     end
     
-    log("Mute message for track " .. arguments[1].value .. ", our track: " .. trackNumber)
-    
-    -- Check if this message is for our track
-    if arguments[1].value == trackNumber then
-        -- Update mute state
-        -- Check if value is boolean or integer and handle both
-        local muteValue = arguments[2].value
-        if type(muteValue) == "number" then
-            isMuted = (muteValue == 1)
-        else
-            isMuted = muteValue
+    -- Check if this message is for our track and has valid arguments
+    if arguments[1] and arguments[1].value == trackNumber and arguments[2] then
+        -- Get connection index
+        local expectedConnection = getConnectionIndex()
+        if connections[expectedConnection] then
+            -- Update mute state - handle both boolean and number values
+            local muteValue = arguments[2].value
+            if type(muteValue) == "boolean" then
+                isMuted = muteValue
+            else
+                -- Convert number to boolean (1 = muted, 0 = unmuted)
+                isMuted = (muteValue == 1)
+            end
+            
+            log("Received mute state for track " .. trackNumber .. ": " .. tostring(isMuted))
+            updateVisualState()
         end
-        log("Updated mute state to: " .. tostring(isMuted))
-        updateVisualState()
     end
     
     return false  -- Don't block other receivers
@@ -167,46 +156,35 @@ end
 -- ===========================
 
 function onValueChanged(valueName)
-    log("Value changed: " .. valueName .. " = " .. tostring(self.values[valueName]))
-    
-    -- Handle touch events
-    if valueName == "touch" and self.values.touch == 1 then
-        log("Touch detected")
+    -- Handle x value changes (button press/release)
+    if valueName == "x" then
+        log("X value changed to: " .. self.values.x)
         
         -- Check if track is mapped
         if not trackNumber or not trackType then
-            log("No track mapped, ignoring touch")
+            log("No track mapped, ignoring button press")
             return
         end
         
-        -- Toggle mute state
-        isMuted = not isMuted
-        log("Toggled mute state to: " .. tostring(isMuted))
+        -- Get connection configuration
+        local connectionIndex = getConnectionIndex()
+        local connections = buildConnectionTable(connectionIndex)
         
-        -- Send OSC based on track type
+        -- Determine OSC path based on track type
         local path = trackType == "return" and '/live/return/set/mute' or '/live/track/set/mute'
-        -- SEND BOOLEAN VALUE!
-        sendOSCRouted(path, trackNumber, isMuted)
         
-        -- Update visual state immediately for responsiveness
-        updateVisualState()
-    
-    -- Also handle x value changes (for compatibility)
-    elseif valueName == "x" then
-        log("X value changed to: " .. self.values.x)
-        -- If x changed externally (user pressing button), treat as toggle
-        if trackNumber and trackType then
-            -- Only respond to user input, not our own updates
-            local expectedX = isMuted and 0 or 1
-            if self.values.x ~= expectedX then
-                log("X changed by user interaction, toggling mute")
-                isMuted = not isMuted
-                local path = trackType == "return" and '/live/return/set/mute' or '/live/track/set/mute'
-                -- SEND BOOLEAN VALUE!
-                sendOSCRouted(path, trackNumber, isMuted)
-                updateVisualState()
-            end
-        end
+        -- IMPORTANT: Invert the x value for mute state
+        -- x=0 (pressed) -> send 1 (mute on)
+        -- x=1 (released) -> send 0 (mute off)
+        local muteValue = (self.values.x == 0) and 1 or 0
+        
+        -- Update internal state
+        isMuted = (muteValue == 1)
+        
+        log("Sending OSC - path: " .. path .. ", track: " .. trackNumber .. ", mute: " .. muteValue .. ", connection: " .. connectionIndex)
+        
+        -- Send OSC message with integer value (0 or 1)
+        sendOSC(path, trackNumber, muteValue, connections)
     end
 end
 
