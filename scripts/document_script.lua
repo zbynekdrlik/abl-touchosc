@@ -1,13 +1,13 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.8.6
+-- Version: 2.8.7
 -- Purpose: Main document script with configuration and track management
--- Changed: Added debug logging to diagnose group finding issue
+-- Changed: Store group references during init to avoid finding issues
 
-local VERSION = "2.8.6"
+local VERSION = "2.8.7"
 local SCRIPT_NAME = "Document Script"
 
 -- Debug flag - set to 1 to enable logging
-local DEBUG = 1  -- TEMPORARILY ENABLED FOR DEBUGGING
+local DEBUG = 0
 
 -- Configuration storage
 local config = {
@@ -18,6 +18,9 @@ local config = {
 -- Control references (can be in pagers)
 local configText = nil
 
+-- Store track group references
+local trackGroups = {}
+
 -- Startup tracking
 local startupRefreshTime = nil
 local frameCount = 0
@@ -25,7 +28,6 @@ local STARTUP_DELAY_FRAMES = 60  -- Wait 1 second (60 frames at 60fps)
 
 -- Refresh state tracking
 local refreshState = "idle"  -- idle, clearing, waiting, refreshing
-local refreshGroups = {}
 local refreshWaitStart = 0
 local REFRESH_WAIT_TIME = 100  -- 100ms delay between clear and refresh
 
@@ -34,52 +36,6 @@ local function log(message)
     if DEBUG == 1 then
         print("[" .. os.date("%H:%M:%S") .. "] " .. SCRIPT_NAME .. ": " .. message)
     end
-end
-
--- === HELPER TO FIND TRACK GROUPS ===
-local function findTrackGroups()
-    local groups = {}
-    local searchCount = 0
-    
-    -- Function to recursively search for groups
-    local function searchControl(control, depth)
-        searchCount = searchCount + 1
-        
-        if control and control.name then
-            -- Debug: log what we're checking
-            if depth <= 2 then  -- Only log first few levels to avoid spam
-                log("Checking control: " .. control.name .. " (depth: " .. depth .. ")")
-            end
-            
-            -- Check if name starts with "band_" or "master_"
-            if (control.name:match("^band_") or control.name:match("^master_")) then
-                log("Found potential group: " .. control.name .. " - has children: " .. tostring(control.children ~= nil))
-                if control.children then
-                    table.insert(groups, control)
-                    log("Added group: " .. control.name)
-                end
-            end
-        end
-        
-        -- Recursively search children
-        if control and control.children then
-            for name, child in pairs(control.children) do
-                searchControl(child, depth + 1)
-            end
-        end
-    end
-    
-    -- Start searching from root
-    log("Starting group search from root...")
-    searchControl(root, 0)
-    log("Search complete. Checked " .. searchCount .. " controls, found " .. #groups .. " groups")
-    
-    -- Log the names of found groups
-    for i, group in ipairs(groups) do
-        log("Group " .. i .. ": " .. group.name)
-    end
-    
-    return groups
 end
 
 -- === CONFIGURATION PARSING ===
@@ -159,6 +115,12 @@ function onReceiveNotify(action, value)
     elseif action == "refresh_all_groups" then
         -- Global refresh button pressed - start refresh sequence
         startRefreshSequence()
+    elseif action == "register_track_group" then
+        -- Track group is registering itself
+        if value and value.name then
+            trackGroups[value.name] = value
+            log("Registered track group: " .. value.name)
+        end
     end
     -- Note: Removed "configuration_updated" handler - config text is read-only at runtime
     -- Note: Removed "log_message" handler - each script logs independently now
@@ -174,16 +136,24 @@ function startRefreshSequence()
         status.values.text = "Clearing..."
     end
     
-    -- Find all track groups by name pattern
-    refreshGroups = findTrackGroups()
-    
-    -- Clear all track mappings first
-    for _, group in ipairs(refreshGroups) do
-        -- Notify group to clear its mapping
-        group:notify("clear_mapping")
+    -- Count groups
+    local groupCount = 0
+    for name, _ in pairs(trackGroups) do
+        groupCount = groupCount + 1
     end
     
-    log("Cleared " .. #refreshGroups .. " groups")
+    -- Clear all track mappings first
+    for name, group in pairs(trackGroups) do
+        -- Verify group still exists and is valid
+        if group and group.notify then
+            group:notify("clear_mapping")
+        else
+            -- Remove invalid reference
+            trackGroups[name] = nil
+        end
+    end
+    
+    log("Cleared " .. groupCount .. " groups")
     
     -- Set state to wait before refreshing
     refreshState = "waiting"
@@ -205,12 +175,22 @@ function completeRefreshSequence()
         status.values.text = "Refreshing..."
     end
     
+    -- Count groups
+    local groupCount = 0
+    
     -- Trigger refresh on all groups
-    for _, group in ipairs(refreshGroups) do
-        group:notify("refresh_tracks")
+    for name, group in pairs(trackGroups) do
+        -- Verify group still exists and is valid
+        if group and group.notify then
+            group:notify("refresh_tracks")
+            groupCount = groupCount + 1
+        else
+            -- Remove invalid reference
+            trackGroups[name] = nil
+        end
     end
     
-    log("Refreshed " .. #refreshGroups .. " groups")
+    log("Refreshed " .. groupCount .. " groups")
     
     -- Update status
     if status then
@@ -219,7 +199,6 @@ function completeRefreshSequence()
     
     -- Reset state
     refreshState = "idle"
-    refreshGroups = {}
 end
 
 -- === GLOBAL HELPER FUNCTIONS ===
@@ -267,6 +246,9 @@ end
 -- === INITIALIZATION ===
 function init()
     log("Script v" .. VERSION .. " loaded")
+    
+    -- Clear track groups table
+    trackGroups = {}
     
     -- Try to parse configuration
     parseConfiguration()
