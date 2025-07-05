@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.16.1
--- Changed: Fixed clear_mapping to properly notify children and reset tag to prevent stale track references
+-- Version: 1.16.2
+-- Changed: Register group with document script on init for reliable refresh
 
 -- Version constant
-local SCRIPT_VERSION = "1.16.1"
+local SCRIPT_VERSION = "1.16.2"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -190,6 +190,9 @@ function init()
     
     -- Log initialization
     log("Script v" .. SCRIPT_VERSION .. " loaded")
+    
+    -- Register this group with the document script
+    root:notify("register_track_group", self)
     
     -- SAFETY: Disable all controls until properly mapped
     setGroupEnabled(false, true)  -- Silent
