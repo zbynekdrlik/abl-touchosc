@@ -1,9 +1,9 @@
 -- TouchOSC Pan Control Script
--- Version: 1.5.1
--- Changed: Standardized DEBUG flag (uppercase) and disabled by default
+-- Version: 1.6.0
+-- Changed: Restored color change and double touch to center functionality
 
 -- Version constant
-local VERSION = "1.5.1"
+local VERSION = "1.6.0"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -14,6 +14,16 @@ local trackType = nil  -- "track" or "return"
 local currentPan = 0.5  -- Center (0.5 = center in TouchOSC, 0 = center in Ableton)
 local lastOscPan = 0.5
 local isTouching = false
+
+-- Double touch detection
+local lastTouchTime = 0
+local touchCount = 0
+local DOUBLE_TOUCH_TIMEOUT = 0.5  -- 500ms for double touch
+
+-- Animation for centering
+local isAnimating = false
+local animationTarget = 0.5
+local ANIMATION_SPEED = 0.05  -- Speed of centering animation
 
 -- ===========================
 -- LOCAL LOGGING
@@ -105,6 +115,23 @@ local function abletonToTouchOSCPan(value)
 end
 
 -- ===========================
+-- VISUAL STATE MANAGEMENT
+-- ===========================
+
+local function updateVisualState()
+    -- Update color based on pan position
+    -- Gray when centered, yellow when panned
+    local tolerance = 0.02  -- Small tolerance for center detection
+    if math.abs(currentPan - 0.5) < tolerance then
+        -- Centered - gray color
+        self.color = Color(0.5, 0.5, 0.5, 1)
+    else
+        -- Panned - yellow color
+        self.color = Color(1, 0.8, 0, 1)
+    end
+end
+
+-- ===========================
 -- OSC HANDLERS
 -- ===========================
 
@@ -142,14 +169,45 @@ function onReceiveOSC(message, connections)
         local abletonPan = arguments[2].value
         lastOscPan = abletonToTouchOSCPan(abletonPan)
         
-        -- Only update if not touching to prevent jumps
-        if not isTouching then
+        -- Only update if not touching or animating to prevent jumps
+        if not isTouching and not isAnimating then
             currentPan = lastOscPan
             self.values.x = currentPan
+            updateVisualState()
         end
     end
     
     return false  -- Don't block other receivers
+end
+
+-- ===========================
+-- ANIMATION UPDATE
+-- ===========================
+
+function update()
+    -- Handle centering animation
+    if isAnimating then
+        local diff = animationTarget - currentPan
+        
+        if math.abs(diff) < 0.001 then
+            -- Animation complete
+            currentPan = animationTarget
+            isAnimating = false
+            
+            -- Send final center position
+            if trackNumber and trackType then
+                local abletonPan = touchOSCToAbletonPan(currentPan)
+                local path = trackType == "return" and '/live/return/set/panning' or '/live/track/set/panning'
+                sendOSCRouted(path, trackNumber, abletonPan)
+            end
+        else
+            -- Animate towards target
+            currentPan = currentPan + (diff * ANIMATION_SPEED)
+        end
+        
+        self.values.x = currentPan
+        updateVisualState()
+    end
 end
 
 -- ===========================
@@ -161,12 +219,32 @@ function onValueChanged(valueName)
     if valueName == "touch" then
         isTouching = self.values.touch
         
-        -- Sync with last OSC value when releasing
-        if not isTouching then
-            currentPan = lastOscPan
-            self.values.x = currentPan
+        if isTouching then
+            -- Check for double touch
+            local currentTime = os.clock()
+            if currentTime - lastTouchTime < DOUBLE_TOUCH_TIMEOUT then
+                touchCount = touchCount + 1
+                if touchCount >= 2 then
+                    -- Double touch detected - center pan
+                    log("Double touch detected - centering pan")
+                    isAnimating = true
+                    animationTarget = 0.5
+                    touchCount = 0
+                    return
+                end
+            else
+                touchCount = 1
+            end
+            lastTouchTime = currentTime
+        else
+            -- Sync with last OSC value when releasing
+            if not isAnimating then
+                currentPan = lastOscPan
+                self.values.x = currentPan
+                updateVisualState()
+            end
         end
-    elseif valueName == "x" and isTouching then
+    elseif valueName == "x" and isTouching and not isAnimating then
         -- Check if track is mapped
         if not trackNumber or not trackType then
             return
@@ -174,6 +252,7 @@ function onValueChanged(valueName)
         
         -- Update pan value
         currentPan = self.values.x
+        updateVisualState()
         
         -- Convert to Ableton range and send
         local abletonPan = touchOSCToAbletonPan(currentPan)
@@ -192,6 +271,7 @@ function onReceiveNotify(key, value)
         -- Reset to center when track changes
         currentPan = 0.5
         self.values.x = currentPan
+        updateVisualState()
     elseif key == "track_type" then
         trackType = value
     elseif key == "track_unmapped" then
@@ -199,6 +279,7 @@ function onReceiveNotify(key, value)
         trackType = nil
         currentPan = 0.5
         self.values.x = currentPan
+        updateVisualState()
     end
 end
 
@@ -214,6 +295,7 @@ function init()
     
     -- Set initial position to center
     self.values.x = currentPan
+    updateVisualState()
 end
 
 init()
