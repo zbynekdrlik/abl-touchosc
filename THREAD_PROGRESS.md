@@ -1,98 +1,55 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**⚠️ MUTE BUTTON FIX - OSC TYPE MISMATCH BLOCKING:**
-- [x] Problem identified: TouchOSC sends FLOAT, Ableton expects BOOL
-- [x] Currently at: v2.1.3 awaiting test results
-- [ ] Testing required: Does v2.1.3 work with Ableton?
-- [ ] Blocked by: OSC type conversion issue
-- [ ] Branch: feature/restore-mute-color-behavior
+**⚠️ MULTI-CONNECTION REGRESSION FIXED:**
+- [x] Issue identified: Meter scripts lost multi-connection support after v1.2.0
+- [x] Root cause: getConnectionIndex() function and connection filtering removed
+- [x] Fixed: meter_script.lua v2.5.0
+- [x] Fixed: db_meter_label.lua v2.7.0
+- [x] Fixed: db_label.lua v1.4.0
+- [x] PR #20 created and ready for review
+- [ ] Waiting for: User testing and merge approval
 
-## EXACT PROBLEM STATEMENT:
-User reported mute button colors being overridden by script. While fixing this (successfully removed color control), discovered mute functionality is broken due to OSC type mismatch:
+## Implementation Status
+- Phase: CRITICAL BUG FIX
+- Status: COMPLETE - Ready for testing
+- Branch: feature/restore-multi-connection-meter
 
-**Error from Ableton:**
-```
-Error handling OSC message: Python argument types in
-    None.None(Track, float)
-did not match C++ signature:
-    None(class TTrackPyHandle, bool)
-```
+## What Happened
+After the v1.2.0 release (which added return track support), subsequent updates to meter scripts accidentally removed the multi-connection functionality. This caused all meters to respond to ALL Ableton instances instead of filtering by their assigned connection.
 
-**OSC Log shows TouchOSC sending:**
-```
-SEND | ADDRESS(/live/return/set/mute) FLOAT(0) FLOAT(0)
-```
+## Scripts Affected and Fixed
+| Script | Old Version | Fixed Version | Changes |
+|--------|-------------|---------------|---------|
+| meter_script.lua | 2.4.1 | 2.5.0 | Restored getConnectionIndex() and connection filtering |
+| db_meter_label.lua | 2.6.1 | 2.7.0 | Restored multi-connection support |
+| db_label.lua | 1.3.1 | 1.4.0 | Restored multi-connection support |
 
-## Version History in This Thread:
-1. **v2.0.1** (starting point): Had color override + touch events
-2. **v2.1.0**: Removed color control (main goal ✅)
-3. **v2.1.1**: Added debug logging (DEBUG=1)
-4. **v2.1.2**: Tried sending boolean values - didn't work
-5. **v2.1.3**: Reverted to old pattern - AWAITING TEST
+## Scripts NOT Affected
+These scripts maintained their multi-connection support:
+- fader_script.lua ✅
+- pan_control.lua ✅  
+- mute_button.lua ✅
+- group_init.lua ✅
 
-## Key Code Changes in v2.1.3:
-```lua
--- Using onValueChanged("x") like old version
--- Sending integer values with inverted logic:
-local muteValue = (self.values.x == 0) and 1 or 0
-sendOSC(path, trackNumber, muteValue, connections)
-```
+## Technical Details
+The regression occurred because:
+1. Multi-connection support was added AFTER v1.2.0
+2. When meter scripts were updated for other features, the old versions were used as base
+3. The getConnectionIndex() function and connection filtering logic were not preserved
 
-## What Old Version (1.9.1) Did:
-- Used `onValueChanged("x")` 
-- Sent inverted x as boolean: `(self.values.x == 0)`
-- No color manipulation
-- Somehow worked with Ableton despite TouchOSC FLOAT issue
+## Testing Required
+Users with multiple Ableton instances should test:
+1. Meters only respond to their assigned connection
+2. Animation features still work correctly
+3. Debug mode toggle (db_meter_label) still works
+4. All other functionality preserved
 
-## Critical Question for Next Thread:
-How did the old version handle the bool/float type mismatch? Options:
-1. Old TouchOSC version sent proper booleans?
-2. Old Ableton Live version accepted floats?
-3. Some other script/setting converted types?
-4. Need different OSC message format?
+## Next Steps
+1. User tests the fix with multiple Ableton instances
+2. Verify meters are properly isolated by connection
+3. Merge PR #20 if testing successful
+4. Consider adding automated tests to prevent similar regressions
 
-## Pending PRs Status:
-1. **PR #19** - Mute Button Fix (THIS BRANCH)
-   - Color control removed ✅
-   - OSC functionality broken ❌
-   - Need to solve type mismatch
-   
-2. **PR #18** - Pan Control Restoration
-   - COMPLETE & TESTED ✅
-   - Ready to merge
-   
-3. **PR #16** - Group Interactivity Fix
-   - Ready to merge
-   
-4. **PR #15** - Refresh Track Renumbering Fix  
-   - Ready to merge
-
-## Files Modified in This Branch:
-- `/scripts/track/mute_button.lua` (v2.1.3)
-- `/CHANGELOG.md` (updated with mute fix entry)
-- `/THREAD_PROGRESS.md` (this file)
-
-## Next Steps for New Thread:
-1. **TEST v2.1.3** - Get logs to see if reverting to old pattern works
-2. If still broken, investigate:
-   - Compare with working scripts (fader/pan) OSC sending
-   - Check if TouchOSC has boolean type support
-   - Test with different OSC message formats
-3. Consider asking user:
-   - TouchOSC version?
-   - Ableton Live version?
-   - When did it last work?
-
-## User's Original Complaint:
-"I am mainly unhappy that new code mess with colors what was working perfectly in previous version and visually correct, now colors are broken and not able to fix in touchosc editor. I want have old way of manage colors by user not by script"
-
-**Color issue: FIXED in all versions ✅**
-**Functionality issue: DISCOVERED during testing ❌**
-
-## Session End State:
-- Awaiting test results for v2.1.3
-- Main goal (color control) achieved
-- Secondary issue (OSC type) blocking functionality
-- All changes committed to feature branch
-- PR #19 created but not ready to merge
+## Lesson Learned
+When updating scripts, always check for features added after the last major release and ensure they are preserved. The multi-connection support was a critical feature that should never have been lost.
