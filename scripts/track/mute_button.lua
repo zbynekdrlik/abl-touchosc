@@ -1,9 +1,9 @@
 -- TouchOSC Mute Button Script
--- Version: 2.1.3
--- Fixed: Force integer values for OSC as TouchOSC converts booleans to floats
+-- Version: 2.1.4
+-- Fixed: Send boolean values for AbletonOSC (not integers)
 
 -- Version constant
-local VERSION = "2.1.3"
+local VERSION = "2.1.4"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 1  -- ENABLED FOR DEBUGGING
@@ -173,17 +173,17 @@ function onValueChanged(valueName)
         -- Determine OSC path based on track type
         local path = trackType == "return" and '/live/return/set/mute' or '/live/track/set/mute'
         
-        -- IMPORTANT: Invert the x value for mute state
-        -- x=0 (pressed) -> send 1 (mute on)
-        -- x=1 (released) -> send 0 (mute off)
-        local muteValue = (self.values.x == 0) and 1 or 0
+        -- IMPORTANT: Send boolean value, not integer!
+        -- x=0 (pressed) -> send true (mute on)
+        -- x=1 (released) -> send false (mute off)
+        local muteValue = (self.values.x == 0)
         
         -- Update internal state
-        isMuted = (muteValue == 1)
+        isMuted = muteValue
         
-        log("Sending OSC - path: " .. path .. ", track: " .. trackNumber .. ", mute: " .. muteValue .. ", connection: " .. connectionIndex)
+        log("Sending OSC - path: " .. path .. ", track: " .. trackNumber .. ", mute: " .. tostring(muteValue) .. ", connection: " .. connectionIndex)
         
-        -- Send OSC message with integer value (0 or 1)
+        -- Send OSC message with boolean value
         sendOSC(path, trackNumber, muteValue, connections)
     end
 end
