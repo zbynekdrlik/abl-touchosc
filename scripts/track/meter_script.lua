@@ -1,9 +1,8 @@
 -- TouchOSC Meter Script with Multi-Connection Support
--- Version: 2.5.1
--- Fixed: Cache connection index to avoid repeated lookups
--- Improved: Performance optimization for multi-connection support
+-- Version: 2.5.2
+-- Fixed: Use consistent logging function throughout
 
-local VERSION = "2.5.1"
+local VERSION = "2.5.2"
 
 -- DEBUG MODE
 local DEBUG = 0  -- Set to 1 to see meter values and conversions in console
@@ -61,17 +60,9 @@ local function log(message)
             context = "METER(" .. self.parent.name .. ")"
         end
         
-        -- Print to console (simplified from v2.3.1)
+        -- Print to console
         print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
     end
-end
-
-function debugPrint(...)
-  if DEBUG == 1 then
-    local args = {...}
-    local msg = table.concat(args, " ")
-    log("[DEBUG] " .. msg)
-  end
 end
 
 -- ===========================
@@ -116,7 +107,7 @@ local function getConnectionIndex()
     -- Find and read configuration
     local configObj = root:findByName("configuration", true)
     if not configObj or not configObj.values or not configObj.values.text then
-        debugPrint("No configuration found, using default connection")
+        log("No configuration found, using default connection")
         cachedConnectionIndex = defaultConnection
         return defaultConnection
     end
@@ -129,12 +120,12 @@ local function getConnectionIndex()
         if configInstance and configInstance == instance then
             local index = tonumber(connectionNum) or defaultConnection
             cachedConnectionIndex = index
-            debugPrint("Cached connection for", instance, ":", index)
+            log("Cached connection for " .. instance .. ": " .. index)
             return index
         end
     end
     
-    debugPrint("No connection found for instance:", instance)
+    log("No connection found for instance: " .. instance)
     cachedConnectionIndex = defaultConnection
     return defaultConnection
 end
@@ -342,17 +333,17 @@ function onReceiveOSC(message, connections)
   
   -- Debug logging (reduced frequency)
   if DEBUG == 1 and math.abs(fader_position - lastMeterValue) > 0.01 then
-    debugPrint("=== METER UPDATE ===")
-    debugPrint("Track Type:", trackType, "Track:", trackNumber, "Connection:", myConnection)
-    debugPrint("AbletonOSC normalized:", string.format("%.4f", normalized_meter))
-    debugPrint("→ Fader position:", string.format("%.1f%%", fader_position * 100))
+    log("=== METER UPDATE ===")
+    log("Track Type: " .. trackType .. " Track: " .. trackNumber .. " Connection: " .. myConnection)
+    log("AbletonOSC normalized: " .. string.format("%.4f", normalized_meter))
+    log("→ Fader position: " .. string.format("%.1f%%", fader_position * 100))
     
     -- Calculate actual dB for display
     local audio_value = linearToLog(fader_position)
     local actual_db = value2db(audio_value)
-    debugPrint("→ Actual dB:", string.format("%.1f", actual_db))
-    debugPrint("→ Color:", actual_db >= COLOR_THRESHOLD_RED and "RED" or
-                         actual_db >= COLOR_THRESHOLD_YELLOW and "YELLOW" or "GREEN")
+    log("→ Actual dB: " .. string.format("%.1f", actual_db))
+    log("→ Color: " .. (actual_db >= COLOR_THRESHOLD_RED and "RED" or
+                        actual_db >= COLOR_THRESHOLD_YELLOW and "YELLOW" or "GREEN"))
   end
   
   return true  -- Stop propagation
@@ -369,7 +360,7 @@ function onReceiveNotify(key, value)
         self.color = Color(current_color[1], current_color[2], current_color[3], current_color[4])
         -- Clear cached connection index as track may have changed instance
         cachedConnectionIndex = nil
-        debugPrint("Track changed - reset meter and cleared cache")
+        log("Track changed - reset meter and cleared cache")
     elseif key == "track_unmapped" then
         -- Disable meter when track is unmapped
         self.values.x = 0
@@ -377,7 +368,7 @@ function onReceiveNotify(key, value)
         animationActive = false
         -- Clear cached connection index
         cachedConnectionIndex = nil
-        debugPrint("Track unmapped - disabled meter and cleared cache")
+        log("Track unmapped - disabled meter and cleared cache")
     end
 end
 
