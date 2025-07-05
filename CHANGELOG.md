@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - CRITICAL: Restored multi-connection support to meter scripts (regression from v1.2.0)
-  - meter_script.lua v2.5.1: Restored connection filtering with performance caching
+  - meter_script.lua v2.5.2: Restored connection filtering with performance caching and consistent logging
   - db_meter_label.lua v2.6.2: Restored connection support (minimal changes only)
   - db_label.lua v1.3.2: Restored connection support (minimal changes only)
   - Multi-instance routing now works correctly for all meter displays
