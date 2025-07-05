@@ -1,9 +1,10 @@
 -- TouchOSC dB Value Label Display
--- Version: 1.3.1
--- Changed: Standardized DEBUG flag (uppercase) and disabled by default
+-- Version: 1.4.0
+-- Restored: Multi-connection routing support
+-- Maintained: All existing functionality
 
 -- Version constant
-local VERSION = "1.3.1"
+local VERSION = "1.4.0"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -39,6 +40,50 @@ local function getTrackInfo()
         end
     end
     return nil, nil
+end
+
+-- Get connection index by reading configuration directly (RESTORED)
+local function getConnectionIndex()
+    -- Default to connection 1 if can't determine
+    local defaultConnection = 1
+    
+    -- Check parent tag for instance name
+    if not self.parent or not self.parent.tag then
+        return defaultConnection
+    end
+    
+    -- Extract instance name from tag
+    local instance = self.parent.tag:match("^(%w+):")
+    if not instance then
+        return defaultConnection
+    end
+    
+    -- Find and read configuration
+    local configObj = root:findByName("configuration", true)
+    if not configObj or not configObj.values or not configObj.values.text then
+        if DEBUG == 1 then
+            log("No configuration found, using default connection")
+        end
+        return defaultConnection
+    end
+    
+    -- Parse configuration to find connection for this instance
+    local configText = configObj.values.text
+    for line in configText:gmatch("[^\r\n]+") do
+        -- Look for connection_instance: number pattern
+        local configInstance, connectionNum = line:match("connection_(%w+):%s*(%d+)")
+        if configInstance and configInstance == instance then
+            if DEBUG == 1 then
+                log("Found connection for " .. instance .. ": " .. connectionNum)
+            end
+            return tonumber(connectionNum) or defaultConnection
+        end
+    end
+    
+    if DEBUG == 1 then
+        log("No connection found for instance: " .. instance)
+    end
+    return defaultConnection
 end
 
 -- Check if track is properly mapped
@@ -86,7 +131,7 @@ function formatDB(db_value)
 end
 
 -- ===========================
--- OSC HANDLER
+-- OSC HANDLER WITH MULTI-CONNECTION
 -- ===========================
 
 function onReceiveOSC(message, connections)
@@ -111,6 +156,14 @@ function onReceiveOSC(message, connections)
         return false
     end
     
+    -- Get our connection index (MULTI-CONNECTION SUPPORT)
+    local myConnection = getConnectionIndex()
+    
+    -- Check if this message is from our connection
+    if connections and not connections[myConnection] then
+        return false
+    end
+    
     -- Check if this message is for our track
     if arguments[1].value == trackNumber then
         -- Get the volume value and convert to dB
@@ -120,6 +173,11 @@ function onReceiveOSC(message, connections)
         -- Update label text
         self.values.text = formatDB(db_value)
         lastDB = db_value
+        
+        if DEBUG == 1 then
+            log(string.format("%s track %d (conn %d): %.1f dB", 
+                trackType, trackNumber, myConnection, db_value))
+        end
     end
     
     return false  -- Don't block other receivers
@@ -158,6 +216,11 @@ function init()
         self.values.text = "-inf"
     else
         self.values.text = "-"
+    end
+    
+    if DEBUG == 1 then
+        log("=== DB LABEL WITH MULTI-CONNECTION RESTORED ===")
+        log("Multi-connection routing enabled")
     end
 end
 
