@@ -1,9 +1,9 @@
 -- TouchOSC dB Value Label Display
--- Version: 1.3.1
--- Changed: Standardized DEBUG flag (uppercase) and disabled by default
+-- Version: 1.3.2
+-- Fixed: Added multi-connection support
 
 -- Version constant
-local VERSION = "1.3.1"
+local VERSION = "1.3.2"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -39,6 +39,41 @@ local function getTrackInfo()
         end
     end
     return nil, nil
+end
+
+-- Get connection index by reading configuration
+local function getConnectionIndex()
+    -- Default to connection 1 if can't determine
+    local defaultConnection = 1
+    
+    -- Check parent tag for instance name
+    if not self.parent or not self.parent.tag then
+        return defaultConnection
+    end
+    
+    -- Extract instance name from tag
+    local instance = self.parent.tag:match("^(%w+):")
+    if not instance then
+        return defaultConnection
+    end
+    
+    -- Find and read configuration
+    local configObj = root:findByName("configuration", true)
+    if not configObj or not configObj.values or not configObj.values.text then
+        return defaultConnection
+    end
+    
+    -- Parse configuration to find connection for this instance
+    local configText = configObj.values.text
+    for line in configText:gmatch("[^\r\n]+") do
+        -- Look for connection_instance: number pattern
+        local configInstance, connectionNum = line:match("connection_(%w+):%s*(%d+)")
+        if configInstance and configInstance == instance then
+            return tonumber(connectionNum) or defaultConnection
+        end
+    end
+    
+    return defaultConnection
 end
 
 -- Check if track is properly mapped
@@ -108,6 +143,14 @@ function onReceiveOSC(message, connections)
     end
     
     if not isVolumeMessage then
+        return false
+    end
+    
+    -- Get our connection index
+    local myConnection = getConnectionIndex()
+    
+    -- Check if this message is from our connection
+    if connections and not connections[myConnection] then
         return false
     end
     

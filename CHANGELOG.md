@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the TouchOSC Ableton Live Controller will be documented in this file.
+All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -8,126 +8,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- CRITICAL: Restored multi-connection support to meter scripts (regression from v1.2.0)
+  - meter_script.lua v2.5.2: Restored connection filtering with performance caching and consistent logging
+  - db_meter_label.lua v2.6.2: Restored connection support (minimal changes only)
+  - db_label.lua v1.3.2: Restored connection support (minimal changes only)
+  - Multi-instance routing now works correctly for all meter displays
+  - Found that multi-connection support was accidentally removed after v1.2.0 release
 - Mute button now sends boolean values to AbletonOSC (v2.1.4)
   - Fixed "Python argument types did not match C++ signature" error
   - Changed from sending integers (0/1) to proper boolean values (true/false)
-  - Added rule documentation in `rules/abletonosc-mute-boolean.md`
-- Restored user control of mute button colors (v2.1.0)
-  - Removed script color manipulation that was overriding TouchOSC editor settings
-  - Colors now fully controlled by user in TouchOSC editor
-  - TouchOSC's built-in pressed/released color states work properly
-  - Maintains improved code organization from v2.0.x
-- Restored missing pan control features (v1.5.3)
-  - Color change functionality: gray when centered, cyan when off-center
-  - Double-tap to center functionality with 300ms detection window
-  - Optimized performance by removing continuous update() calls
-  - Color changes now event-driven in onValueChanged()
-- Group interactivity bug - meters and labels now remain non-interactive when group is mapped
-  - Simplified code to only handle controls that need interactivity changes
-  - Removed unnecessary code that was setting non-interactive states
-  - Let TouchOSC editor handle non-interactive state for meters/labels
-- Refresh All button now properly reassigns groups when tracks are renumbered in Ableton
-  - Implemented registration system where groups self-register with document script
-  - Fixed issue where refresh would find 0 groups after initial mapping
-  - Added proper clearing of track references before reassignment
-  - Handles track renumbering when inserting/removing tracks in Ableton
 
-## [2.8.7] - 2025-07-05
+## [1.2.0] - 2025-06-28
+
+### Added
+- Complete support for Ableton Live return tracks
+  - All controls (fader, mute, pan, meters) now work with return tracks
+  - Automatic detection of track type (regular vs return)
+  - Dynamic OSC path routing based on track type
+  - Updated all scripts to handle both track types seamlessly
 
 ### Changed
-- document_script.lua: Switched from searching to registration-based group management
-- group_init.lua v1.16.2: Groups now self-register with document script on initialization
-- fader_script.lua v2.5.3: Added handling for mapping_cleared notification
+- Enhanced track initialization system
+  - group_init.lua now queries both regular and return tracks
+  - Scripts automatically use correct OSC paths (/live/track vs /live/return)
+  - Improved track type detection and storage
 
 ### Fixed
-- Track renumbering refresh issue completely resolved
+- Track mapping now correctly identifies return tracks
+- OSC routing properly differentiates between track types
+- All controls maintain proper state when switching between track types
 
-## [2.8.2] - 2025-07-04
+## [1.1.0] - 2025-06-27
 
-### Removed
-- Removed dead configuration_updated handler from document_script.lua
-- Config text is read-only at runtime, making the handler unnecessary
-
-## [2.8.1] - 2025-07-04
+### Added
+- Professional multi-connection support for multiple Ableton Live instances
+  - Configuration-based connection routing
+  - Support for up to 10 simultaneous connections
+  - Each track group can be assigned to different Ableton instances
+  - Global refresh broadcasts to all connections
+- Enhanced visual feedback system
+  - Real-time status indicators for each track
+  - Color-coded connection states (green=active, yellow=receiving, red=unmapped)
+  - Smooth fade animations for activity indication
+- dBFS meter label display with real-time calibration
+  - Accurate dBFS readings based on user-verified calibration
+  - Toggle between dBFS display and raw meter values for debugging
+  - Visual feedback when in debug mode (yellow tint)
 
 ### Changed
-- Removed centralized logging system via notify()
-- Each script now has its own local log() function with DEBUG flag
-- Improved performance by eliminating inter-script logging communication
-
-### Technical Details
-- All scripts updated with local logging functions
-- DEBUG flag defaults to 0 (off) for production
-- Logging format standardized across all scripts
-
-## [2.5.2] - 2025-06-29
+- Improved script architecture for better performance
+  - Optimized message routing
+  - Reduced unnecessary processing
+  - Better error handling
+- Enhanced debug logging system
+  - Contextual logging with parent information
+  - Standardized debug flags across all scripts
+  - More informative log messages
 
 ### Fixed
-- Fader script debug flag standardization (DEBUG in uppercase)
-- Set DEBUG=0 by default for production use
-
-## [2.5.1] - 2025-06-29
-
-### Changed
-- Enhanced fader double-tap animation with optimized speed (0.005 units/update)
-- Smoother visual transition when double-tapping to unity gain
-
-## [2.5.0] - 2025-06-29
-
-### Added
-- Connection-aware OSC routing in fader script
-- Dynamic connection index lookup from parent group configuration
-- Support for both regular tracks and return tracks
-
-### Changed
-- Fader now reads track info directly from parent group tag
-- Improved OSC message routing with connection tables
-
-## [2.4.0] - 2025-06-29
-
-### Added
-- Smart group initialization with automatic startup refresh
-- Connection-based configuration system
-- Multiple Ableton instance support (band/master)
-- Visual activity indicators for groups
-
-### Changed
-- Groups now store track mapping in tag property
-- Improved refresh mechanism with proper clearing
-- Better error handling for missing tracks
-
-## [2.3.0] - 2025-06-28
-
-### Added
-- Professional fader control with movement smoothing
-- First movement scaling for precise control
-- Emergency movement detection for quick adjustments
-- Double-tap to unity gain (0dB) functionality
-
-### Technical Features
-- 0.1dB minimum change on first movement
-- Reaction time compensation
-- Linear range precision (-6dB to +6dB)
-- Smooth animation for double-tap
-
-## [2.0.0] - 2025-06-27
-
-### Added
-- Complete rewrite with modular architecture
-- Document script pattern for configuration management
-- Inter-script communication via notify()
-- Comprehensive documentation and rules
-
-### Changed
-- Migrated from monolithic to modular script structure
-- Improved error handling and validation
-- Better TouchOSC API compliance
+- Connection routing now properly isolates instances
+- Status indicators update correctly during all state changes
+- Meter calibration matches actual Ableton Live values
 
 ## [1.0.0] - 2025-06-27
 
 ### Added
-- Initial release
-- Basic fader control for Ableton Live
-- Volume, pan, mute controls
-- VU meter display
-- Multi-track support
+- Initial release of the Ableton Live TouchOSC Template
+- Professional fader control with movement smoothing system
+  - Gradual first movement scaling for precision
+  - Immediate 0.1dB response for fine adjustments
+  - Emergency movement detection for quick changes
+  - Double-tap to unity gain (0dB) functionality
+- Complete track control suite
+  - Volume fader with dB-accurate positioning
+  - Mute button with proper state management
+  - Pan control with center detent and double-tap reset
+  - VU meter with color-coded level indication
+  - dB value label showing current fader position
+- Smart track management
+  - Automatic track detection and mapping
+  - Document-based connection configuration
+  - Persistent track assignments
+  - Automatic refresh on Ableton Live project changes
+- Professional visual design
+  - Color-coded controls for easy identification
+  - Real-time visual feedback
+  - Clean, intuitive layout
+  - Consistent styling across all controls
+
+### Technical Features
+- Logarithmic curve matching Ableton Live's fader response
+- Calibrated meter display with smooth animations
+- Proper OSC message handling and routing
+- Extensive debug logging capabilities
+- Modular script architecture for easy maintenance
+
+[1.2.0]: https://github.com/zbynekdrlik/abl-touchosc/releases/tag/v1.2.0
+[1.1.0]: https://github.com/zbynekdrlik/abl-touchosc/releases/tag/v1.1.0
+[1.0.0]: https://github.com/zbynekdrlik/abl-touchosc/releases/tag/v1.0.0
