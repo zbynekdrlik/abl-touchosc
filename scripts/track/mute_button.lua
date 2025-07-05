@@ -1,9 +1,9 @@
 -- TouchOSC Mute Button Script
--- Version: 2.1.1
--- Debug version with enhanced logging to diagnose issues
+-- Version: 2.1.2
+-- Fixed: Send boolean values instead of integers to match Ableton's expectations
 
 -- Version constant
-local VERSION = "2.1.1"
+local VERSION = "2.1.2"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 1  -- ENABLED FOR DEBUGGING
@@ -112,8 +112,10 @@ end
 local function sendOSCRouted(path, track, mute)
     local connectionIndex = getConnectionIndex()
     local connections = buildConnectionTable(connectionIndex)
-    log("Sending OSC - path: " .. path .. ", track: " .. track .. ", mute: " .. mute .. ", connection: " .. connectionIndex)
-    sendOSC(path, track, mute, connections)
+    -- CRITICAL: Send boolean value, not integer!
+    local muteValue = mute  -- mute should already be boolean
+    log("Sending OSC - path: " .. path .. ", track: " .. track .. ", mute: " .. tostring(muteValue) .. " (type: " .. type(muteValue) .. "), connection: " .. connectionIndex)
+    sendOSC(path, track, muteValue, connections)
 end
 
 function onReceiveOSC(message, connections)
@@ -145,8 +147,14 @@ function onReceiveOSC(message, connections)
     
     -- Check if this message is for our track
     if arguments[1].value == trackNumber then
-        -- Update mute state (1 = muted, 0 = unmuted in Ableton)
-        isMuted = (arguments[2].value == 1)
+        -- Update mute state
+        -- Check if value is boolean or integer and handle both
+        local muteValue = arguments[2].value
+        if type(muteValue) == "number" then
+            isMuted = (muteValue == 1)
+        else
+            isMuted = muteValue
+        end
         log("Updated mute state to: " .. tostring(isMuted))
         updateVisualState()
     end
@@ -177,7 +185,8 @@ function onValueChanged(valueName)
         
         -- Send OSC based on track type
         local path = trackType == "return" and '/live/return/set/mute' or '/live/track/set/mute'
-        sendOSCRouted(path, trackNumber, isMuted and 1 or 0)
+        -- SEND BOOLEAN VALUE!
+        sendOSCRouted(path, trackNumber, isMuted)
         
         -- Update visual state immediately for responsiveness
         updateVisualState()
@@ -193,7 +202,8 @@ function onValueChanged(valueName)
                 log("X changed by user interaction, toggling mute")
                 isMuted = not isMuted
                 local path = trackType == "return" and '/live/return/set/mute' or '/live/track/set/mute'
-                sendOSCRouted(path, trackNumber, isMuted and 1 or 0)
+                -- SEND BOOLEAN VALUE!
+                sendOSCRouted(path, trackNumber, isMuted)
                 updateVisualState()
             end
         end
