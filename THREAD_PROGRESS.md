@@ -1,19 +1,48 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**⚠️ ABLETONOSC BUG IDENTIFIED - CROSS-WIRED LISTENERS:**
-- [x] Issue identified: Multiple tracks receiving same listener events
+**⚠️ ABLETONOSC FIXES CREATED - READY FOR TESTING:**
+- [x] Issue identified: Multiple tracks receiving same listener events  
 - [x] Pattern found: Track 5 broadcasts to tracks 5,6,7; Track 8 responds as track 10
 - [x] Root cause: AbletonOSC listener system bug (not TouchOSC issue)
-- [ ] Next step: Fork AbletonOSC and investigate the bug
+- [x] Fork AbletonOSC: https://github.com/zbynekdrlik/AbletonOSC
+- [x] Created fixes in branch: fix/listener-cross-wiring
+- [ ] Next step: Test the fixes in Ableton
 
 ## Implementation Status
-- Phase: BUG ROOT CAUSE IDENTIFIED
-- Status: NEED TO FORK ABLETONOSC
+- Phase: FIXES IMPLEMENTED
+- Status: READY FOR TESTING
 - Branch: feature/track-8-10-mismatch
+- AbletonOSC PR: https://github.com/zbynekdrlik/AbletonOSC/pull/3
+
+## Fixes Created in AbletonOSC
+1. **Fixed String/Bytes Error** (osc_server.py)
+   - Fixed "write() argument must be str, not bytes" error
+   - Added proper decoding when writing debug data
+
+2. **Fixed Listener Cross-Wiring** (track.py & handler.py)
+   - Added thread-safe listener registration with locks
+   - Fixed track index validation to prevent out-of-bounds
+   - Improved error handling in callbacks  
+   - Ensured correct track indices are always sent
+
+3. **Fixed Observer Errors**
+   - Added clear_api method to safely remove all listeners
+   - Improved listener cleanup on shutdown
+
+## Testing Instructions
+1. Copy the fixed files from AbletonOSC fork to your Ableton installation:
+   - abletonosc/osc_server.py
+   - abletonosc/handler.py
+   - abletonosc/track.py
+2. Restart Ableton Live
+3. Test all track volume changes (0-11)
+4. Verify Track 5 only updates Track 5
+5. Verify Track 8 responds as Track 8 (not 10)
+6. Check for any errors in Ableton logs
 
 ## Issue Analysis
-User logs show clear evidence of AbletonOSC listener cross-wiring:
+User logs showed clear evidence of AbletonOSC listener cross-wiring:
 
 **Track 5 broadcasting to multiple tracks:**
 ```
@@ -31,28 +60,9 @@ RECEIVE: /live/track/get/volume FLOAT(10) FLOAT(0.7574361)
 
 ## Key Findings
 1. This is NOT a TouchOSC issue
-2. The problem is in AbletonOSC's listener registration/routing
-3. No hidden tracks, no group tracks - pure AbletonOSC bug
-4. Pattern suggests listeners are being registered to wrong track indices
-
-## Next Steps for User
-1. Fork https://github.com/ideoforms/AbletonOSC
-2. Share the fork URL so we can investigate
-3. We'll look into:
-   - `track.py` - how listeners are registered
-   - `handler.py` - how messages are routed
-   - The start_listen/stop_listen implementation
-
-## Likely Bug Location
-Based on the pattern, the bug is probably in how AbletonOSC:
-- Registers volume listeners to track objects
-- Routes responses back with track indices
-- Manages the listener callback registry
-
-## Temporary Workarounds
-1. Avoid using tracks that exhibit this behavior
-2. Rename tracks in Ableton to work around the issue
-3. Use only tracks that respond correctly
+2. The problem was in AbletonOSC's listener registration/routing
+3. Return track support implementation introduced bugs
+4. Fixed with proper thread safety and validation
 
 ## Diagnostic Tools Created
 - track_mismatch_test.lua v1.1.0 - Tests for listener cross-wiring
