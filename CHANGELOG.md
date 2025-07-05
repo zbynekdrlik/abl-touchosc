@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Mute button now sends boolean values to AbletonOSC (v2.1.4)
+  - Fixed "Python argument types did not match C++ signature" error
+  - Changed from sending integers (0/1) to proper boolean values (true/false)
+  - Added rule documentation in `rules/abletonosc-mute-boolean.md`
+- Restored user control of mute button colors (v2.1.0)
+  - Removed script color manipulation that was overriding TouchOSC editor settings
+  - Colors now fully controlled by user in TouchOSC editor
+  - TouchOSC's built-in pressed/released color states work properly
+  - Maintains improved code organization from v2.0.x
 - Restored missing pan control features (v1.5.3)
   - Color change functionality: gray when centered, cyan when off-center
   - Double-tap to center functionality with 300ms detection window

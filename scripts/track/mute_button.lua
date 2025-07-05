@@ -1,12 +1,12 @@
 -- TouchOSC Mute Button Script
--- Version: 2.0.1
--- Changed: Standardized DEBUG flag (uppercase) and disabled by default
+-- Version: 2.1.4
+-- Fixed: Send boolean values for AbletonOSC (not integers)
 
 -- Version constant
-local VERSION = "2.0.1"
+local VERSION = "2.1.4"
 
 -- Debug flag - set to 1 to enable logging
-local DEBUG = 0
+local DEBUG = 0  -- Production mode
 
 -- State variables
 local trackNumber = nil
@@ -74,12 +74,19 @@ end
 
 -- Get track number and type from parent group
 local function getTrackInfo()
+    log("Getting track info from parent...")
     -- Parent stores track info in tag as "instance:trackNumber:trackType"
     if self.parent and self.parent.tag then
+        log("Parent tag: " .. tostring(self.parent.tag))
         local instance, trackNum, trackType = self.parent.tag:match("^(%w+):(%d+):(%w+)$")
         if trackNum and trackType then
+            log("Parsed track info - number: " .. trackNum .. ", type: " .. trackType)
             return tonumber(trackNum), trackType
+        else
+            log("Failed to parse parent tag")
         end
+    else
+        log("No parent or parent tag found")
     end
     return nil, nil
 end
@@ -91,25 +98,15 @@ end
 local function updateVisualState()
     -- Buttons use values.x for pressed/released state
     -- 0 = pressed/on, 1 = released/off
-    if isMuted then
-        self.values.x = 0  -- Pressed state (muted)
-        self.color = Color(1, 0, 0, 1)  -- Red when muted
-    else
-        self.values.x = 1  -- Released state (unmuted)
-        self.color = Color(0.5, 0.5, 0.5, 1)  -- Gray when unmuted
-    end
+    -- Let TouchOSC handle the colors based on these states
+    local newState = isMuted and 0 or 1
+    log("Updating visual state - muted: " .. tostring(isMuted) .. ", x: " .. newState)
+    self.values.x = newState
 end
 
 -- ===========================
 -- OSC HANDLERS
 -- ===========================
-
--- Send OSC with connection routing
-local function sendOSCRouted(path, track, mute)
-    local connectionIndex = getConnectionIndex()
-    local connections = buildConnectionTable(connectionIndex)
-    sendOSC(path, track, mute, connections)
-end
 
 function onReceiveOSC(message, connections)
     local path = message[1]
@@ -132,11 +129,23 @@ function onReceiveOSC(message, connections)
         return false
     end
     
-    -- Check if this message is for our track
-    if arguments[1].value == trackNumber then
-        -- Update mute state (1 = muted, 0 = unmuted in Ableton)
-        isMuted = (arguments[2].value == 1)
-        updateVisualState()
+    -- Check if this message is for our track and has valid arguments
+    if arguments[1] and arguments[1].value == trackNumber and arguments[2] then
+        -- Get connection index
+        local expectedConnection = getConnectionIndex()
+        if connections[expectedConnection] then
+            -- Update mute state - handle both boolean and number values
+            local muteValue = arguments[2].value
+            if type(muteValue) == "boolean" then
+                isMuted = muteValue
+            else
+                -- Convert number to boolean (1 = muted, 0 = unmuted)
+                isMuted = (muteValue == 1)
+            end
+            
+            log("Received mute state for track " .. trackNumber .. ": " .. tostring(isMuted))
+            updateVisualState()
+        end
     end
     
     return false  -- Don't block other receivers
@@ -147,22 +156,35 @@ end
 -- ===========================
 
 function onValueChanged(valueName)
-    -- Handle touch events
-    if valueName == "touch" and self.values.touch == 1 then
+    -- Handle x value changes (button press/release)
+    if valueName == "x" then
+        log("X value changed to: " .. self.values.x)
+        
         -- Check if track is mapped
         if not trackNumber or not trackType then
+            log("No track mapped, ignoring button press")
             return
         end
         
-        -- Toggle mute state
-        isMuted = not isMuted
+        -- Get connection configuration
+        local connectionIndex = getConnectionIndex()
+        local connections = buildConnectionTable(connectionIndex)
         
-        -- Send OSC based on track type
+        -- Determine OSC path based on track type
         local path = trackType == "return" and '/live/return/set/mute' or '/live/track/set/mute'
-        sendOSCRouted(path, trackNumber, isMuted and 1 or 0)
         
-        -- Update visual state immediately for responsiveness
-        updateVisualState()
+        -- IMPORTANT: Send boolean value, not integer!
+        -- x=0 (pressed) -> send true (mute on)
+        -- x=1 (released) -> send false (mute off)
+        local muteValue = (self.values.x == 0)
+        
+        -- Update internal state
+        isMuted = muteValue
+        
+        log("Sending OSC - path: " .. path .. ", track: " .. trackNumber .. ", mute: " .. tostring(muteValue) .. ", connection: " .. connectionIndex)
+        
+        -- Send OSC message with boolean value
+        sendOSC(path, trackNumber, muteValue, connections)
     end
 end
 
@@ -171,6 +193,8 @@ end
 -- ===========================
 
 function onReceiveNotify(key, value)
+    log("Received notify: " .. key .. " = " .. tostring(value))
+    
     if key == "track_changed" then
         trackNumber = value
         -- Reset mute state when track changes
@@ -196,8 +220,15 @@ function init()
     -- Get initial track info
     trackNumber, trackType = getTrackInfo()
     
+    if trackNumber then
+        log("Initialized with track " .. trackNumber .. " type " .. trackType)
+    else
+        log("No track assigned at init")
+    end
+    
     -- Set initial visual state
     updateVisualState()
 end
 
+-- Call init
 init()
