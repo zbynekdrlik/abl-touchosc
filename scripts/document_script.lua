@@ -1,9 +1,9 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.8.2
+-- Version: 2.8.3
 -- Purpose: Main document script with configuration and track management
--- Changed: Removed dead configuration_updated handler (config is read-only at runtime)
+-- Changed: Added delay between clear and refresh to ensure proper track renumbering
 
-local VERSION = "2.8.2"
+local VERSION = "2.8.3"
 local SCRIPT_NAME = "Document Script"
 
 -- Debug flag - set to 1 to enable logging
@@ -22,6 +22,12 @@ local configText = nil
 local startupRefreshTime = nil
 local frameCount = 0
 local STARTUP_DELAY_FRAMES = 60  -- Wait 1 second (60 frames at 60fps)
+
+-- Refresh state tracking
+local refreshState = "idle"  -- idle, clearing, waiting, refreshing
+local refreshGroups = {}
+local refreshWaitStart = 0
+local REFRESH_WAIT_TIME = 100  -- 100ms delay between clear and refresh
 
 -- === LOCAL LOGGING FUNCTION ===
 local function log(message)
@@ -105,11 +111,69 @@ function onReceiveNotify(action, value)
         parseConfiguration()
         
     elseif action == "refresh_all_groups" then
-        -- Global refresh button pressed
-        refreshAllGroups()
+        -- Global refresh button pressed - start refresh sequence
+        startRefreshSequence()
     end
     -- Note: Removed "configuration_updated" handler - config text is read-only at runtime
     -- Note: Removed "log_message" handler - each script logs independently now
+end
+
+-- === REFRESH SEQUENCE WITH DELAY ===
+function startRefreshSequence()
+    log("=== STARTING REFRESH SEQUENCE ===")
+    
+    -- Update status
+    local status = root:findByName("global_status")
+    if status then
+        status.values.text = "Clearing..."
+    end
+    
+    -- Find all groups with trackGroup tag
+    refreshGroups = root:findAllByProperty("tag", "trackGroup", true)
+    
+    -- Clear all track mappings first
+    for _, group in ipairs(refreshGroups) do
+        -- Notify group to clear its mapping
+        group:notify("clear_mapping")
+    end
+    
+    log("Cleared " .. #refreshGroups .. " groups")
+    
+    -- Set state to wait before refreshing
+    refreshState = "waiting"
+    refreshWaitStart = getMillis()
+    
+    -- Update status
+    if status then
+        status.values.text = "Waiting..."
+    end
+end
+
+-- === COMPLETE REFRESH AFTER DELAY ===
+function completeRefreshSequence()
+    log("=== COMPLETING REFRESH ===")
+    
+    -- Update status
+    local status = root:findByName("global_status")
+    if status then
+        status.values.text = "Refreshing..."
+    end
+    
+    -- Trigger refresh on all groups
+    for _, group in ipairs(refreshGroups) do
+        group:notify("refresh_tracks")
+    end
+    
+    log("Refreshed " .. #refreshGroups .. " groups")
+    
+    -- Update status
+    if status then
+        status.values.text = "Ready"
+    end
+    
+    -- Reset state
+    refreshState = "idle"
+    refreshGroups = {}
 end
 
 -- === GLOBAL HELPER FUNCTIONS ===
@@ -118,34 +182,8 @@ function getConnectionForInstance(instance)
 end
 
 function refreshAllGroups()
-    log("=== REFRESH ALL GROUPS ===")
-    
-    -- Update status
-    local status = root:findByName("global_status")
-    if status then
-        status.values.text = "Refreshing..."
-    end
-    
-    -- Find all groups with trackGroup tag
-    local groups = root:findAllByProperty("tag", "trackGroup", true)
-    
-    -- Clear all track mappings first
-    for _, group in ipairs(groups) do
-        -- Notify group to clear its mapping
-        group:notify("clear_mapping")
-    end
-    
-    -- Trigger refresh on all groups
-    for _, group in ipairs(groups) do
-        group:notify("refresh_tracks")
-    end
-    
-    log("Refreshed " .. #groups .. " groups")
-    
-    -- Update status
-    if status then
-        status.values.text = "Ready"
-    end
+    -- Deprecated - use startRefreshSequence instead
+    startRefreshSequence()
 end
 
 -- === OSC ROUTING HELPER ===
@@ -157,8 +195,17 @@ function createConnectionTable(connectionIndex)
     return connections
 end
 
--- === UPDATE FUNCTION FOR STARTUP REFRESH ===
+-- === UPDATE FUNCTION FOR STARTUP REFRESH AND DELAYED OPERATIONS ===
 function update()
+    -- Handle refresh sequence timing
+    if refreshState == "waiting" then
+        local elapsed = getMillis() - refreshWaitStart
+        if elapsed >= REFRESH_WAIT_TIME then
+            refreshState = "refreshing"
+            completeRefreshSequence()
+        end
+    end
+    
     -- Count frames since startup
     if frameCount < STARTUP_DELAY_FRAMES + 10 then
         frameCount = frameCount + 1
@@ -166,7 +213,7 @@ function update()
         -- Perform refresh at the specified frame count
         if frameCount == STARTUP_DELAY_FRAMES then
             log("=== AUTOMATIC STARTUP REFRESH ===")
-            refreshAllGroups()
+            startRefreshSequence()
         end
     end
 end
