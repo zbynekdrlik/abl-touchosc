@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- CRITICAL: Restored multi-connection support to meter scripts (regression from v1.2.0)
+  - meter_script.lua v2.5.0: Restored connection filtering while keeping animation
+  - db_meter_label.lua v2.7.0: Restored connection support with all features
+  - db_label.lua v1.4.0: Restored connection support
+  - Multi-instance routing now works correctly for all meter displays
+  - Found that multi-connection support was accidentally removed after v1.2.0 release
 - Mute button now sends boolean values to AbletonOSC (v2.1.4)
   - Fixed "Python argument types did not match C++ signature" error
   - Changed from sending integers (0/1) to proper boolean values (true/false)
