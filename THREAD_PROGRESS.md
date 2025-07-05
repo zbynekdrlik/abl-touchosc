@@ -3,87 +3,79 @@
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
 - [x] Currently working on: Fix refresh all button track renumbering issue
-- [ ] Waiting for: User testing of the CRITICAL fix in v2.8.4
+- [ ] Waiting for: User testing of the NEW approach in v2.8.7
 - [ ] Blocked by: None
 
 ## Current Task: Fix Refresh Track Renumbering
 **Started**: 2025-07-05
 **Branch**: feature/fix-refresh-track-renumbering  
-**Status**: CRITICAL_FIX_APPLIED
-**PR**: #15 - Updated with critical fix
+**Status**: NEW_APPROACH_IMPLEMENTED
+**PR**: #15 - Updated with registration approach
 
-### Problem Found:
-1. When inserting a new track at the beginning in Ableton, all tracks get renumbered but the "Refresh All" button doesn't properly reassign groups to the correct track numbers.
-2. **CRITICAL BUG**: After the first mapping, subsequent refresh attempts would find 0 groups because it was looking for the "trackGroup" tag which changes after mapping.
+### Problem Evolution:
+1. Initial problem: When inserting a new track at the beginning in Ableton, tracks get renumbered but refresh doesn't update mappings
+2. First bug: After mapping, refresh found 0 groups (tag changed from "trackGroup")
+3. Second bug: Can't search TouchOSC control hierarchy (children is userdata, not table)
 
-### Solution Implemented:
-1. ✅ Updated group_init.lua v1.16.1:
-   - Fixed clear_mapping to reset tag to "trackGroup" 
-   - Added notification to children about mapping_cleared
-   - Ensures no stale track references remain
+### NEW Solution - Registration Approach:
+1. ✅ Updated group_init.lua v1.16.2:
+   - Each group now registers itself with document script on init
+   - Still handles clear_mapping and refresh_tracks properly
+   - Maintains all previous functionality
 
-2. ✅ Updated fader_script.lua v2.5.3:
-   - Added handling for mapping_cleared notification
-   - Cancels any ongoing animations when mapping is cleared
-   - Ensures fader always reads fresh track info from parent tag
+2. ✅ Updated document_script.lua v2.8.7:
+   - Maintains a table of registered track groups
+   - No more searching - groups register themselves
+   - Clear and refresh operations use the registered groups
+   - Works regardless of tag changes
 
-3. ✅ Updated document_script.lua v2.8.3:
-   - Added 100ms delay between clear and refresh operations
-   - Ensures all scripts have time to process the clear before new mappings
-   - Improved status feedback during refresh sequence
-
-4. ✅ **CRITICAL FIX** - document_script.lua v2.8.4:
-   - Fixed group finding mechanism to use name pattern instead of tag
-   - Now finds groups by names starting with "band_" or "master_"
-   - Works correctly for both initial and subsequent refreshes
-   - Solves the "Cleared 0 groups" bug
+3. ✅ Previous fixes still in place:
+   - group_init.lua: Resets tag on clear_mapping, notifies children
+   - fader_script.lua v2.5.3: Handles mapping_cleared notification
+   - 100ms delay between clear and refresh phases
 
 ### Testing Instructions:
 1. Open Ableton with multiple tracks (e.g., 4-8 tracks)
-2. Map tracks in TouchOSC and verify faders control correct tracks
-3. Press "Refresh All" to ensure it finds groups (should say "Cleared 2 groups", NOT 0)
-4. Insert a new track at the beginning in Ableton
-5. Press "Refresh All" button in TouchOSC again
-6. Verify that:
+2. Load the updated TouchOSC template
+3. Verify console shows groups registering: "Registered track group: master_A-Repro LR #" etc.
+4. Map tracks and verify faders control correct tracks
+5. Press "Refresh All" to ensure it finds groups (should say "Cleared 2 groups", NOT 0)
+6. Insert a new track at the beginning in Ableton
+7. Press "Refresh All" button in TouchOSC again
+8. Verify that:
    - Console shows "Cleared 2 groups" (or appropriate number, NOT 0)
-   - Status shows "Clearing..." then "Waiting..." then "Refreshing..." then "Ready"
+   - Status shows "Clearing..." → "Waiting..." → "Refreshing..." → "Ready"
    - All faders now control the correct renumbered tracks
    - No faders control the wrong track
 
 ### Changes Made:
-- **group_init.lua**: Reset tag on clear_mapping, notify children
-- **fader_script.lua**: Handle mapping_cleared notification
-- **document_script.lua v2.8.3**: Add delay between clear and refresh phases
-- **document_script.lua v2.8.4**: CRITICAL - Fix group finding to use name pattern
+- **group_init.lua v1.16.2**: Added self-registration with document script
+- **document_script.lua v2.8.7**: Switched from searching to registration approach
+- **fader_script.lua v2.5.3**: (unchanged) Handles mapping_cleared notification
 
-## Previous Task: Notify Usage Analysis & Cleanup (COMPLETE)
-**Completed**: 2025-07-04
-**Branch**: feature/notify-usage-analysis (merged)
-**PR**: #12 - Merged
-
-### Summary:
-- Analyzed all scripts for notify() usage
-- Confirmed notify is only used for inter-script communication
-- No high-frequency usage found
-- Removed dead configuration_updated handler
+## Previous Attempts:
+1. v2.8.3: Added delay between clear/refresh
+2. v2.8.4: Tried to find groups by name pattern (failed - findAllByProperty doesn't work as expected)
+3. v2.8.5: Tried recursive search (failed - children is userdata)
+4. v2.8.6: Added debug logging (revealed the userdata issue)
+5. v2.8.7: NEW APPROACH - Registration system
 
 ## Implementation Status
 - Phase: Bug Fixes & Improvements
-- Step: Track renumbering refresh fix with critical bug fix
+- Step: Track renumbering refresh fix with registration approach
 - Status: CODE_COMPLETE
 
 ## Testing Status Matrix
 | Component | Status | Notes |
 |-----------|--------|-------|
-| group_init.lua v1.16.1 | ✅ | Clear mapping improved |
+| group_init.lua v1.16.2 | ✅ | Self-registers with document |
 | fader_script.lua v2.5.3 | ✅ | Handles mapping_cleared |
-| document_script.lua v2.8.3 | ✅ | Added refresh delay |
-| document_script.lua v2.8.4 | ✅ | CRITICAL: Fixed group finding |
+| document_script.lua v2.8.7 | ✅ | Registration-based approach |
 | Integration Testing | ⏳ | Ready for user testing |
 
 ## Next Steps:
-1. User tests the fix with track renumbering scenario
-2. User must verify console shows groups being found (not 0)
-3. Verify all faders control correct tracks after refresh
-4. Merge PR if successful
-5. Update main branch
+1. User tests the new registration approach
+2. Verify groups register on startup
+3. Verify refresh finds all groups
+4. Verify track renumbering works correctly
+5. Merge PR if successful
