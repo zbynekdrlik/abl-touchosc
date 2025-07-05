@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Restored missing pan control features (v1.5.3)
+  - Color change functionality: gray when centered, cyan when off-center
+  - Double-tap to center functionality with 300ms detection window
+  - Optimized performance by removing continuous update() calls
+  - Color changes now event-driven in onValueChanged()
 - Group interactivity bug - meters and labels now remain non-interactive when group is mapped
   - Simplified code to only handle controls that need interactivity changes
   - Removed unnecessary code that was setting non-interactive states
