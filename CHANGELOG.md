@@ -1,237 +1,115 @@
 # Changelog
 
-All notable changes to the ABL TouchOSC project are documented here.
+All notable changes to the TouchOSC Ableton Live Controller will be documented in this file.
 
-## [1.3.0] - 2025-07-04
-### Logging System Refactor Release 📝
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-This release removes the centralized logging system in favor of local logging functions in each script, improving performance and reducing complexity.
+## [Unreleased]
 
-### Major Changes
+### Fixed
+- Refresh All button now properly reassigns groups when tracks are renumbered in Ableton
+  - Implemented registration system where groups self-register with document script
+  - Fixed issue where refresh would find 0 groups after initial mapping
+  - Added proper clearing of track references before reassignment
+  - Handles track renumbering when inserting/removing tracks in Ableton
 
-#### Removed Centralized Logging System
-- **No More notify() Overhead**: Eliminated all notify("log_message") calls
-- **Local Logging**: Each script now has its own local log() function
-- **Debug Control**: Standardized DEBUG flag (uppercase) across all scripts
-- **Production Ready**: DEBUG=0 by default - no log messages in production
+## [2.8.7] - 2025-07-05
 
-#### Performance Improvements
-- **Reduced Script Size**: Average 10% reduction in script size
-- **Better Performance**: No notify() overhead for logging
-- **Simpler Architecture**: Each script is self-contained
+### Changed
+- document_script.lua: Switched from searching to registration-based group management
+- group_init.lua v1.16.2: Groups now self-register with document script on initialization
+- fader_script.lua v2.5.3: Added handling for mapping_cleared notification
 
-#### Script Updates
-All scripts updated with local logging and DEBUG=0:
-- **document_script.lua [2.8.1]**: Removed log_message handler
-- **global_refresh_button.lua [1.5.1]**: Local logging instead of notify
-- **group_init.lua [1.15.1]**: Already had local logging, standardized
-- **mute_button.lua [2.0.1]**: Local logging, removed verbose logs
-- **fader_script.lua [2.5.2]**: Local logging, DEBUG mode standardized
-- **meter_script.lua [2.4.1]**: Local logging, DEBUG mode standardized  
-- **db_label.lua [1.3.1]**: Local logging, reduced verbosity
-- **db_meter_label.lua [2.6.1]**: Local logging, DEBUG mode standardized
-- **pan_control.lua [1.5.1]**: Local logging, reduced verbosity
+### Fixed
+- Track renumbering refresh issue completely resolved
 
-### Impact Summary
-- **Files Changed**: 11 files modified
-- **Lines Removed**: Net reduction of 330 lines
-- **Script Size**: ~10% reduction (e.g., fader_script.lua: 35KB → 32KB)
-- **Log Output**: None in production (DEBUG=0)
+## [2.8.2] - 2025-07-04
 
-### Testing Confirmed
-- ✅ All functionality preserved
-- ✅ No log messages in production
-- ✅ Debug logging works when DEBUG=1
-- ✅ All controls tested and working
+### Removed
+- Removed dead configuration_updated handler from document_script.lua
+- Config text is read-only at runtime, making the handler unnecessary
 
----
+## [2.8.1] - 2025-07-04
 
-## [1.2.0] - 2025-07-03
-### Return Track Support Release 🎚️
+### Changed
+- Removed centralized logging system via notify()
+- Each script now has its own local log() function with DEBUG flag
+- Improved performance by eliminating inter-script logging communication
 
-This release adds complete return track support to ABL TouchOSC using a unified architecture where the same scripts handle both regular and return tracks.
+### Technical Details
+- All scripts updated with local logging functions
+- DEBUG flag defaults to 0 (off) for production
+- Logging format standardized across all scripts
 
-### Major Changes
+## [2.5.2] - 2025-06-29
 
-#### Unified Architecture Implementation
-- **No Separate Scripts**: Return tracks use the same scripts as regular tracks
-- **Auto-Detection**: Groups automatically detect track type (regular vs return)
-- **Single Connection**: Return tracks use the same connection as regular tracks (band/master)
-- **Tag-Based Communication**: Parent groups pass track info to children via tags
+### Fixed
+- Fader script debug flag standardization (DEBUG in uppercase)
+- Set DEBUG=0 by default for production use
 
-#### AbletonOSC Fork Updated
-- **Repository**: https://github.com/zbynekdrlik/AbletonOSC
-- **Branch**: feature/return-tracks-support
-- **PR**: https://github.com/zbynekdrlik/AbletonOSC/pull/2
-- Fixed "Observer not connected" errors for return tracks
-- Added missing listener support for return tracks
+## [2.5.1] - 2025-06-29
 
-#### Script Updates
-All scripts updated to support both track types:
-- **group_init.lua [1.14.5]**: Auto-detects track type, smart label display
-- **fader_script.lua [2.4.1]**: Volume control for both track types
-- **meter_script.lua [2.3.1]**: Meter display with return track support
-- **mute_button.lua [1.9.1]**: Mute control unified
-- **pan_control.lua [1.4.1]**: Pan control unified
-- **db_label.lua [1.2.0]**: dB display for both track types
-- **db_meter_label.lua [2.5.1]**: Peak meter display unified
+### Changed
+- Enhanced fader double-tap animation with optimized speed (0.005 units/update)
+- Smoother visual transition when double-tapping to unity gain
 
-#### Bug Fixes
-- Fixed script property access errors (parent.trackNumber not available)
-- Fixed track label truncation for names with special characters
-- Added smart return track prefix handling (A-, B-, etc.)
+## [2.5.0] - 2025-06-29
 
-### Features
-- **Full Return Track Control**: Volume, mute, pan, and metering
-- **Automatic Discovery**: Return tracks mapped by name matching
-- **Smart Track Labels**: Shows first word, skipping return prefixes
-- **Complete Integration**: Works with existing multi-instance routing
-- **Bidirectional Updates**: All controls update in both directions
+### Added
+- Connection-aware OSC routing in fader script
+- Dynamic connection index lookup from parent group configuration
+- Support for both regular tracks and return tracks
 
-### Implementation Details
-Groups now use a tag format to communicate track info:
-```
-"instance:trackNumber:trackType"
-Example: "master:0:return"
-```
+### Changed
+- Fader now reads track info directly from parent group tag
+- Improved OSC message routing with connection tables
 
-Child scripts parse this tag to determine which OSC paths to use.
+## [2.4.0] - 2025-06-29
 
-### Testing Results
-- ✅ Return tracks successfully discovered and mapped
-- ✅ All controls working bidirectionally
-- ✅ OSC data flow confirmed (logs show meter and dB values)
-- ✅ Multi-connection routing supported
-- ✅ No script errors
+### Added
+- Smart group initialization with automatic startup refresh
+- Connection-based configuration system
+- Multiple Ableton instance support (band/master)
+- Visual activity indicators for groups
 
----
+### Changed
+- Groups now store track mapping in tag property
+- Improved refresh mechanism with proper clearing
+- Better error handling for missing tracks
 
-## [1.1.0] - 2025-06-29
-### Enhancement Release
+## [2.3.0] - 2025-06-28
 
-#### Group Script [1.10.0]
-- Status indicator now works as opacity replacement (visible only when mapped)
-- Track labels preserved - no more "???" when unmapped
-- Added connection label support - shows "band" or "master"
-- Removed 5-minute stale status check
-- Added db_label to notification list
+### Added
+- Professional fader control with movement smoothing
+- First movement scaling for precise control
+- Emergency movement detection for quick adjustments
+- Double-tap to unity gain (0dB) functionality
 
-#### dB Label [1.0.2]
-- Fixed error "No such property or function: 'lastDB'"
-- Changed from `self.lastDB` to local variable (TouchOSC doesn't support custom properties on self)
+### Technical Features
+- 0.1dB minimum change on first movement
+- Reaction time compensation
+- Linear range precision (-6dB to +6dB)
+- Smooth animation for double-tap
 
-## [1.0.0] - 2025-06-29
-### Production Release 🚀
+## [2.0.0] - 2025-06-27
 
-This is the first production release of ABL TouchOSC with complete multi-instance routing capabilities.
+### Added
+- Complete rewrite with modular architecture
+- Document script pattern for configuration management
+- Inter-script communication via notify()
+- Comprehensive documentation and rules
 
-### Features
-- **Multi-Connection Routing**: Control multiple Ableton instances from one interface
-- **Automatic Startup Refresh**: Tracks discovered automatically after 1 second
-- **Professional Controls**: All core track controls implemented
-  - Volume Fader with 0.1dB precision and double-tap to 0dB
-  - Calibrated Level Meter with color thresholds
-  - Mute Button with state tracking
-  - Pan Control with double-tap to center
-  - dB Value Display
-- **Visual Design Preservation**: Scripts never alter your interface design
-- **Complete Script Isolation**: Robust architecture with isolated components
-- **Comprehensive Documentation**: Production-ready documentation
+### Changed
+- Migrated from monolithic to modular script structure
+- Improved error handling and validation
+- Better TouchOSC API compliance
 
-### Final Script Versions
-| Script | Version | Purpose |
-|--------|---------|---------|  
-| document_script.lua | 2.7.1 | Central management + auto refresh |
-| group_init.lua | 1.10.0 | Track group management |
-| fader_script.lua | 2.3.5 | Professional fader control |
-| meter_script.lua | 2.2.2 | Calibrated level metering |
-| mute_button.lua | 1.8.0 | Mute state management |
-| pan_control.lua | 1.3.2 | Pan with visual feedback |
-| db_label.lua | 1.0.2 | dB value display |
-| global_refresh_button.lua | 1.4.0 | Manual refresh trigger |
+## [1.0.0] - 2025-06-27
 
-### Testing Confirmed
-- Multi-connection routing verified with band_CG # and master_CG #
-- Complete isolation between connections
-- All controls working as designed
-- Performance acceptable for real-time use
-
----
-
-## Development History
-
-### Phase 4 Started - 2025-06-29
-
-#### Documentation Reorganization
-- README.md updated to be feature-focused rather than phase-focused
-- Added docs/CONTRIBUTING.md with development guidelines
-- Added docs/TECHNICAL.md with comprehensive technical documentation
-- Added docs/README.md as documentation index
-- Created docs/archive/ for historical documentation
-
-#### dB Label [1.0.1]
-- Changed to show dash "-" when track unmapped
-
-#### dB Label [1.0.0] - NEW
-- Shows fader value in dB format
-- Multi-connection routing support
-- Uses exact same dB conversion as fader
-
-### Phase 3 Complete - 2025-06-29
-
-#### Document Script [2.7.1]
-- Fixed automatic refresh with frame counting method
-
-#### Document Script [2.7.0]
-- Added automatic refresh on startup
-- Triggers refresh 1 second after TouchOSC starts
-
-#### All Control Scripts
-- Fader [2.3.5]: Professional movement scaling
-- Meter [2.2.2]: Exact calibration
-- Mute [1.8.0]: State tracking
-- Pan [1.3.2]: Visual feedback
-
-### Phase 2 Complete - 2025-06-28
-- Multi-connection architecture implemented
-- Instance-based routing working
-- Configuration system finalized
-
-### Phase 1 Complete - 2025-06-27
-- Foundation established
-- Basic controls working
-- Track discovery functional
-
-## Key Technical Achievements
-
-### Return Track Support
-Successfully added return track support using a unified architecture where the same scripts handle both track types through auto-detection.
-
-### Multi-Connection Architecture
-Successfully implemented routing to control multiple Ableton instances from one TouchOSC interface with complete isolation.
-
-### Automatic Startup Refresh
-Implemented automatic track discovery on TouchOSC startup, eliminating manual refresh requirement.
-
-### Script Isolation
-Discovered and solved TouchOSC script isolation challenges, leading to robust architecture.
-
-### State Preservation
-Implemented principle that controls never change position based on assumptions.
-
----
-
-## Future Roadmap
-
-### Planned Enhancements
-- Additional track groups for full production scaling
-- Solo and record arm controls
-- Send level controls (A-D) for both tracks and returns
-- Device parameter mapping
-- Scene launching capabilities
-- Debug level system for logging
-- Submit unified return track approach to upstream AbletonOSC
-
----
-
-*For detailed version history, see the development phases below.*
+### Added
+- Initial release
+- Basic fader control for Ableton Live
+- Volume, pan, mute controls
+- VU meter display
+- Multi-track support
