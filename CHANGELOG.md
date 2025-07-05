@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Group interactivity bug - meters and labels now remain non-interactive when group is mapped
+  - Simplified code to only handle controls that need interactivity changes
+  - Removed unnecessary code that was setting non-interactive states
+  - Let TouchOSC editor handle non-interactive state for meters/labels
 - Refresh All button now properly reassigns groups when tracks are renumbered in Ableton
   - Implemented registration system where groups self-register with document script
   - Fixed issue where refresh would find 0 groups after initial mapping
