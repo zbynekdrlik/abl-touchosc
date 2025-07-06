@@ -41,6 +41,7 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 - Visual-only state indication (no text)
 - Touch detection for responsive control
 - Sends proper boolean values to AbletonOSC
+- **NEW**: Configurable double-click protection for critical tracks (v2.2.0)
 
 #### Pan Control
 - Smooth panning with visual feedback
@@ -86,6 +87,10 @@ connection_master: 3    # Master controls → Ableton instance on connection 3
 # Auto-unfold groups
 unfold_band: 'Band'     # Unfold 'Band' group in band instance
 unfold_master: 'Master' # Unfold 'Master' group in master instance
+
+# Double-click mute protection (optional)
+double_click_mute_band: 'Band Tracks'    # Require double-click for 'Band Tracks' group
+double_click_mute_master: 'Master Bus'   # Require double-click for 'Master Bus' group
 ```
 
 5. **Run the template** - tracks will be discovered automatically after 1 second!
@@ -100,8 +105,24 @@ Each track group contains:
 - **Volume Fader**: Professional fader with dB scaling
 - **dB Display**: Current volume in dB with color indication
 - **Level Meter**: Real-time level display with peak colors
-- **Mute Button**: Toggle track mute
+- **Mute Button**: Toggle track mute (with optional double-click protection)
 - **Pan Control**: Stereo positioning
+
+### Double-Click Mute Protection (NEW)
+
+For critical tracks where accidental muting could be disastrous (like master bus or live performance tracks), you can enable double-click protection:
+
+1. **Add configuration** for the groups that need protection:
+   ```yaml
+   # Require double-click for specific groups
+   double_click_mute_band: 'Band Tracks'    # Instance-specific
+   double_click_mute_master: 'Master Bus'   # Instance-specific
+   double_click_mute: 'Critical Group'      # All instances
+   ```
+
+2. **Groups with double-click enabled** require two clicks within 500ms to toggle mute
+
+3. **Groups without configuration** maintain single-click behavior (backward compatible)
 
 ### Return Track Setup
 
@@ -143,6 +164,8 @@ The configuration text control accepts these parameters:
 | connection_[instance] | Map instance to connection number | `connection_band: 2` |
 | unfold_[instance] | Auto-unfold group name for instance | `unfold_band: 'Band'` |
 | unfold | Legacy: unfold on all connections | `unfold: 'Drums'` |
+| double_click_mute_[instance] | Require double-click for group | `double_click_mute_band: 'Band Tracks'` |
+| double_click_mute | Require double-click on all instances | `double_click_mute: 'Master Bus'` |
 
 ### Multi-Instance Example
 
@@ -154,6 +177,10 @@ connection_master: 3    # Master mix Ableton
 # Different unfold groups per instance  
 unfold_band: 'Band'
 unfold_master: 'Master'
+
+# Double-click protection for critical tracks
+double_click_mute_band: 'Band Tracks'    # Protect band master group
+double_click_mute_master: 'Master Bus'   # Protect master bus
 ```
 
 Both regular tracks and return tracks use the same connection for each instance.
@@ -173,11 +200,11 @@ The system uses a unified script architecture:
 
 | Script | Current Version | Purpose |
 |--------|-----------------|---------|
-| document_script.lua | 2.8.7 | Configuration, group registry, auto-refresh |
+| document_script.lua | 2.9.0 | Configuration, group registry, auto-refresh |
 | group_init.lua | 1.16.2 | Track group with auto-detection and registration |
 | fader_script.lua | 2.5.4 | Volume control with feedback loop prevention |
 | meter_script.lua | 2.5.2 | Level metering with multi-connection support |
-| mute_button.lua | 2.1.4 | Mute control with boolean values |
+| mute_button.lua | 2.2.0 | Mute control with double-click support |
 | pan_control.lua | 1.5.1 | Pan control unified |
 | db_label.lua | 1.5.0 | dB display with color indicator |
 | db_meter_label.lua | 2.6.2 | Peak meter with multi-connection support |
@@ -194,6 +221,7 @@ The system uses a unified script architecture:
 - **State Machine Design**: Robust state tracking for all controls
 - **Group Registration**: Groups self-register with document script for reliable refresh
 - **Feedback Prevention**: Controls won't echo back when updated from Ableton
+- **Double-Click Detection**: Configurable timing-based double-click for critical tracks
 
 ## 🔧 Troubleshooting
 
@@ -212,6 +240,11 @@ The system uses a unified script architecture:
 - Install the [forked AbletonOSC](https://github.com/zbynekdrlik/AbletonOSC)
 - Check return track names match exactly (including "A-", "B-" prefixes)
 - Look for "Mapped to Return Track X" in logs
+
+**Double-click mute not working:**
+- Check configuration syntax exactly matches examples
+- Group name must match exactly (case-sensitive)
+- Enable DEBUG = 1 in mute_button.lua to see detection logs
 
 **Controls not responding:**
 - Check connection numbers in configuration
@@ -252,7 +285,7 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 ---
 
-**Current Version**: v1.3.0 - Production ready with all features tested and working perfectly for both regular and return tracks.
+**Current Version**: v1.4.0 - Added double-click mute protection for critical tracks.
 
 For additional documentation:
 - [Technical Documentation](docs/TECHNICAL.md) - Detailed technical information
