@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Double-click mute protection for critical tracks (v2.2.0)
+  - Configurable per track group via configuration text
+  - Format: `double_click_mute_[instance]: 'Group Name'`
+  - Prevents accidental muting on master bus or critical tracks
+  - Backward compatible - single-click behavior remains default
+  - 500ms double-click window for mute toggle
+  - Works with both regular and return tracks
+
+### Changed
+- mute_button.lua updated to v2.2.0 with double-click detection
+- document_script.lua updated to v2.9.0 to support new configuration format
+- README updated with double-click mute documentation
+
 ## [1.3.0] - 2025-07-06
 
 ### Added
