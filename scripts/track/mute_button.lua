@@ -1,9 +1,9 @@
 -- TouchOSC Mute Button Script
--- Version: 2.4.1
--- Fixed: Pattern matching for group names with special characters
+-- Version: 2.5.0
+-- Fixed: Proper toggle behavior for double-click protection
 
 -- Version constant
-local VERSION = "2.4.1"
+local VERSION = "2.5.0"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0  -- Production mode
@@ -13,9 +13,10 @@ local trackNumber = nil
 local trackType = nil  -- "track" or "return"
 local isMuted = false
 
--- ADDED: Double-click variables (only 2 new variables)
+-- ADDED: Double-click variables
 local lastClickTime = 0
 local requiresDoubleClick = false
+local waitingForDoubleClick = false  -- Track if we're waiting for second click
 
 -- ===========================
 -- LOCAL LOGGING
@@ -195,17 +196,38 @@ function onValueChanged(valueName)
             return
         end
         
-        -- ADDED: Double-click detection (minimal addition - 8 lines)
-        if self.values.x == 0 and requiresDoubleClick then  -- Only on press
-            local currentTime = getMillis()
-            if currentTime - lastClickTime > 500 then  -- First click
-                lastClickTime = currentTime
-                return  -- Don't process this click
+        -- FIXED: Handle as toggle button, not momentary
+        if requiresDoubleClick then
+            -- For double-click mode, only process on press (x=0)
+            if self.values.x == 0 then
+                local currentTime = getMillis()
+                if currentTime - lastClickTime > 500 then
+                    -- First click - just record time and mark waiting
+                    lastClickTime = currentTime
+                    waitingForDoubleClick = true
+                    log("First click recorded, waiting for double-click")
+                    return  -- Don't send anything
+                else
+                    -- Second click within threshold - proceed with toggle
+                    lastClickTime = 0
+                    waitingForDoubleClick = false
+                    log("Double-click detected, toggling mute")
+                end
+            else
+                -- Release event (x=1)
+                if waitingForDoubleClick then
+                    -- Ignore release if we're waiting for double-click
+                    log("Ignoring release while waiting for double-click")
+                    return
+                end
+                -- For normal operation, also ignore release
+                return
             end
-            lastClickTime = 0  -- Reset after double-click
+        else
+            -- Normal single-click mode - process both press and release as before
+            -- This maintains backward compatibility
         end
         
-        -- ORIGINAL CODE CONTINUES UNCHANGED
         -- Get connection configuration
         local connectionIndex = getConnectionIndex()
         local connections = buildConnectionTable(connectionIndex)
@@ -213,10 +235,15 @@ function onValueChanged(valueName)
         -- Determine OSC path based on track type
         local path = trackType == "return" and '/live/return/set/mute' or '/live/track/set/mute'
         
-        -- IMPORTANT: Send boolean value, not integer!
-        -- x=0 (pressed) -> send true (mute on)
-        -- x=1 (released) -> send false (mute off)
-        local muteValue = (self.values.x == 0)
+        -- TOGGLE behavior for double-click mode, original behavior for single-click
+        local muteValue
+        if requiresDoubleClick then
+            -- Toggle mode - invert current state
+            muteValue = not isMuted
+        else
+            -- Original behavior - follow button state
+            muteValue = (self.values.x == 0)
+        end
         
         -- Update internal state
         isMuted = muteValue
@@ -241,6 +268,7 @@ function onReceiveNotify(key, value)
         isMuted = false
         updateVisualState()
         updateDoubleClickConfig()  -- ADDED: Update config when track changes
+        waitingForDoubleClick = false  -- Reset double-click state
     elseif key == "track_type" then
         trackType = value
     elseif key == "track_unmapped" then
@@ -249,6 +277,7 @@ function onReceiveNotify(key, value)
         isMuted = false
         updateVisualState()
         requiresDoubleClick = false  -- ADDED: Reset double-click
+        waitingForDoubleClick = false
     end
 end
 
