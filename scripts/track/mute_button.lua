@@ -1,9 +1,9 @@
 -- TouchOSC Mute Button Script
--- Version: 2.6.0
--- Proper double-click for TOGGLE buttons (not momentary)
+-- Version: 2.7.0
+-- Simplified configuration format for double-click mute
 
 -- Version constant
-local VERSION = "2.6.0"
+local VERSION = "2.7.0"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0  -- Production mode
@@ -102,20 +102,18 @@ local function escapePattern(str)
     return str:gsub("([%-%^%$%(%)%%%.%[%]%*%+%?])", "%%%1")
 end
 
--- ADDED: Simple config check (minimal addition)
+-- UPDATED: Simplified config check - just match the full group name
 local function updateDoubleClickConfig()
-    if self.parent and self.parent.tag and self.parent.name then
-        local instance = self.parent.tag:match("^(%w+):")
-        if instance then
-            local configObj = root:findByName("configuration", true)
-            if configObj and configObj.values and configObj.values.text then
-                -- Escape special characters in group name for pattern matching
-                local escapedName = escapePattern(self.parent.name)
-                local searchPattern = "double_click_mute_" .. instance .. ":%s*['\"]?" .. escapedName .. "['\"]?"
-                requiresDoubleClick = configObj.values.text:match(searchPattern) ~= nil
-                log("Double-click required: " .. tostring(requiresDoubleClick))
-                return
-            end
+    if self.parent and self.parent.name then
+        local configObj = root:findByName("configuration", true)
+        if configObj and configObj.values and configObj.values.text then
+            -- Escape special characters in group name for pattern matching
+            local escapedName = escapePattern(self.parent.name)
+            -- SIMPLIFIED: Just look for double_click_mute: 'GroupName' (no instance prefix)
+            local searchPattern = "double_click_mute:%s*['\"]?" .. escapedName .. "['\"]?"
+            requiresDoubleClick = configObj.values.text:match(searchPattern) ~= nil
+            log("Double-click required for '" .. self.parent.name .. "': " .. tostring(requiresDoubleClick))
+            return
         end
     end
     requiresDoubleClick = false
