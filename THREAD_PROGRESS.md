@@ -2,7 +2,7 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Currently working on: Double-click mute feature COMPLETE
+- [x] Currently working on: Double-click mute feature COMPLETE (v2.3.0)
 - [ ] Waiting for: User testing and feedback
 - [ ] Blocked by: None
 
@@ -15,43 +15,49 @@
 
 ## Feature Summary
 **Double-click mute protection implemented successfully:**
-- ✅ mute_button.lua v2.2.0 - Added double-click detection (500ms threshold)
+- ✅ mute_button.lua v2.3.0 - Instance-specific double-click detection only
 - ✅ document_script.lua v2.9.0 - Updated documentation only
-- ✅ README.md - Clarified configuration format (each group needs own line)
-- ✅ CHANGELOG.md - Added feature entry
-- ✅ PR #24 created and ready for review
+- ✅ README.md - Removed references to global configuration option
+- ✅ CHANGELOG.md - Updated for v2.3.0 changes
+- ✅ PR #24 updated - Clarified instance-specific only configuration
 
 ## Configuration Format (FINAL)
 ```yaml
 # IMPORTANT: Each group needs its own line!
+# Only instance-specific configuration is supported (no global option)
 
 # Instance-specific (one group per line)
 double_click_mute_band: 'Band Tracks'
 double_click_mute_band: 'Lead Vocals'
 double_click_mute_band: 'Drums'
-
-# Global (applies to all instances)
-double_click_mute: 'Master Bus'
-double_click_mute: 'Critical'
+double_click_mute_master: 'Master Bus'
+double_click_mute_master: 'Critical'
 ```
+
+## Recent Changes (This Session)
+1. Removed global configuration option (`double_click_mute:`)
+2. Updated documentation to reflect instance-specific only configuration
+3. Updated version to v2.3.0
+4. Clarified that each Ableton instance must be explicitly configured
 
 ## What User Needs to Do Next
 1. **Pull the feature branch**: `git pull && git checkout feature/double-click-mute`
 2. **Update TouchOSC template** with new scripts
-3. **Add configuration** for groups needing double-click protection
+3. **Add configuration** for groups needing double-click protection (instance-specific only)
 4. **Test the feature**:
    - Single-click on non-configured groups (should work normally)
    - Double-click on configured groups (should require two clicks within 500ms)
    - Test with multiple instances
+   - Verify instance-specific configurations work correctly
 5. **Provide feedback** on PR #24
 
 ## Testing Checklist for User
 - [ ] Single-click works on non-configured tracks
 - [ ] Double-click required on configured tracks
 - [ ] 500ms timing feels natural
-- [ ] Configuration parsing works correctly
+- [ ] Configuration parsing works correctly (instance-specific only)
 - [ ] No regression on existing functionality
-- [ ] Multiple instances work independently
+- [ ] Multiple instances work independently with their own configurations
 
 ## Technical Details
 - Double-click window: 500ms (configurable in code if needed)
@@ -59,12 +65,7 @@ double_click_mute: 'Critical'
 - Backward compatible - no changes needed for existing setups
 - Each mute button tracks its own click timing
 - Visual feedback unchanged (button state shows mute status)
-
-## Recent Changes (This Thread)
-1. Implemented double-click detection in mute_button.lua
-2. Updated documentation to clarify configuration format
-3. Added comprehensive examples for multi-instance setups
-4. Clarified that each group needs its own configuration line
+- Only instance-specific configurations supported (no global option)
 
 ## Next Thread Should:
 - Review test results from user
