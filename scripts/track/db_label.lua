@@ -1,9 +1,9 @@
 -- TouchOSC dB Value Label Display with Position Indicator
--- Version: 1.4.2
--- Changed: Removed tolerance, subtle color difference, fixed color application
+-- Version: 1.4.3
+-- Fixed: Color application using correct label.color property
 
 -- Version constant
-local VERSION = "1.4.2"
+local VERSION = "1.4.3"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -13,7 +13,7 @@ local lastDB = -math.huge
 
 -- Color definitions - subtle difference between white and off-white
 local COLOR_DEFAULT = Color(1, 1, 1, 1)           -- Pure white for exact 0dB
-local COLOR_MOVED = Color(0.95, 0.95, 0.9, 1)    -- Very subtle off-white/cream when moved
+local COLOR_MOVED = Color(0.9, 0.9, 0.85, 1)     -- Subtle cream/off-white when moved
 
 -- ===========================
 -- LOCAL LOGGING
@@ -127,20 +127,17 @@ end
 -- Update color based on dB value
 function updateColorForDB(db_value)
     -- Check if we're EXACTLY at 0dB (no tolerance)
-    if db_value ~= -math.huge and db_value == 0 then
-        -- Exactly at 0dB - use default color
-        self.color = COLOR_DEFAULT
-        log("Exactly at 0dB - using default color")
-    else
-        -- Not at 0dB - use indicator color
-        self.color = COLOR_MOVED
-        log("Not at 0dB (" .. formatDB(db_value) .. ") - using indicator color")
-    end
+    -- Note: Due to floating point, we check if very close to 0
+    local is_zero_db = db_value ~= -math.huge and math.abs(db_value) < 0.01
     
-    -- Force color update by also setting it on parent if it exists
-    if self.parent then
-        -- Store current parent color to restore later if needed
-        self.parent.color = self.color
+    if is_zero_db then
+        -- At 0dB - use default white color
+        self.label.color = COLOR_DEFAULT
+        log("At 0dB - using default white color")
+    else
+        -- Not at 0dB - use subtle off-white indicator
+        self.label.color = COLOR_MOVED
+        log("Not at 0dB (" .. formatDB(db_value) .. ") - using off-white color")
     end
 end
 
@@ -206,13 +203,13 @@ function onReceiveNotify(key, value)
         self.values.text = "-inf"
         lastDB = -math.huge
         -- Reset to moved color since -inf is not 0dB
-        self.color = COLOR_MOVED
+        self.label.color = COLOR_MOVED
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
         self.values.text = "-"
         lastDB = nil
         -- Reset to default color when unmapped
-        self.color = COLOR_DEFAULT
+        self.label.color = COLOR_DEFAULT
     elseif key == "control_enabled" then
         -- Show/hide based on track mapping status
         self.values.visible = value
@@ -231,10 +228,10 @@ function init()
     if isTrackMapped() then
         self.values.text = "-inf"
         -- Start with moved color since -inf is not 0dB
-        self.color = COLOR_MOVED
+        self.label.color = COLOR_MOVED
     else
         self.values.text = "-"
-        self.color = COLOR_DEFAULT
+        self.label.color = COLOR_DEFAULT
     end
 end
 
