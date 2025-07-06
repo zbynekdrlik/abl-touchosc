@@ -1,9 +1,9 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.8.7
+-- Version: 2.9.0
 -- Purpose: Main document script with configuration and track management
--- Changed: Store group references during init to avoid finding issues
+-- Changed: Added support for double-click mute configuration parsing
 
-local VERSION = "2.8.7"
+local VERSION = "2.9.0"
 local SCRIPT_NAME = "Document Script"
 
 -- Debug flag - set to 1 to enable logging
@@ -13,6 +13,7 @@ local DEBUG = 0
 local config = {
     connections = {},
     unfold_groups = {}
+    -- Note: double_click_mute settings are parsed directly by mute_button.lua
 }
 
 -- Control references (can be in pagers)
@@ -39,6 +40,10 @@ local function log(message)
 end
 
 -- === CONFIGURATION PARSING ===
+-- Configuration format supports:
+-- connection_[instance]: [number] - Connection routing
+-- unfold_[instance]: '[group_name]' - Auto-unfold groups
+-- double_click_mute_[instance]: '[group_name]' - Double-click mute groups (parsed by mute_button.lua)
 local function parseConfiguration()
     -- Try to find configuration if not registered yet
     if not configText then
@@ -95,6 +100,8 @@ local function parseConfiguration()
                 })
                 unfoldCount = unfoldCount + 1
             end
+            
+            -- Note: double_click_mute_[instance] configuration is parsed directly by mute_button.lua
         end
     end
     
