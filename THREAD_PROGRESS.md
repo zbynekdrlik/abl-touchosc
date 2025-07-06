@@ -5,6 +5,7 @@
 - [x] Currently working on: Double-click mute feature COMPLETE (v2.4.0 - minimal implementation)
 - [ ] Waiting for: User testing and feedback
 - [ ] Blocked by: None
+- **Thread ending - ready to continue in new thread**
 
 ## Implementation Status
 - Phase: FEATURE IMPLEMENTATION COMPLETE
@@ -34,26 +35,40 @@ double_click_mute_master: 'Master Bus'
 double_click_mute_master: 'Critical'
 ```
 
-## Recent Changes (This Session)
-1. Analyzed original implementation and found it was overly complex
-2. Simplified to minimal implementation (v2.4.0)
-3. Preserved ALL original button behavior - no regressions
-4. Added only 15 lines of code total:
-   - 2 new variables
-   - 1 simple config check function
-   - 8 lines in onValueChanged for double-click logic
-   - Minor updates in notify handlers
-5. Configuration is cached for performance
+## Session Summary (This Thread)
+1. Started with request to remove global configuration option
+2. Removed all references to `double_click_mute:` (global) from docs
+3. Updated to v2.3.0 initially
+4. Analyzed implementation and found it was overly complex (100+ lines)
+5. Simplified to minimal implementation (v2.4.0) with only 15 lines added
+6. Preserved ALL original button behavior - no regressions
+7. Updated all documentation to reflect v2.4.0
+
+## Technical Implementation Details
+**Minimal changes made:**
+- 2 new variables: `lastClickTime` and `requiresDoubleClick`
+- 1 function: `updateDoubleClickConfig()` - simple pattern match
+- 8 lines in `onValueChanged` - blocks first click if double-click required
+- Configuration cached for performance (updates on track change)
+- Original behavior completely preserved
+
+**Key code addition:**
+```lua
+if self.values.x == 0 and requiresDoubleClick then
+    local currentTime = getMillis()
+    if currentTime - lastClickTime > 500 then
+        lastClickTime = currentTime
+        return  -- Skip first click
+    end
+    lastClickTime = 0  -- Reset
+end
+```
 
 ## What User Needs to Do Next
 1. **Pull the feature branch**: `git pull && git checkout feature/double-click-mute`
 2. **Update TouchOSC template** with new scripts
-3. **Add configuration** for groups needing double-click protection (instance-specific only)
-4. **Test the feature**:
-   - Single-click on non-configured groups (should work normally)
-   - Double-click on configured groups (should require two clicks within 500ms)
-   - Test with multiple instances
-   - Verify instance-specific configurations work correctly
+3. **Add configuration** for groups needing double-click protection
+4. **Test the feature** thoroughly
 5. **Provide feedback** on PR #24
 
 ## Testing Checklist for User
@@ -62,22 +77,27 @@ double_click_mute_master: 'Critical'
 - [ ] 500ms timing feels natural
 - [ ] Configuration parsing works correctly (instance-specific only)
 - [ ] No regression on existing functionality
-- [ ] Multiple instances work independently with their own configurations
-- [ ] Configuration updates when track changes or refresh is pressed
-
-## Technical Details
-- Double-click window: 500ms (configurable in code if needed)
-- Configuration read directly by mute_button.lua
-- Configuration cached for performance (updates on track change)
-- Backward compatible - no changes needed for existing setups
-- Each mute button tracks its own click timing
-- Visual feedback unchanged (button state shows mute status)
-- Only instance-specific configurations supported (no global option)
-- Minimal implementation preserves all original behavior
+- [ ] Multiple instances work independently
+- [ ] Configuration updates when track changes or refresh pressed
+- [ ] Button state syncs properly with Ableton
 
 ## Next Thread Should:
-- Review test results from user
-- Fix any issues found during testing
-- Consider adjusting timing threshold if needed
-- Merge PR if tests pass
-- Update version to v1.4.0 after merge
+1. Check if user has tested the feature
+2. Review any test results/logs provided
+3. Fix any issues found during testing
+4. If tests pass:
+   - Merge PR #24
+   - Update version to v1.4.0
+   - Create release tag
+5. If issues found:
+   - Debug and fix
+   - Update documentation if needed
+   - Re-test
+
+## Important Notes for Next Thread:
+- Feature uses MINIMAL implementation approach (not the complex v2.3.0)
+- Configuration is CACHED for performance
+- Only instance-specific config supported (no global option)
+- All original button behavior preserved
+- 500ms double-click window (hardcoded, could be made configurable)
+- Configuration updates on track change or refresh
