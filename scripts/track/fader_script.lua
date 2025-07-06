@@ -1,9 +1,9 @@
 -- TouchOSC Professional Fader with Movement Smoothing
--- Version: 2.5.3
--- Changed: Added handling for mapping_cleared notification to prevent stale track references
+-- Version: 2.5.4
+-- Changed: Fixed feedback loop by preventing OSC echo when receiving updates from Ableton
 
 -- Version constant
-local VERSION = "2.5.3"
+local VERSION = "2.5.4"
 
 -- ===========================
 -- ORIGINAL CONFIGURATION
@@ -77,6 +77,9 @@ local last_logged_position = -1
 local double_tap_animation_active = false
 local double_tap_target_position = 0
 local double_tap_start_position = 0
+
+-- FEEDBACK LOOP PREVENTION
+local updating_from_osc = false  -- Flag to prevent sending OSC when updating from received OSC
 
 -- ===========================
 -- LOCAL LOGGING
@@ -451,8 +454,12 @@ function onReceiveOSC(message, connections)
     if not self.values.touch then
       -- Don't update if we're in the middle of a sync delay
       if synced then
+        -- Set flag to prevent OSC echo
+        updating_from_osc = true
         self.values.x = last_osc_x
         last_position = last_osc_x
+        -- Clear flag after update
+        updating_from_osc = false
       end
     else
       touched = true
@@ -545,8 +552,11 @@ function update()
   if not synced and not self.values.touch and not double_tap_animation_active then
     local now = getMillis()
     if (now - last > delay) then
+      -- Set flag to prevent OSC echo when syncing
+      updating_from_osc = true
       self.values.x = last_osc_x
       last_position = last_osc_x
+      updating_from_osc = false
       synced = true
     end
   end
@@ -558,6 +568,11 @@ function update()
 end
 
 function onValueChanged()
+  -- CRITICAL: Skip sending OSC if this change came from OSC update
+  if updating_from_osc then
+    return
+  end
+  
   -- Safety check: only process if track is mapped
   if not isTrackMapped() then
     return
