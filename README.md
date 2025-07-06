@@ -41,7 +41,7 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 - Visual-only state indication (no text)
 - Touch detection for responsive control
 - Sends proper boolean values to AbletonOSC
-- **NEW**: Configurable double-click protection for critical tracks (v2.3.0)
+- **NEW**: Configurable double-click protection for critical tracks (v2.4.0)
 
 #### Pan Control
 - Smooth panning with visual feedback
@@ -265,7 +265,7 @@ The system uses a unified script architecture:
 | group_init.lua | 1.16.2 | Track group with auto-detection and registration |
 | fader_script.lua | 2.5.4 | Volume control with feedback loop prevention |
 | meter_script.lua | 2.5.2 | Level metering with multi-connection support |
-| mute_button.lua | 2.3.0 | Mute control with instance-specific double-click |
+| mute_button.lua | 2.4.0 | Mute control with instance-specific double-click |
 | pan_control.lua | 1.5.1 | Pan control unified |
 | db_label.lua | 1.5.0 | dB display with color indicator |
 | db_meter_label.lua | 2.6.2 | Peak meter with multi-connection support |
