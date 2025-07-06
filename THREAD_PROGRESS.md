@@ -3,38 +3,48 @@
 ## CRITICAL CURRENT STATE
 **⚠️ NEW FEATURE IN PROGRESS:**
 - [ ] Currently working on: Fader position color indicator
-- [ ] Waiting for: User testing of color indicator
-- [ ] Blocked by: None
+- [ ] Waiting for: User testing of textColor property
+- [ ] Blocked by: Finding correct property for label text color
 
 ## Implementation Status
 - Phase: NEW FEATURE - FADER POSITION COLOR INDICATOR
-- Step: Implementation completed, awaiting testing
-- Status: IMPLEMENTING
+- Step: Troubleshooting color property application
+- Status: IMPLEMENTING/DEBUGGING
 - Branch: feature/fader-position-color-indicator
 
-## New Feature: Fader Position Color Indicator (v1.4.1)
+## New Feature: Fader Position Color Indicator (v1.4.4)
 **Feature Request:** Change db_label color when fader is not at 0dB position
 
-**Implementation:**
-- Updated db_label.lua to version 1.4.1
-- Added color indicator that changes when fader is moved from 0dB
-- White color (1, 1, 1) when at 0dB (±0.1dB tolerance)
-- Yellow color (1, 0.8, 0) when fader is moved away from 0dB
-- Clean implementation with no regression risk
-
-**Changes:**
+**Implementation Progress:**
 - v1.4.0: Initial implementation with gray default color
 - v1.4.1: Changed default color to white for better contrast
+- v1.4.2: Removed tolerance, changed to subtle off-white
+- v1.4.3: Tried using self.label.color property
+- v1.4.4: Currently trying self.textColor property
+
+**Current Issue:**
+- Logs show correct behavior but color is not visually changing
+- Trying to find correct property path for label text color
+- User indicated label has "label parameter and then parameter color"
+
+**Properties Attempted:**
+1. `self.color` - No visual change
+2. `self.label.color` - No visual change
+3. `self.textColor` - Currently testing
+
+**Implementation Details:**
+- White color (1, 1, 1) when exactly at 0dB
+- Subtle cream/off-white (0.9, 0.9, 0.85) when moved from 0dB
+- No tolerance - only exact 0dB shows white (< 0.01 for floating point)
+- Clean implementation with no regression risk
 
 **Files Modified:**
-- scripts/track/db_label.lua (v1.3.2 → v1.4.1)
+- scripts/track/db_label.lua (v1.3.2 → v1.4.4)
 
-## Testing Required
-- [ ] Verify label shows yellow when fader is moved from 0dB
-- [ ] Verify label returns to white when fader is at 0dB (±0.1dB)
-- [ ] Test with different track types (regular and return tracks)
-- [ ] Confirm no regression in existing functionality
-- [ ] Test color changes are smooth and responsive
+## Testing Status
+- [x] Logic verified working via logs
+- [ ] Visual color change not yet working
+- [ ] Need to find correct property for label text color
 
 ## Previous Work (Completed)
 ### Feedback Loop Prevention (v2.5.4) ✅
@@ -52,9 +62,12 @@
 **Testing Result:** ✅ User confirmed fix is working - no more feedback loop!
 
 ## Next Steps
-1. User to test the color indicator feature in TouchOSC
-2. Adjust colors or tolerance if needed based on feedback
-3. Update documentation if feature is approved
+1. Test if self.textColor works
+2. If not, may need to:
+   - Check TouchOSC documentation for label text color property
+   - Try alternative visual indicators (parent background color?)
+   - Consider using two labels with visibility toggle
+3. Once working, update documentation
 4. Merge PR after successful testing
 
 ## Notes
@@ -62,4 +75,5 @@
 - No changes to fader behavior or OSC communication
 - Uses TouchOSC Color constructor as per rules
 - Follows existing code patterns and conventions
-- White/yellow provides clear visual contrast
+- White/cream provides subtle visual contrast
+- Issue appears to be finding correct property path for label text color
