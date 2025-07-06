@@ -89,6 +89,7 @@ unfold_band: 'Band'     # Unfold 'Band' group in band instance
 unfold_master: 'Master' # Unfold 'Master' group in master instance
 
 # Double-click mute protection (optional)
+# IMPORTANT: Each group needs its own line!
 double_click_mute_band: 'Band Tracks'    # Require double-click for 'Band Tracks' group
 double_click_mute_master: 'Master Bus'   # Require double-click for 'Master Bus' group
 ```
@@ -114,10 +115,15 @@ For critical tracks where accidental muting could be disastrous (like master bus
 
 1. **Add configuration** for the groups that need protection:
    ```yaml
-   # Require double-click for specific groups
-   double_click_mute_band: 'Band Tracks'    # Instance-specific
-   double_click_mute_master: 'Master Bus'   # Instance-specific
-   double_click_mute: 'Critical Group'      # All instances
+   # IMPORTANT: Each group needs its own line in the configuration!
+   
+   # Instance-specific protection (one group per line)
+   double_click_mute_band: 'Band Tracks'      # Line 1: Band instance, 'Band Tracks' group
+   double_click_mute_band: 'Lead Vocals'      # Line 2: Band instance, 'Lead Vocals' group
+   double_click_mute_master: 'Master Bus'     # Line 3: Master instance, 'Master Bus' group
+   
+   # Global protection (applies to all instances)
+   double_click_mute: 'Critical Group'        # Any instance with 'Critical Group'
    ```
 
 2. **Groups with double-click enabled** require two clicks within 500ms to toggle mute
@@ -164,8 +170,24 @@ The configuration text control accepts these parameters:
 | connection_[instance] | Map instance to connection number | `connection_band: 2` |
 | unfold_[instance] | Auto-unfold group name for instance | `unfold_band: 'Band'` |
 | unfold | Legacy: unfold on all connections | `unfold: 'Drums'` |
-| double_click_mute_[instance] | Require double-click for group | `double_click_mute_band: 'Band Tracks'` |
+| double_click_mute_[instance] | Require double-click for group (one per line) | `double_click_mute_band: 'Band Tracks'` |
 | double_click_mute | Require double-click on all instances | `double_click_mute: 'Master Bus'` |
+
+### Configuration Format Rules
+
+⚠️ **IMPORTANT**: Each configuration entry must be on its own line!
+
+✅ **CORRECT** - Each group on separate line:
+```yaml
+double_click_mute_band: 'Drums'
+double_click_mute_band: 'Bass'
+double_click_mute_band: 'Lead Vocal'
+```
+
+❌ **INCORRECT** - Multiple groups on one line (will NOT work):
+```yaml
+double_click_mute_band: 'Drums', 'Bass', 'Lead Vocal'  # This won't work!
+```
 
 ### Multi-Instance Example
 
@@ -179,8 +201,52 @@ unfold_band: 'Band'
 unfold_master: 'Master'
 
 # Double-click protection for critical tracks
+# Each group needs its own line!
 double_click_mute_band: 'Band Tracks'    # Protect band master group
+double_click_mute_band: 'Drums'          # Protect drums
+double_click_mute_band: 'Lead Vocal'     # Protect lead vocals
 double_click_mute_master: 'Master Bus'   # Protect master bus
+double_click_mute_master: 'Limiter'      # Protect final limiter
+```
+
+### Complete Multi-Instance Configuration Example
+
+```yaml
+# Four Ableton instances for live show
+connection_band: 2
+connection_playback: 3
+connection_fx: 4
+connection_broadcast: 5
+
+# Auto-unfold groups
+unfold_band: 'Rhythm Section'
+unfold_band: 'Vocals'              # Yes, you can have multiple unfolds per instance
+unfold_playback: 'Backing Tracks'
+unfold_fx: 'Send Effects'
+unfold_broadcast: 'Stream Mix'
+
+# Double-click protection - Band instance
+double_click_mute_band: 'Drums'
+double_click_mute_band: 'Bass'
+double_click_mute_band: 'Lead Vocal'
+double_click_mute_band: 'Click Track'
+
+# Double-click protection - Playback instance
+double_click_mute_playback: 'Main Playback'
+double_click_mute_playback: 'Timecode'
+double_click_mute_playback: 'Video Sync'
+
+# Double-click protection - FX instance
+double_click_mute_fx: 'Reverb Send'
+double_click_mute_fx: 'Delay Send'
+
+# Double-click protection - Broadcast instance
+double_click_mute_broadcast: 'Stream Master'
+double_click_mute_broadcast: 'Broadcast Limiter'
+
+# Global protection (all instances)
+double_click_mute: 'MASTER OUT'
+double_click_mute: 'Emergency'
 ```
 
 Both regular tracks and return tracks use the same connection for each instance.
@@ -242,9 +308,10 @@ The system uses a unified script architecture:
 - Look for "Mapped to Return Track X" in logs
 
 **Double-click mute not working:**
-- Check configuration syntax exactly matches examples
+- Check each group is on its own line in configuration
 - Group name must match exactly (case-sensitive)
 - Enable DEBUG = 1 in mute_button.lua to see detection logs
+- Verify configuration format matches examples exactly
 
 **Controls not responding:**
 - Check connection numbers in configuration
