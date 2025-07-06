@@ -1,15 +1,19 @@
--- TouchOSC dB Value Label Display
--- Version: 1.3.2
--- Fixed: Added multi-connection support
+-- TouchOSC dB Value Label Display with Position Indicator
+-- Version: 1.5.0
+-- Final: Light green indicator when fader is not at 0dB
 
 -- Version constant
-local VERSION = "1.3.2"
+local VERSION = "1.5.0"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
 
 -- State variable (must be local, not on self)
 local lastDB = -math.huge
+
+-- Color definitions
+local COLOR_DEFAULT = Color(1, 1, 1, 1)           -- Pure white for exact 0dB
+local COLOR_MOVED = Color(0.7, 1, 0.7, 1)         -- Light green when fader is moved from 0dB
 
 -- ===========================
 -- LOCAL LOGGING
@@ -120,6 +124,23 @@ function formatDB(db_value)
     end
 end
 
+-- Update color based on dB value
+function updateColorForDB(db_value)
+    -- Check if we're EXACTLY at 0dB (no tolerance)
+    -- Note: Due to floating point, we check if very close to 0
+    local is_zero_db = db_value ~= -math.huge and math.abs(db_value) < 0.01
+    
+    if is_zero_db then
+        -- At 0dB - use default white color
+        self.textColor = COLOR_DEFAULT
+        log("At 0dB - using default white color")
+    else
+        -- Not at 0dB - use light green indicator
+        self.textColor = COLOR_MOVED
+        log("Not at 0dB (" .. formatDB(db_value) .. ") - using light green color")
+    end
+end
+
 -- ===========================
 -- OSC HANDLER
 -- ===========================
@@ -163,6 +184,9 @@ function onReceiveOSC(message, connections)
         -- Update label text
         self.values.text = formatDB(db_value)
         lastDB = db_value
+        
+        -- Update color based on position
+        updateColorForDB(db_value)
     end
     
     return false  -- Don't block other receivers
@@ -178,10 +202,14 @@ function onReceiveNotify(key, value)
         -- Clear the display when track changes
         self.values.text = "-inf"
         lastDB = -math.huge
+        -- Reset to moved color since -inf is not 0dB
+        self.textColor = COLOR_MOVED
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
         self.values.text = "-"
         lastDB = nil
+        -- Reset to default color when unmapped
+        self.textColor = COLOR_DEFAULT
     elseif key == "control_enabled" then
         -- Show/hide based on track mapping status
         self.values.visible = value
@@ -196,11 +224,14 @@ function init()
     -- Log version
     log("Script v" .. VERSION .. " loaded")
     
-    -- Set initial text
+    -- Set initial text and color
     if isTrackMapped() then
         self.values.text = "-inf"
+        -- Start with moved color since -inf is not 0dB
+        self.textColor = COLOR_MOVED
     else
         self.values.text = "-"
+        self.textColor = COLOR_DEFAULT
     end
 end
 

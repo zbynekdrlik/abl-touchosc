@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Fader position color indicator for dB labels (v1.5.0)
+  - White text when fader is exactly at 0dB (unity gain)
+  - Light green text when fader is at any other position
+  - Provides quick visual feedback for gain staging
+  - Uses TouchOSC's textColor property for label text color
+  - No performance impact or regression
+
 ### Fixed
 - CRITICAL: Restored multi-connection support to meter scripts (regression from v1.2.0)
   - meter_script.lua v2.5.2: Restored connection filtering with performance caching and consistent logging
