@@ -2,74 +2,91 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Pattern matching fixed (v2.4.1) - detects config with special chars
-- [x] Button type identified - TOGGLE button, not momentary
-- [x] v2.6.0 deployed - proper double-click for toggle buttons
-- [ ] Waiting for: User to test v2.6.0 with toggle button
-- [ ] Blocked by: None
+- [x] Double-click feature WORKING with v2.6.0
+- [x] Pattern matching works with special characters
+- [x] Toggle button behavior correct
+- [ ] Configuration format needs simplification
+- **Thread ending - need to refactor configuration approach**
 
-## Implementation Status
-- Phase: TOGGLE BUTTON FIX DEPLOYED
-- Step: Testing v2.6.0 with toggle buttons
-- Status: AWAITING TEST RESULTS
-- Branch: feature/double-click-mute
-- PR: #24 (open) - https://github.com/zbynekdrlik/abl-touchosc/pull/24
-- Current Version: v2.6.0
+## FEATURE STATUS: WORKING BUT NEEDS REFACTOR
+- **Current Version**: v2.6.0 - FULLY FUNCTIONAL
+- **Issue**: Configuration format is too complex
+- **User Request**: Simplify configuration format
 
-## Version History & Fixes
-1. **v2.4.0** - Initial minimal implementation (15 lines)
-2. **v2.4.1** - Fixed pattern matching for special characters
-3. **v2.5.0** - Attempted fix for momentary buttons
-4. **v2.6.0** - Proper implementation for TOGGLE buttons
-
-## How v2.6.0 Works
-For toggle buttons with double-click enabled:
-1. **First click**: Button tries to toggle, but we revert it to match actual state
-2. **Second click within 500ms**: Allow toggle to proceed and send command
-3. **Visual feedback**: Button only changes state after successful double-click
-
-## Configuration (Working)
+## Current Configuration (TOO COMPLEX)
 ```yaml
-double_click_mute_master: 'master_A-ReproM'  # Pattern matching works!
+# Current format - requires instance name:
+double_click_mute_master: 'master_A-ReproM'
+double_click_mute_band: 'band_Drums'
 ```
 
-## What User Needs to Do
-1. **Pull latest changes**: `git pull`
-2. **Update TouchOSC** with v2.6.0 script
-3. **Ensure button is in TOGGLE mode** (not momentary)
-4. **Test the behavior**:
-   - Single click: Button flickers but returns to original state
-   - Double-click: Button toggles and mute changes
+## Desired Configuration (SIMPLER)
+```yaml
+# Desired format - just list group names:
+double_click_mute: 'master_A-ReproM'
+double_click_mute: 'band_Drums' 
+double_click_mute: 'dj_Master Bus'
+```
 
-## Expected Behavior with v2.6.0
-- First click: Button may flicker but reverts (no mute change)
-- Second click within 500ms: Button toggles properly, mute state changes
-- Visual state always matches actual mute state
+**Rationale**: Group names already contain the instance prefix (e.g., "master_A-ReproM" has "master" in it), so requiring instance-specific configuration keys is redundant.
 
-## Known Issues Resolved
-1. ✅ Pattern matching with special characters (v2.4.1)
-2. ✅ Momentary vs Toggle button confusion (v2.6.0)
-3. ✅ Visual state sync issues (v2.6.0)
+## What Works Currently
+- ✅ Double-click detection and blocking
+- ✅ Pattern matching with special characters (hyphens, etc.)
+- ✅ Toggle button support
+- ✅ Visual state sync
+- ✅ Multi-instance support
 
-## Testing Progress
-- [x] Configuration detected correctly
-- [x] Double-click detection works (logs show it)
-- [ ] Toggle button visual behavior correct
-- [ ] Mute state changes only on double-click
-- [ ] No visual glitches
+## What Needs to Change
+1. **Configuration parsing**: 
+   - FROM: `double_click_mute_[instance]: 'GroupName'`
+   - TO: `double_click_mute: 'GroupName'`
+2. **Pattern matching**:
+   - Match exact group name from configuration
+   - No need to extract instance from config key
 
-## Technical Notes
-- TouchOSC toggle buttons send value changes, not press/release
-- We track pending state changes and revert unwanted toggles
-- Visual state always syncs with Ableton's actual mute state
+## Implementation Plan for Next Thread
+1. Modify `updateDoubleClickConfig()` function:
+   - Look for `double_click_mute:` entries (not instance-specific)
+   - Match against full group name
+   - Simpler pattern matching
+2. Update documentation to reflect new format
+3. Test with existing configurations
+4. Maintain backward compatibility if possible
 
-## Next Thread Should
-1. Review v2.6.0 test results
-2. If working:
-   - Update all documentation to v2.6.0
-   - Update changelog
-   - Consider if 500ms timing needs adjustment
-   - Merge PR
-3. If issues remain:
-   - Debug the specific button behavior
-   - Consider alternative approaches
+## Version History
+- v2.4.0 - Initial minimal implementation
+- v2.4.1 - Fixed pattern matching for special chars
+- v2.5.0 - Attempted fix for momentary buttons
+- v2.6.0 - Proper toggle button support (CURRENT - WORKING)
+- v2.7.0 - (PLANNED) Simplified configuration format
+
+## Code Change Preview
+Current pattern in v2.6.0:
+```lua
+local searchPattern = "double_click_mute_" .. instance .. ":%s*['\"]?" .. escapedName .. "['\"]?"
+```
+
+Simplified pattern for v2.7.0:
+```lua
+local searchPattern = "double_click_mute:%s*['\"]?" .. escapedName .. "['\"]?"
+```
+
+## Testing Requirements
+- Test with group names containing instance prefixes
+- Test with special characters in names
+- Test multiple groups in configuration
+- Verify no regression in functionality
+
+## Next Thread Tasks
+1. Create v2.7.0 with simplified configuration
+2. Update all documentation
+3. Test thoroughly
+4. Update PR description
+5. Prepare for merge
+
+## Important Notes
+- Feature is FULLY WORKING in v2.6.0
+- Only the configuration format needs simplification
+- No functional changes needed, just config parsing
+- User wants global configuration, not instance-specific
