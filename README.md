@@ -10,7 +10,7 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 - **Dynamic Group Management**: Track groups auto-unfold based on configuration
 - **Complete Isolation**: Each instance operates independently without interference
 
-### Return Track Support (v1.2.0) 🎉
+### Return Track Support
 - **Unified Architecture**: Same scripts handle both regular and return tracks
 - **Automatic Detection**: Groups automatically detect track type
 - **Full Control Suite**: Volume, mute, pan, and metering for return tracks
@@ -19,13 +19,14 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 
 ### Professional Controls
 
-#### Volume Fader (v2.5.4)
+#### Volume Fader
 - Professional movement scaling with 0.1dB precision
 - Double-tap to jump to 0dB
 - Exact dB curve matching Ableton's response
 - Emergency movement detection for quick adjustments
 - State preservation between sessions
-- **Fixed**: Feedback loop prevention when controlled from Ableton
+- Feedback loop prevention when controlled from Ableton
+- **NEW**: Color indicator on dB label (white at 0dB, light green when moved)
 
 #### Level Meter  
 - Precisely calibrated to match Ableton's meters
@@ -39,6 +40,7 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 - Reliable state tracking with feedback prevention
 - Visual-only state indication (no text)
 - Touch detection for responsive control
+- Sends proper boolean values to AbletonOSC
 
 #### Pan Control
 - Smooth panning with visual feedback
@@ -49,6 +51,7 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 - Shows current fader position in dB
 - Displays "-inf" at minimum
 - Shows "-" when track unmapped
+- **NEW**: Color changes to indicate fader position (v1.5.0)
 
 ## 🚀 Quick Start
 
@@ -69,7 +72,7 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
    - Replace your existing AbletonOSC installation
    - Restart Ableton Live
 
-2. **Download the TouchOSC template** from the releases page
+2. **Download the TouchOSC template** from the [releases page](https://github.com/zbynekdrlik/abl-touchosc/releases)
 
 3. **Import into TouchOSC** via the editor
 
@@ -95,7 +98,7 @@ Each track group contains:
 - **Track Label**: Shows track name (first word, smart prefix handling)
 - **Status Indicator**: Green when mapped, red when unmapped
 - **Volume Fader**: Professional fader with dB scaling
-- **dB Display**: Current volume in dB
+- **dB Display**: Current volume in dB with color indication
 - **Level Meter**: Real-time level display with peak colors
 - **Mute Button**: Toggle track mute
 - **Pan Control**: Stereo positioning
@@ -136,7 +139,7 @@ Return tracks use the exact same scripts and controls as regular tracks:
 The configuration text control accepts these parameters:
 
 | Parameter | Description | Example |
-|-----------|-------------|---------||
+|-----------|-------------|---------|
 | connection_[instance] | Map instance to connection number | `connection_band: 2` |
 | unfold_[instance] | Auto-unfold group name for instance | `unfold_band: 'Band'` |
 | unfold | Legacy: unfold on all connections | `unfold: 'Drums'` |
@@ -169,58 +172,16 @@ The system uses a unified script architecture:
 ### Script Versions
 
 | Script | Current Version | Purpose |
-|--------|----------------|---------||
+|--------|-----------------|---------|
 | document_script.lua | 2.8.7 | Configuration, group registry, auto-refresh |
 | group_init.lua | 1.16.2 | Track group with auto-detection and registration |
 | fader_script.lua | 2.5.4 | Volume control with feedback loop prevention |
 | meter_script.lua | 2.5.2 | Level metering with multi-connection support |
-| mute_button.lua | 2.0.1 | Mute control unified |
+| mute_button.lua | 2.1.4 | Mute control with boolean values |
 | pan_control.lua | 1.5.1 | Pan control unified |
-| db_label.lua | 1.3.2 | dB display with multi-connection support |
+| db_label.lua | 1.5.0 | dB display with color indicator |
 | db_meter_label.lua | 2.6.2 | Peak meter with multi-connection support |
 | global_refresh_button.lua | 1.5.1 | Manual refresh trigger |
-
-### Recent Fixes
-
-#### Feedback Loop Prevention (v2.5.4)
-- **Issue**: Moving faders in Ableton caused jumpy/laggy behavior
-- **Cause**: TouchOSC was echoing received values back to Ableton
-- **Fix**: Added `updating_from_osc` flag to prevent sending OSC when updating from received values
-
-#### AbletonOSC Listener Cross-Wiring
-- **Issue**: Track 5 updating tracks 5,6,7 and Track 8 responding as Track 10
-- **Cause**: Bug in AbletonOSC's listener registration system
-- **Fix**: Fork includes thread-safe listener registration and proper track index validation
-- **PR**: https://github.com/zbynekdrlik/AbletonOSC/pull/3
-
-### Unified Architecture Details
-
-Groups communicate track information through tags:
-```lua
--- Tag format: "instance:trackNumber:trackType"
-self.tag = "master:0:return"  -- Return track 0 on master
-self.tag = "band:5:track"     -- Regular track 5 on band
-```
-
-Child scripts parse the parent tag to determine:
-- Which track number to control
-- Whether to use `/live/track/` or `/live/return/` OSC paths
-- Which connection to use for routing
-
-### Return Track OSC Messages
-
-The forked AbletonOSC adds these endpoints:
-
-**Query Messages:**
-- `/live/song/get/num_return_tracks` - Get return track count
-- `/live/song/get/return_track_names` - Get return track names
-- `/live/song/get/return_track_data` - Get detailed return data
-
-**Control Messages:**
-- `/live/return/get/[property] [index]` - Get return track property
-- `/live/return/set/[property] [index] [value]` - Set return track property
-- `/live/return/start_listen/[property] [index]` - Start property listener
-- `/live/return/stop_listen/[property] [index]` - Stop property listener
 
 ### Key Technical Features
 
@@ -257,9 +218,9 @@ The forked AbletonOSC adds these endpoints:
 - Verify AbletonOSC is running in Ableton
 - Press refresh button to re-discover tracks
 
-**Track label shows wrong text:**
-- Update to group_init.lua v1.16.2 or later
-- Script now handles return prefixes intelligently
+**Performance issues with many tracks:**
+- See [Performance Guide](docs/PERFORMANCE.md) for optimization strategies
+- Ensure DEBUG = 0 in all scripts for production use
 
 ### Debug Mode
 
@@ -291,6 +252,9 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 ---
 
-**Current Status**: v1.3.1 - Production ready with feedback loop prevention and AbletonOSC listener fixes. All controls tested and working perfectly for both regular and return tracks.
+**Current Version**: v1.3.0 - Production ready with all features tested and working perfectly for both regular and return tracks.
 
-For development documentation and future plans, see the [docs](docs/) directory.
+For additional documentation:
+- [Technical Documentation](docs/TECHNICAL.md) - Detailed technical information
+- [Performance Guide](docs/PERFORMANCE.md) - Optimization strategies
+- [Contributing Guidelines](docs/CONTRIBUTING.md) - How to contribute
