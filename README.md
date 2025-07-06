@@ -15,16 +15,17 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 - **Automatic Detection**: Groups automatically detect track type
 - **Full Control Suite**: Volume, mute, pan, and metering for return tracks
 - **Smart Track Labels**: First word display with return prefix handling
-- **Requires**: [Forked AbletonOSC](https://github.com/zbynekdrlik/AbletonOSC/tree/feature/return-tracks-support) with listener fixes
+- **Requires**: [Forked AbletonOSC](https://github.com/zbynekdrlik/AbletonOSC) with return tracks support and listener fixes
 
 ### Professional Controls
 
-#### Volume Fader
+#### Volume Fader (v2.5.4)
 - Professional movement scaling with 0.1dB precision
 - Double-tap to jump to 0dB
 - Exact dB curve matching Ableton's response
 - Emergency movement detection for quick adjustments
 - State preservation between sessions
+- **Fixed**: Feedback loop prevention when controlled from Ableton
 
 #### Level Meter  
 - Precisely calibrated to match Ableton's meters
@@ -54,13 +55,17 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 ### Prerequisites
 - TouchOSC (latest version)
 - Ableton Live with AbletonOSC installed
-  - For return track support: Use the [forked version](https://github.com/zbynekdrlik/AbletonOSC/tree/feature/return-tracks-support)
+  - **Important**: Use the [forked version](https://github.com/zbynekdrlik/AbletonOSC) for return track support and listener fixes
 - Network connections configured in TouchOSC
 
 ### Installation
 
-1. **For Return Track Support** (optional):
-   - Download the [forked AbletonOSC](https://github.com/zbynekdrlik/AbletonOSC/tree/feature/return-tracks-support)
+1. **Install the forked AbletonOSC** (required for proper operation):
+   - Download from: https://github.com/zbynekdrlik/AbletonOSC
+   - This fork includes:
+     - Return track support
+     - Listener cross-wiring fixes (prevents track 5→5,6,7 and track 8→10 issues)
+     - Thread-safe listener registration
    - Replace your existing AbletonOSC installation
    - Restart Ableton Live
 
@@ -117,6 +122,7 @@ Return tracks use the exact same scripts and controls as regular tracks:
 - **Connection Routing**: Controls automatically route to configured connections
 - **State Preservation**: Control positions are maintained between sessions
 - **Visual Feedback**: All controls provide immediate visual feedback
+- **Feedback Loop Prevention**: Faders won't echo back when controlled from Ableton
 
 ### Manual Controls
 
@@ -130,7 +136,7 @@ Return tracks use the exact same scripts and controls as regular tracks:
 The configuration text control accepts these parameters:
 
 | Parameter | Description | Example |
-|-----------|-------------|---------|
+|-----------|-------------|---------||
 | connection_[instance] | Map instance to connection number | `connection_band: 2` |
 | unfold_[instance] | Auto-unfold group name for instance | `unfold_band: 'Band'` |
 | unfold | Legacy: unfold on all connections | `unfold: 'Drums'` |
@@ -163,16 +169,29 @@ The system uses a unified script architecture:
 ### Script Versions
 
 | Script | Current Version | Purpose |
-|--------|----------------|---------|
+|--------|----------------|---------||
 | document_script.lua | 2.8.7 | Configuration, group registry, auto-refresh |
 | group_init.lua | 1.16.2 | Track group with auto-detection and registration |
-| fader_script.lua | 2.5.3 | Volume control with mapping_cleared handling |
-| meter_script.lua | 2.4.1 | Level metering unified |
+| fader_script.lua | 2.5.4 | Volume control with feedback loop prevention |
+| meter_script.lua | 2.5.2 | Level metering with multi-connection support |
 | mute_button.lua | 2.0.1 | Mute control unified |
 | pan_control.lua | 1.5.1 | Pan control unified |
-| db_label.lua | 1.2.0 | dB display unified |
-| db_meter_label.lua | 2.6.1 | Peak meter unified |
+| db_label.lua | 1.3.2 | dB display with multi-connection support |
+| db_meter_label.lua | 2.6.2 | Peak meter with multi-connection support |
 | global_refresh_button.lua | 1.5.1 | Manual refresh trigger |
+
+### Recent Fixes
+
+#### Feedback Loop Prevention (v2.5.4)
+- **Issue**: Moving faders in Ableton caused jumpy/laggy behavior
+- **Cause**: TouchOSC was echoing received values back to Ableton
+- **Fix**: Added `updating_from_osc` flag to prevent sending OSC when updating from received values
+
+#### AbletonOSC Listener Cross-Wiring
+- **Issue**: Track 5 updating tracks 5,6,7 and Track 8 responding as Track 10
+- **Cause**: Bug in AbletonOSC's listener registration system
+- **Fix**: Fork includes thread-safe listener registration and proper track index validation
+- **PR**: https://github.com/zbynekdrlik/AbletonOSC/pull/3
 
 ### Unified Architecture Details
 
@@ -213,13 +232,23 @@ The forked AbletonOSC adds these endpoints:
 - **Connection Filtering**: OSC messages filtered by connection
 - **State Machine Design**: Robust state tracking for all controls
 - **Group Registration**: Groups self-register with document script for reliable refresh
+- **Feedback Prevention**: Controls won't echo back when updated from Ableton
 
 ## 🔧 Troubleshooting
 
 ### Common Issues
 
+**Faders jumpy when controlled from Ableton:**
+- Update to fader_script.lua v2.5.4 or later
+- This version includes feedback loop prevention
+
+**Wrong tracks responding (e.g., Track 8 moves Track 10):**
+- Install the [forked AbletonOSC](https://github.com/zbynekdrlik/AbletonOSC)
+- This is a bug in the original AbletonOSC's listener system
+- The fork includes proper thread-safe listener registration
+
 **Return tracks not working:**
-- Install the [forked AbletonOSC](https://github.com/zbynekdrlik/AbletonOSC/tree/feature/return-tracks-support)
+- Install the [forked AbletonOSC](https://github.com/zbynekdrlik/AbletonOSC)
 - Check return track names match exactly (including "A-", "B-" prefixes)
 - Look for "Mapped to Return Track X" in logs
 
@@ -227,11 +256,6 @@ The forked AbletonOSC adds these endpoints:
 - Check connection numbers in configuration
 - Verify AbletonOSC is running in Ableton
 - Press refresh button to re-discover tracks
-
-**Wrong tracks mapped:**
-- Ensure exact name matching for groups
-- Check both regular and return track names
-- Try manual refresh
 
 **Track label shows wrong text:**
 - Update to group_init.lua v1.16.2 or later
@@ -243,6 +267,11 @@ Enable detailed logging by modifying script DEBUG constants:
 ```lua
 local DEBUG = 1  -- Set to 1 for verbose logging
 ```
+
+### Diagnostic Tools
+
+The project includes diagnostic scripts in `scripts/diagnostics/`:
+- **track_mismatch_test.lua**: Tests for AbletonOSC listener cross-wiring issues
 
 ## 🤝 Contributing
 
@@ -267,6 +296,6 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 ---
 
-**Current Status**: v1.3.0 - Production ready with group registration system for reliable refresh. All controls tested and working perfectly for both regular and return tracks.
+**Current Status**: v1.3.1 - Production ready with feedback loop prevention and AbletonOSC listener fixes. All controls tested and working perfectly for both regular and return tracks.
 
 For development documentation and future plans, see the [docs](docs/) directory.
