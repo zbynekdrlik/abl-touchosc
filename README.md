@@ -41,7 +41,7 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 - Visual-only state indication (no text)
 - Touch detection for responsive control
 - Sends proper boolean values to AbletonOSC
-- **NEW**: Configurable double-click protection for critical tracks (v2.2.0)
+- **NEW**: Configurable double-click protection for critical tracks (v2.3.0)
 
 #### Pan Control
 - Smooth panning with visual feedback
@@ -116,14 +116,14 @@ For critical tracks where accidental muting could be disastrous (like master bus
 1. **Add configuration** for the groups that need protection:
    ```yaml
    # IMPORTANT: Each group needs its own line in the configuration!
+   # Each configuration is instance-specific
    
-   # Instance-specific protection (one group per line)
+   # Band instance protection (one group per line)
    double_click_mute_band: 'Band Tracks'      # Line 1: Band instance, 'Band Tracks' group
    double_click_mute_band: 'Lead Vocals'      # Line 2: Band instance, 'Lead Vocals' group
-   double_click_mute_master: 'Master Bus'     # Line 3: Master instance, 'Master Bus' group
    
-   # Global protection (applies to all instances)
-   double_click_mute: 'Critical Group'        # Any instance with 'Critical Group'
+   # Master instance protection
+   double_click_mute_master: 'Master Bus'     # Line 3: Master instance, 'Master Bus' group
    ```
 
 2. **Groups with double-click enabled** require two clicks within 500ms to toggle mute
@@ -171,7 +171,6 @@ The configuration text control accepts these parameters:
 | unfold_[instance] | Auto-unfold group name for instance | `unfold_band: 'Band'` |
 | unfold | Legacy: unfold on all connections | `unfold: 'Drums'` |
 | double_click_mute_[instance] | Require double-click for group (one per line) | `double_click_mute_band: 'Band Tracks'` |
-| double_click_mute | Require double-click on all instances | `double_click_mute: 'Master Bus'` |
 
 ### Configuration Format Rules
 
@@ -243,10 +242,6 @@ double_click_mute_fx: 'Delay Send'
 # Double-click protection - Broadcast instance
 double_click_mute_broadcast: 'Stream Master'
 double_click_mute_broadcast: 'Broadcast Limiter'
-
-# Global protection (all instances)
-double_click_mute: 'MASTER OUT'
-double_click_mute: 'Emergency'
 ```
 
 Both regular tracks and return tracks use the same connection for each instance.
@@ -270,7 +265,7 @@ The system uses a unified script architecture:
 | group_init.lua | 1.16.2 | Track group with auto-detection and registration |
 | fader_script.lua | 2.5.4 | Volume control with feedback loop prevention |
 | meter_script.lua | 2.5.2 | Level metering with multi-connection support |
-| mute_button.lua | 2.2.0 | Mute control with double-click support |
+| mute_button.lua | 2.3.0 | Mute control with instance-specific double-click |
 | pan_control.lua | 1.5.1 | Pan control unified |
 | db_label.lua | 1.5.0 | dB display with color indicator |
 | db_meter_label.lua | 2.6.2 | Peak meter with multi-connection support |
@@ -287,7 +282,7 @@ The system uses a unified script architecture:
 - **State Machine Design**: Robust state tracking for all controls
 - **Group Registration**: Groups self-register with document script for reliable refresh
 - **Feedback Prevention**: Controls won't echo back when updated from Ableton
-- **Double-Click Detection**: Configurable timing-based double-click for critical tracks
+- **Double-Click Detection**: Instance-specific timing-based double-click for critical tracks
 
 ## 🔧 Troubleshooting
 
@@ -310,6 +305,7 @@ The system uses a unified script architecture:
 **Double-click mute not working:**
 - Check each group is on its own line in configuration
 - Group name must match exactly (case-sensitive)
+- Must include instance name (e.g., `double_click_mute_band:` not just `double_click_mute:`)
 - Enable DEBUG = 1 in mute_button.lua to see detection logs
 - Verify configuration format matches examples exactly
 
