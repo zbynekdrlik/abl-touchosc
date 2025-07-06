@@ -2,75 +2,74 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Currently working on: Double-click mute feature - TESTING IN PROGRESS
-- [x] Bug found: Pattern matching fails with special characters (hyphens)
-- [x] Bug fixed: v2.4.1 adds pattern escaping
-- [ ] Waiting for: User to test the fix
+- [x] Pattern matching fixed (v2.4.1) - now detects double-click config correctly
+- [x] Bug found: Button is direct state, not toggle
+- [x] Fixed in v2.5.0 - proper double-click handling for state button
+- [ ] Waiting for: User to test v2.5.0
 - [ ] Blocked by: None
 
 ## Implementation Status
-- Phase: BUG FIX DEPLOYED
-- Step: Testing pattern matching fix
+- Phase: BUG FIX v2 DEPLOYED
+- Step: Testing proper button behavior
 - Status: AWAITING TEST RESULTS
 - Branch: feature/double-click-mute
 - PR: #24 (open) - https://github.com/zbynekdrlik/abl-touchosc/pull/24
+- Current Version: v2.5.0
 
-## Bug Found and Fixed
-**Issue**: Configuration `double_click_mute_master: 'master_A-ReproM'` was not working
+## Bug Analysis and Fix
 
-**Root Cause**: The hyphen in "A-ReproM" is a special character in Lua patterns (means "zero or more occurrences"). The pattern matching was failing.
+### Original Issue
+The button works as a **direct state button**, not a toggle:
+- Press (x=0) → Send "mute ON"
+- Release (x=1) → Send "mute OFF"
+- Visual state directly represents mute state
 
-**Fix Applied (v2.4.1)**:
-- Added `escapePattern()` function to escape special characters
-- Pattern now correctly matches group names with hyphens, dots, brackets, etc.
-- Only 4 lines added to fix
+### Why v2.4.x Failed
+- Only blocked the press event
+- Release event still sent "mute OFF"
+- Result: Always unmuted after first click
 
-## Configuration Format (FINAL)
+### Fix in v2.5.0
+- For double-click mode: Changed to toggle behavior
+- Tracks waiting state to ignore release events
+- Only processes on double-click press
+- Toggles between muted/unmuted states
+
+## Configuration (Working)
 ```yaml
-# IMPORTANT: Each group needs its own line!
-# Only instance-specific configuration is supported
-
-# Instance-specific (one group per line)
-double_click_mute_master: 'master_A-ReproM'  # This now works!
-double_click_mute_band: 'Band Tracks'
-double_click_mute_band: 'Lead Vocals'
+double_click_mute_master: 'master_A-ReproM'  # Pattern matching now works!
 ```
 
-## Recent Changes (This Session)
-1. User tested with `double_click_mute_master: 'master_A-ReproM'`
-2. Found pattern matching bug - hyphen not escaped
-3. Fixed in v2.4.1 by adding pattern escaping
-4. Committed fix to branch
+## What User Needs to Do
+1. **Pull latest changes**: `git pull`
+2. **Update TouchOSC** with v2.5.0 script
+3. **Test the behavior**:
+   - Single click: Should do nothing
+   - Double-click: Should toggle mute state
+   - Release events: Should be ignored
 
-## What User Needs to Do Next
-1. **Pull the latest changes**: `git pull`
-2. **Update TouchOSC template** with fixed script (v2.4.1)
-3. **Test again** with same configuration
-4. Should now see "Double-click required: true" in logs
+## Expected Behavior with v2.5.0
+- First click: Nothing happens (waiting for double-click)
+- Second click within 500ms: Toggles mute state
+- Release events: Ignored when double-click is enabled
 
-## Testing Checklist for User
-- [ ] Pattern matching works with special characters (hyphens, dots, etc.)
-- [ ] Single-click works on non-configured tracks
-- [ ] Double-click required on configured tracks
-- [ ] 500ms timing feels natural
-- [ ] Configuration parsing works correctly
-- [ ] No regression on existing functionality
-- [ ] Multiple instances work independently
+## Testing Progress
+- [x] Configuration detected correctly (v2.4.1)
+- [ ] Double-click toggles mute
+- [ ] Single-click does nothing
+- [ ] No unwanted unmuting on release
+- [ ] State syncs with Ableton
 
-## Technical Details
-- Version: v2.4.1 (was v2.4.0)
-- Fix: Added `escapePattern()` function
-- Escapes: - ^ $ ( ) % . [ ] * + ?
-- Pattern matching now handles all special characters
-- Total lines added: 19 (15 original + 4 for fix)
+## Known Issues Fixed
+1. ✅ Pattern matching with special characters (v2.4.1)
+2. ✅ Momentary button behavior with double-click (v2.5.0)
 
-## Next Thread Should:
-1. Verify user test results with v2.4.1
-2. If pattern matching works:
-   - Complete remaining tests
-   - Update documentation if needed
-   - Merge PR if all tests pass
-3. If still issues:
-   - Debug further
-   - Check exact configuration format
-   - Verify group name matches exactly
+## Next Thread Should
+1. Review v2.5.0 test results
+2. If working:
+   - Update documentation
+   - Update changelog
+   - Merge PR
+3. If issues remain:
+   - Analyze button behavior further
+   - Consider alternative approaches
