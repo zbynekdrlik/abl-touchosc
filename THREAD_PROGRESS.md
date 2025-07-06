@@ -2,70 +2,73 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Currently working on: Double-click mute feature implementation
+- [x] Currently working on: Double-click mute feature COMPLETE
 - [ ] Waiting for: User testing and feedback
 - [ ] Blocked by: None
 
 ## Implementation Status
-- Phase: FEATURE IMPLEMENTATION
-- Step: Implementation complete, ready for testing
-- Status: TESTING
+- Phase: FEATURE IMPLEMENTATION COMPLETE
+- Step: Ready for user testing
+- Status: AWAITING TEST RESULTS
 - Branch: feature/double-click-mute
-- PR: #24 (open)
+- PR: #24 (open) - https://github.com/zbynekdrlik/abl-touchosc/pull/24
 
-## Feature Requirements
-User requested: "mute/unmute over double click to prevent unwanted mute/unmute on critical tracks"
-- ✅ Configurable via configuration object
-- ✅ Specific group faders can be configured for double-click behavior
-- ✅ Other tracks maintain single-click behavior (backward compatible)
+## Feature Summary
+**Double-click mute protection implemented successfully:**
+- ✅ mute_button.lua v2.2.0 - Added double-click detection (500ms threshold)
+- ✅ document_script.lua v2.9.0 - Updated documentation only
+- ✅ README.md - Clarified configuration format (each group needs own line)
+- ✅ CHANGELOG.md - Added feature entry
+- ✅ PR #24 created and ready for review
 
-## Testing Status Matrix
-| Component | Implemented | Unit Tested | Integration Tested | Multi-Instance Tested | 
-|-----------|------------|-------------|--------------------|-----------------------|
-| mute_button.lua | ✅ v2.2.0 | ❌ | ❌ | ❌ |
-| document_script.lua | ✅ v2.9.0 | ❌ | ❌ | ❌ |
-| README.md | ✅ updated | N/A | N/A | N/A |
-| CHANGELOG.md | ✅ updated | N/A | N/A | N/A |
-
-## Last User Action
-- Date/Time: 2025-07-06
-- Action: Requested double-click mute feature
-- Result: Feature implemented
-- Next Required: Test the implementation
-
-## Implementation Complete
-1. ✅ Created feature branch
-2. ✅ Updated THREAD_PROGRESS.md
-3. ✅ Modified mute_button.lua to add double-click detection
-4. ✅ Updated document_script.lua to v2.9.0 (documentation updates)
-5. ✅ Updated README.md with feature documentation
-6. ✅ Updated CHANGELOG.md
-7. ✅ Created PR #24
-
-## Configuration Format
+## Configuration Format (FINAL)
 ```yaml
-# Double-click mute configuration
-# Format: double_click_mute_[instance]: 'GroupName'
+# IMPORTANT: Each group needs its own line!
+
+# Instance-specific (one group per line)
 double_click_mute_band: 'Band Tracks'
-double_click_mute_dj: 'Master Bus'
-double_click_mute: 'Critical Group'  # All instances
+double_click_mute_band: 'Lead Vocals'
+double_click_mute_band: 'Drums'
+
+# Global (applies to all instances)
+double_click_mute: 'Master Bus'
+double_click_mute: 'Critical'
 ```
 
-## How It Works
-- Groups configured for double-click require two clicks within 500ms
-- First click is recorded, second click within threshold triggers mute toggle
-- Groups without configuration use single-click (backward compatible)
-- Configuration is read directly by mute_button.lua
+## What User Needs to Do Next
+1. **Pull the feature branch**: `git pull && git checkout feature/double-click-mute`
+2. **Update TouchOSC template** with new scripts
+3. **Add configuration** for groups needing double-click protection
+4. **Test the feature**:
+   - Single-click on non-configured groups (should work normally)
+   - Double-click on configured groups (should require two clicks within 500ms)
+   - Test with multiple instances
+5. **Provide feedback** on PR #24
 
-## Testing Needed
-1. Single-click behavior on non-configured tracks
-2. Double-click detection on configured tracks
-3. Configuration parsing with various formats
-4. Multiple instances with different configurations
-5. Edge cases (triple-click, timing boundaries)
+## Testing Checklist for User
+- [ ] Single-click works on non-configured tracks
+- [ ] Double-click required on configured tracks
+- [ ] 500ms timing feels natural
+- [ ] Configuration parsing works correctly
+- [ ] No regression on existing functionality
+- [ ] Multiple instances work independently
 
-## Next Steps
-- User needs to test the implementation
-- Verify configuration works as expected
-- Check timing feels natural (500ms threshold)
-- Confirm no regression on existing functionality
+## Technical Details
+- Double-click window: 500ms (configurable in code if needed)
+- Configuration read directly by mute_button.lua
+- Backward compatible - no changes needed for existing setups
+- Each mute button tracks its own click timing
+- Visual feedback unchanged (button state shows mute status)
+
+## Recent Changes (This Thread)
+1. Implemented double-click detection in mute_button.lua
+2. Updated documentation to clarify configuration format
+3. Added comprehensive examples for multi-instance setups
+4. Clarified that each group needs its own configuration line
+
+## Next Thread Should:
+- Review test results from user
+- Fix any issues found during testing
+- Consider adjusting timing threshold if needed
+- Merge PR if tests pass
+- Update version to v1.4.0 after merge
