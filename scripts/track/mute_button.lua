@@ -1,9 +1,9 @@
 -- TouchOSC Mute Button Script
--- Version: 2.3.0
--- Added: Double-click support for critical tracks (instance-specific only)
+-- Version: 2.4.0
+-- Added: Minimal double-click protection for critical tracks
 
 -- Version constant
-local VERSION = "2.3.0"
+local VERSION = "2.4.0"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0  -- Production mode
@@ -13,11 +13,9 @@ local trackNumber = nil
 local trackType = nil  -- "track" or "return"
 local isMuted = false
 
--- Double-click detection variables
+-- ADDED: Double-click variables (only 2 new variables)
 local lastClickTime = 0
-local DOUBLE_CLICK_THRESHOLD = 500  -- milliseconds
 local requiresDoubleClick = false
-local pendingMuteChange = false
 
 -- ===========================
 -- LOCAL LOGGING
@@ -97,54 +95,21 @@ local function getTrackInfo()
     return nil, nil
 end
 
--- ===========================
--- DOUBLE-CLICK CONFIGURATION
--- ===========================
-
--- Check if this group requires double-click for mute
-local function checkDoubleClickConfig()
-    -- Get instance and group name from parent
-    if not self.parent then
-        return false
-    end
-    
-    local instance = nil
-    local groupName = self.parent.name
-    
-    -- Extract instance from parent tag
-    if self.parent.tag then
-        instance = self.parent.tag:match("^(%w+):")
-    end
-    
-    if not instance or not groupName then
-        return false
-    end
-    
-    -- Find configuration object
-    local configObj = root:findByName("configuration", true)
-    if not configObj or not configObj.values or not configObj.values.text then
-        return false
-    end
-    
-    local configText = configObj.values.text
-    
-    -- Check for double-click configuration for this instance and group
-    local searchKey = "double_click_mute_" .. instance .. ":"
-    
-    for line in configText:gmatch("[^\r\n]+") do
-        line = line:match("^%s*(.-)%s*$")  -- Trim whitespace
-        
-        -- Check if this line matches our pattern
-        if line:sub(1, #searchKey) == searchKey then
-            local configuredGroup = line:sub(#searchKey + 1):match("^%s*['\"]?([^'\"]+)['\"]?%s*$")
-            if configuredGroup and configuredGroup == groupName then
-                log("Double-click required for group: " .. groupName)
-                return true
+-- ADDED: Simple config check (minimal addition)
+local function updateDoubleClickConfig()
+    if self.parent and self.parent.tag and self.parent.name then
+        local instance = self.parent.tag:match("^(%w+):")
+        if instance then
+            local configObj = root:findByName("configuration", true)
+            if configObj and configObj.values and configObj.values.text then
+                local searchPattern = "double_click_mute_" .. instance .. ":%s*['\"]?" .. self.parent.name .. "['\"]?"
+                requiresDoubleClick = configObj.values.text:match(searchPattern) ~= nil
+                log("Double-click required: " .. tostring(requiresDoubleClick))
+                return
             end
         end
     end
-    
-    return false
+    requiresDoubleClick = false
 end
 
 -- ===========================
@@ -211,31 +176,10 @@ end
 -- USER INTERACTION
 -- ===========================
 
--- Send mute toggle command
-local function sendMuteToggle()
-    -- Get connection configuration
-    local connectionIndex = getConnectionIndex()
-    local connections = buildConnectionTable(connectionIndex)
-    
-    -- Determine OSC path based on track type
-    local path = trackType == "return" and '/live/return/set/mute' or '/live/track/set/mute'
-    
-    -- Toggle mute state
-    local newMuteState = not isMuted
-    
-    log("Sending OSC - path: " .. path .. ", track: " .. trackNumber .. ", mute: " .. tostring(newMuteState) .. ", connection: " .. connectionIndex)
-    
-    -- Send OSC message with boolean value
-    sendOSC(path, trackNumber, newMuteState, connections)
-    
-    -- Update internal state
-    isMuted = newMuteState
-end
-
 function onValueChanged(valueName)
     -- Handle x value changes (button press/release)
-    if valueName == "x" and self.values.x == 0 then  -- Button pressed
-        log("Button pressed")
+    if valueName == "x" then
+        log("X value changed to: " .. self.values.x)
         
         -- Check if track is mapped
         if not trackNumber or not trackType then
@@ -243,30 +187,36 @@ function onValueChanged(valueName)
             return
         end
         
-        local currentTime = getMillis()
-        
-        if requiresDoubleClick then
-            -- Check for double-click
-            local timeSinceLastClick = currentTime - lastClickTime
-            
-            if timeSinceLastClick <= DOUBLE_CLICK_THRESHOLD then
-                -- Double-click detected
-                log("Double-click detected! Time since last: " .. timeSinceLastClick .. "ms")
-                sendMuteToggle()
-                lastClickTime = 0  -- Reset to prevent triple-click
-            else
-                -- First click recorded, waiting for potential second click
-                log("First click recorded, waiting for double-click...")
+        -- ADDED: Double-click detection (minimal addition - 8 lines)
+        if self.values.x == 0 and requiresDoubleClick then  -- Only on press
+            local currentTime = getMillis()
+            if currentTime - lastClickTime > 500 then  -- First click
                 lastClickTime = currentTime
-                
-                -- Visual feedback for first click (optional)
-                -- Could add a slight color change here to indicate waiting state
+                return  -- Don't process this click
             end
-        else
-            -- Single-click mode - immediate action
-            log("Single-click mode - toggling mute immediately")
-            sendMuteToggle()
+            lastClickTime = 0  -- Reset after double-click
         end
+        
+        -- ORIGINAL CODE CONTINUES UNCHANGED
+        -- Get connection configuration
+        local connectionIndex = getConnectionIndex()
+        local connections = buildConnectionTable(connectionIndex)
+        
+        -- Determine OSC path based on track type
+        local path = trackType == "return" and '/live/return/set/mute' or '/live/track/set/mute'
+        
+        -- IMPORTANT: Send boolean value, not integer!
+        -- x=0 (pressed) -> send true (mute on)
+        -- x=1 (released) -> send false (mute off)
+        local muteValue = (self.values.x == 0)
+        
+        -- Update internal state
+        isMuted = muteValue
+        
+        log("Sending OSC - path: " .. path .. ", track: " .. trackNumber .. ", mute: " .. tostring(muteValue) .. ", connection: " .. connectionIndex)
+        
+        -- Send OSC message with boolean value
+        sendOSC(path, trackNumber, muteValue, connections)
     end
 end
 
@@ -282,8 +232,7 @@ function onReceiveNotify(key, value)
         -- Reset mute state when track changes
         isMuted = false
         updateVisualState()
-        -- Re-check double-click configuration
-        requiresDoubleClick = checkDoubleClickConfig()
+        updateDoubleClickConfig()  -- ADDED: Update config when track changes
     elseif key == "track_type" then
         trackType = value
     elseif key == "track_unmapped" then
@@ -291,7 +240,7 @@ function onReceiveNotify(key, value)
         trackType = nil
         isMuted = false
         updateVisualState()
-        requiresDoubleClick = false
+        requiresDoubleClick = false  -- ADDED: Reset double-click
     end
 end
 
@@ -311,8 +260,7 @@ function init()
         log("No track assigned at init")
     end
     
-    -- Check double-click configuration
-    requiresDoubleClick = checkDoubleClickConfig()
+    updateDoubleClickConfig()  -- ADDED: Check config at init
     
     -- Set initial visual state
     updateVisualState()
