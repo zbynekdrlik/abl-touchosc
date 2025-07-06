@@ -45,7 +45,6 @@
 ## Summary of All Fixes
 ### TouchOSC Repository (this PR):
 - **fader_script.lua v2.5.4**: Fixed feedback loop with updating_from_osc flag
-- **track_mismatch_test.lua v1.1.0**: Diagnostic tool for testing
 
 ### AbletonOSC Repository (separate PR):
 - **osc_server.py**: Fixed string/bytes error
