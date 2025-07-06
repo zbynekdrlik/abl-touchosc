@@ -268,11 +268,6 @@ Enable detailed logging by modifying script DEBUG constants:
 local DEBUG = 1  -- Set to 1 for verbose logging
 ```
 
-### Diagnostic Tools
-
-The project includes diagnostic scripts in `scripts/diagnostics/`:
-- **track_mismatch_test.lua**: Tests for AbletonOSC listener cross-wiring issues
-
 ## 🤝 Contributing
 
 We welcome contributions! Please:
