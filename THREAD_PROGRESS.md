@@ -12,22 +12,26 @@
 - Status: IMPLEMENTING
 - Branch: feature/fader-position-color-indicator
 
-## New Feature: Fader Position Color Indicator (v1.4.0)
+## New Feature: Fader Position Color Indicator (v1.4.1)
 **Feature Request:** Change db_label color when fader is not at 0dB position
 
 **Implementation:**
-- Updated db_label.lua to version 1.4.0
+- Updated db_label.lua to version 1.4.1
 - Added color indicator that changes when fader is moved from 0dB
-- Default gray color (0.7, 0.7, 0.7) when at 0dB (±0.1dB tolerance)
+- White color (1, 1, 1) when at 0dB (±0.1dB tolerance)
 - Yellow color (1, 0.8, 0) when fader is moved away from 0dB
 - Clean implementation with no regression risk
 
+**Changes:**
+- v1.4.0: Initial implementation with gray default color
+- v1.4.1: Changed default color to white for better contrast
+
 **Files Modified:**
-- scripts/track/db_label.lua (v1.3.2 → v1.4.0)
+- scripts/track/db_label.lua (v1.3.2 → v1.4.1)
 
 ## Testing Required
 - [ ] Verify label shows yellow when fader is moved from 0dB
-- [ ] Verify label returns to gray when fader is at 0dB (±0.1dB)
+- [ ] Verify label returns to white when fader is at 0dB (±0.1dB)
 - [ ] Test with different track types (regular and return tracks)
 - [ ] Confirm no regression in existing functionality
 - [ ] Test color changes are smooth and responsive
@@ -58,3 +62,4 @@
 - No changes to fader behavior or OSC communication
 - Uses TouchOSC Color constructor as per rules
 - Follows existing code patterns and conventions
+- White/yellow provides clear visual contrast
