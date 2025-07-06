@@ -1,9 +1,9 @@
 -- TouchOSC Mute Button Script
--- Version: 2.2.0
--- Added: Double-click support for critical tracks
+-- Version: 2.3.0
+-- Added: Double-click support for critical tracks (instance-specific only)
 
 -- Version constant
-local VERSION = "2.2.0"
+local VERSION = "2.3.0"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0  -- Production mode
@@ -141,16 +141,6 @@ local function checkDoubleClickConfig()
                 log("Double-click required for group: " .. groupName)
                 return true
             end
-        end
-    end
-    
-    -- Also check for global double-click configuration (without instance)
-    for line in configText:gmatch("[^\r\n]+") do
-        line = line:match("^%s*(.-)%s*$")
-        local globalGroup = line:match("^double_click_mute:%s*['\"]?([^'\"]+)['\"]?%s*$")
-        if globalGroup and globalGroup == groupName then
-            log("Double-click required for group (global): " .. groupName)
-            return true
         end
     end
     
