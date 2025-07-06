@@ -1,9 +1,9 @@
 -- TouchOSC dB Value Label Display with Position Indicator
--- Version: 1.4.1
--- Changed: Default color to white instead of gray
+-- Version: 1.4.2
+-- Changed: Removed tolerance, subtle color difference, fixed color application
 
 -- Version constant
-local VERSION = "1.4.1"
+local VERSION = "1.4.2"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -11,10 +11,9 @@ local DEBUG = 0
 -- State variable (must be local, not on self)
 local lastDB = -math.huge
 
--- Color definitions
-local COLOR_DEFAULT = Color(1, 1, 1, 1)        -- White for normal state (at 0dB)
-local COLOR_MOVED = Color(1, 0.8, 0, 1)        -- Yellow when fader is moved from 0dB
-local DB_TOLERANCE = 0.1                       -- ±0.1dB tolerance for 0dB position
+-- Color definitions - subtle difference between white and off-white
+local COLOR_DEFAULT = Color(1, 1, 1, 1)           -- Pure white for exact 0dB
+local COLOR_MOVED = Color(0.95, 0.95, 0.9, 1)    -- Very subtle off-white/cream when moved
 
 -- ===========================
 -- LOCAL LOGGING
@@ -127,15 +126,21 @@ end
 
 -- Update color based on dB value
 function updateColorForDB(db_value)
-    -- Check if we're at 0dB (within tolerance)
-    if db_value ~= -math.huge and math.abs(db_value) <= DB_TOLERANCE then
-        -- At 0dB position - use default color
+    -- Check if we're EXACTLY at 0dB (no tolerance)
+    if db_value ~= -math.huge and db_value == 0 then
+        -- Exactly at 0dB - use default color
         self.color = COLOR_DEFAULT
-        log("At 0dB - using default color")
+        log("Exactly at 0dB - using default color")
     else
         -- Not at 0dB - use indicator color
         self.color = COLOR_MOVED
         log("Not at 0dB (" .. formatDB(db_value) .. ") - using indicator color")
+    end
+    
+    -- Force color update by also setting it on parent if it exists
+    if self.parent then
+        -- Store current parent color to restore later if needed
+        self.parent.color = self.color
     end
 end
 
