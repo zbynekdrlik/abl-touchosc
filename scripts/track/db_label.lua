@@ -1,9 +1,9 @@
 -- TouchOSC dB Value Label Display with Position Indicator
--- Version: 1.4.0
--- Added: Color indicator when fader is not at 0dB position
+-- Version: 1.4.1
+-- Changed: Default color to white instead of gray
 
 -- Version constant
-local VERSION = "1.4.0"
+local VERSION = "1.4.1"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -12,7 +12,7 @@ local DEBUG = 0
 local lastDB = -math.huge
 
 -- Color definitions
-local COLOR_DEFAULT = Color(0.7, 0.7, 0.7, 1)  -- Light gray for normal state
+local COLOR_DEFAULT = Color(1, 1, 1, 1)        -- White for normal state (at 0dB)
 local COLOR_MOVED = Color(1, 0.8, 0, 1)        -- Yellow when fader is moved from 0dB
 local DB_TOLERANCE = 0.1                       -- ±0.1dB tolerance for 0dB position
 
