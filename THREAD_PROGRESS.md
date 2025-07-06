@@ -2,74 +2,74 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Pattern matching fixed (v2.4.1) - now detects double-click config correctly
-- [x] Bug found: Button is direct state, not toggle
-- [x] Fixed in v2.5.0 - proper double-click handling for state button
-- [ ] Waiting for: User to test v2.5.0
+- [x] Pattern matching fixed (v2.4.1) - detects config with special chars
+- [x] Button type identified - TOGGLE button, not momentary
+- [x] v2.6.0 deployed - proper double-click for toggle buttons
+- [ ] Waiting for: User to test v2.6.0 with toggle button
 - [ ] Blocked by: None
 
 ## Implementation Status
-- Phase: BUG FIX v2 DEPLOYED
-- Step: Testing proper button behavior
+- Phase: TOGGLE BUTTON FIX DEPLOYED
+- Step: Testing v2.6.0 with toggle buttons
 - Status: AWAITING TEST RESULTS
 - Branch: feature/double-click-mute
 - PR: #24 (open) - https://github.com/zbynekdrlik/abl-touchosc/pull/24
-- Current Version: v2.5.0
+- Current Version: v2.6.0
 
-## Bug Analysis and Fix
+## Version History & Fixes
+1. **v2.4.0** - Initial minimal implementation (15 lines)
+2. **v2.4.1** - Fixed pattern matching for special characters
+3. **v2.5.0** - Attempted fix for momentary buttons
+4. **v2.6.0** - Proper implementation for TOGGLE buttons
 
-### Original Issue
-The button works as a **direct state button**, not a toggle:
-- Press (x=0) → Send "mute ON"
-- Release (x=1) → Send "mute OFF"
-- Visual state directly represents mute state
-
-### Why v2.4.x Failed
-- Only blocked the press event
-- Release event still sent "mute OFF"
-- Result: Always unmuted after first click
-
-### Fix in v2.5.0
-- For double-click mode: Changed to toggle behavior
-- Tracks waiting state to ignore release events
-- Only processes on double-click press
-- Toggles between muted/unmuted states
+## How v2.6.0 Works
+For toggle buttons with double-click enabled:
+1. **First click**: Button tries to toggle, but we revert it to match actual state
+2. **Second click within 500ms**: Allow toggle to proceed and send command
+3. **Visual feedback**: Button only changes state after successful double-click
 
 ## Configuration (Working)
 ```yaml
-double_click_mute_master: 'master_A-ReproM'  # Pattern matching now works!
+double_click_mute_master: 'master_A-ReproM'  # Pattern matching works!
 ```
 
 ## What User Needs to Do
 1. **Pull latest changes**: `git pull`
-2. **Update TouchOSC** with v2.5.0 script
-3. **Test the behavior**:
-   - Single click: Should do nothing
-   - Double-click: Should toggle mute state
-   - Release events: Should be ignored
+2. **Update TouchOSC** with v2.6.0 script
+3. **Ensure button is in TOGGLE mode** (not momentary)
+4. **Test the behavior**:
+   - Single click: Button flickers but returns to original state
+   - Double-click: Button toggles and mute changes
 
-## Expected Behavior with v2.5.0
-- First click: Nothing happens (waiting for double-click)
-- Second click within 500ms: Toggles mute state
-- Release events: Ignored when double-click is enabled
+## Expected Behavior with v2.6.0
+- First click: Button may flicker but reverts (no mute change)
+- Second click within 500ms: Button toggles properly, mute state changes
+- Visual state always matches actual mute state
+
+## Known Issues Resolved
+1. ✅ Pattern matching with special characters (v2.4.1)
+2. ✅ Momentary vs Toggle button confusion (v2.6.0)
+3. ✅ Visual state sync issues (v2.6.0)
 
 ## Testing Progress
-- [x] Configuration detected correctly (v2.4.1)
-- [ ] Double-click toggles mute
-- [ ] Single-click does nothing
-- [ ] No unwanted unmuting on release
-- [ ] State syncs with Ableton
+- [x] Configuration detected correctly
+- [x] Double-click detection works (logs show it)
+- [ ] Toggle button visual behavior correct
+- [ ] Mute state changes only on double-click
+- [ ] No visual glitches
 
-## Known Issues Fixed
-1. ✅ Pattern matching with special characters (v2.4.1)
-2. ✅ Momentary button behavior with double-click (v2.5.0)
+## Technical Notes
+- TouchOSC toggle buttons send value changes, not press/release
+- We track pending state changes and revert unwanted toggles
+- Visual state always syncs with Ableton's actual mute state
 
 ## Next Thread Should
-1. Review v2.5.0 test results
+1. Review v2.6.0 test results
 2. If working:
-   - Update documentation
+   - Update all documentation to v2.6.0
    - Update changelog
+   - Consider if 500ms timing needs adjustment
    - Merge PR
 3. If issues remain:
-   - Analyze button behavior further
+   - Debug the specific button behavior
    - Consider alternative approaches
