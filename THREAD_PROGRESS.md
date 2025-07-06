@@ -1,21 +1,40 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**⚠️ ABLETONOSC FIXES CREATED - READY FOR TESTING:**
-- [x] Issue identified: Multiple tracks receiving same listener events  
-- [x] Pattern found: Track 5 broadcasts to tracks 5,6,7; Track 8 responds as track 10
-- [x] Root cause: AbletonOSC listener system bug (not TouchOSC issue)
-- [x] Fork AbletonOSC: https://github.com/zbynekdrlik/AbletonOSC
-- [x] Created fixes in branch: fix/listener-cross-wiring
-- [ ] Next step: Test the fixes in Ableton
+**⚠️ FEEDBACK LOOP FIX CREATED - READY FOR TESTING:**
+- [x] Issue identified: Feedback loop when moving faders in Ableton
+- [x] Root cause: TouchOSC sending OSC back when receiving updates from Ableton
+- [x] Fix implemented: Added updating_from_osc flag in fader_script.lua v2.5.4
+- [ ] Next step: Test the feedback loop fix in TouchOSC
 
 ## Implementation Status
-- Phase: FIXES IMPLEMENTED
+- Phase: FEEDBACK LOOP FIX IMPLEMENTED
 - Status: READY FOR TESTING
 - Branch: feature/track-8-10-mismatch
 - AbletonOSC PR: https://github.com/zbynekdrlik/AbletonOSC/pull/3
 
-## Fixes Created in AbletonOSC
+## Latest Fix: Feedback Loop Prevention (v2.5.4)
+**Issue:** When moving fader in Ableton:
+1. Ableton sends OSC to TouchOSC to update fader position
+2. TouchOSC receives and updates its fader (self.values.x)
+3. This triggers onValueChanged() which sends OSC back to Ableton
+4. Creates feedback loop making Ableton fader jumpy/laggy
+
+**Solution:** Added `updating_from_osc` flag to prevent sending OSC when updating from received OSC:
+- Set flag before updating self.values.x in onReceiveOSC()
+- Check flag in onValueChanged() and skip sending if set
+- Also set flag in update() function during sync operations
+
+## Testing Instructions for Feedback Loop Fix
+1. Update fader_script.lua in TouchOSC (v2.5.4)
+2. Restart TouchOSC
+3. Test fader movements:
+   - Move fader in Ableton → TouchOSC fader should follow smoothly
+   - No jumpy/laggy behavior in Ableton
+   - Move fader in TouchOSC → Ableton should update normally
+   - Bidirectional sync should work without feedback
+
+## Previous Fixes Created in AbletonOSC
 1. **Fixed String/Bytes Error** (osc_server.py)
    - Fixed "write() argument must be str, not bytes" error
    - Added proper decoding when writing debug data
@@ -30,7 +49,7 @@
    - Added clear_api method to safely remove all listeners
    - Improved listener cleanup on shutdown
 
-## Testing Instructions
+## Testing Instructions for AbletonOSC
 1. Copy the fixed files from AbletonOSC fork to your Ableton installation:
    - abletonosc/osc_server.py
    - abletonosc/handler.py
@@ -63,6 +82,7 @@ RECEIVE: /live/track/get/volume FLOAT(10) FLOAT(0.7574361)
 2. The problem was in AbletonOSC's listener registration/routing
 3. Return track support implementation introduced bugs
 4. Fixed with proper thread safety and validation
+5. Feedback loop was a separate issue in TouchOSC (now fixed)
 
 ## Diagnostic Tools Created
 - track_mismatch_test.lua v1.1.0 - Tests for listener cross-wiring
