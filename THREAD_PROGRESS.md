@@ -2,102 +2,75 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Currently working on: Double-click mute feature COMPLETE (v2.4.0 - minimal implementation)
-- [ ] Waiting for: User testing and feedback
+- [x] Currently working on: Double-click mute feature - TESTING IN PROGRESS
+- [x] Bug found: Pattern matching fails with special characters (hyphens)
+- [x] Bug fixed: v2.4.1 adds pattern escaping
+- [ ] Waiting for: User to test the fix
 - [ ] Blocked by: None
-- **Thread ending - ready to continue in new thread**
 
 ## Implementation Status
-- Phase: FEATURE IMPLEMENTATION COMPLETE
-- Step: Ready for user testing
+- Phase: BUG FIX DEPLOYED
+- Step: Testing pattern matching fix
 - Status: AWAITING TEST RESULTS
 - Branch: feature/double-click-mute
 - PR: #24 (open) - https://github.com/zbynekdrlik/abl-touchosc/pull/24
 
-## Feature Summary
-**Double-click mute protection implemented with minimal changes:**
-- ✅ mute_button.lua v2.4.0 - Minimal double-click detection (only 15 lines added)
-- ✅ document_script.lua v2.9.0 - Updated documentation only
-- ✅ README.md - Updated to v2.4.0
-- ✅ CHANGELOG.md - Updated for v2.4.0 changes
-- ✅ PR #24 updated - Minimal implementation complete
+## Bug Found and Fixed
+**Issue**: Configuration `double_click_mute_master: 'master_A-ReproM'` was not working
+
+**Root Cause**: The hyphen in "A-ReproM" is a special character in Lua patterns (means "zero or more occurrences"). The pattern matching was failing.
+
+**Fix Applied (v2.4.1)**:
+- Added `escapePattern()` function to escape special characters
+- Pattern now correctly matches group names with hyphens, dots, brackets, etc.
+- Only 4 lines added to fix
 
 ## Configuration Format (FINAL)
 ```yaml
 # IMPORTANT: Each group needs its own line!
-# Only instance-specific configuration is supported (no global option)
+# Only instance-specific configuration is supported
 
 # Instance-specific (one group per line)
+double_click_mute_master: 'master_A-ReproM'  # This now works!
 double_click_mute_band: 'Band Tracks'
 double_click_mute_band: 'Lead Vocals'
-double_click_mute_band: 'Drums'
-double_click_mute_master: 'Master Bus'
-double_click_mute_master: 'Critical'
 ```
 
-## Session Summary (This Thread)
-1. Started with request to remove global configuration option
-2. Removed all references to `double_click_mute:` (global) from docs
-3. Updated to v2.3.0 initially
-4. Analyzed implementation and found it was overly complex (100+ lines)
-5. Simplified to minimal implementation (v2.4.0) with only 15 lines added
-6. Preserved ALL original button behavior - no regressions
-7. Updated all documentation to reflect v2.4.0
-
-## Technical Implementation Details
-**Minimal changes made:**
-- 2 new variables: `lastClickTime` and `requiresDoubleClick`
-- 1 function: `updateDoubleClickConfig()` - simple pattern match
-- 8 lines in `onValueChanged` - blocks first click if double-click required
-- Configuration cached for performance (updates on track change)
-- Original behavior completely preserved
-
-**Key code addition:**
-```lua
-if self.values.x == 0 and requiresDoubleClick then
-    local currentTime = getMillis()
-    if currentTime - lastClickTime > 500 then
-        lastClickTime = currentTime
-        return  -- Skip first click
-    end
-    lastClickTime = 0  -- Reset
-end
-```
+## Recent Changes (This Session)
+1. User tested with `double_click_mute_master: 'master_A-ReproM'`
+2. Found pattern matching bug - hyphen not escaped
+3. Fixed in v2.4.1 by adding pattern escaping
+4. Committed fix to branch
 
 ## What User Needs to Do Next
-1. **Pull the feature branch**: `git pull && git checkout feature/double-click-mute`
-2. **Update TouchOSC template** with new scripts
-3. **Add configuration** for groups needing double-click protection
-4. **Test the feature** thoroughly
-5. **Provide feedback** on PR #24
+1. **Pull the latest changes**: `git pull`
+2. **Update TouchOSC template** with fixed script (v2.4.1)
+3. **Test again** with same configuration
+4. Should now see "Double-click required: true" in logs
 
 ## Testing Checklist for User
+- [ ] Pattern matching works with special characters (hyphens, dots, etc.)
 - [ ] Single-click works on non-configured tracks
 - [ ] Double-click required on configured tracks
 - [ ] 500ms timing feels natural
-- [ ] Configuration parsing works correctly (instance-specific only)
+- [ ] Configuration parsing works correctly
 - [ ] No regression on existing functionality
 - [ ] Multiple instances work independently
-- [ ] Configuration updates when track changes or refresh pressed
-- [ ] Button state syncs properly with Ableton
+
+## Technical Details
+- Version: v2.4.1 (was v2.4.0)
+- Fix: Added `escapePattern()` function
+- Escapes: - ^ $ ( ) % . [ ] * + ?
+- Pattern matching now handles all special characters
+- Total lines added: 19 (15 original + 4 for fix)
 
 ## Next Thread Should:
-1. Check if user has tested the feature
-2. Review any test results/logs provided
-3. Fix any issues found during testing
-4. If tests pass:
-   - Merge PR #24
-   - Update version to v1.4.0
-   - Create release tag
-5. If issues found:
-   - Debug and fix
+1. Verify user test results with v2.4.1
+2. If pattern matching works:
+   - Complete remaining tests
    - Update documentation if needed
-   - Re-test
-
-## Important Notes for Next Thread:
-- Feature uses MINIMAL implementation approach (not the complex v2.3.0)
-- Configuration is CACHED for performance
-- Only instance-specific config supported (no global option)
-- All original button behavior preserved
-- 500ms double-click window (hardcoded, could be made configurable)
-- Configuration updates on track change or refresh
+   - Merge PR if all tests pass
+3. If still issues:
+   - Debug further
+   - Check exact configuration format
+   - Verify group name matches exactly
