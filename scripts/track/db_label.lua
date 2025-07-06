@@ -1,9 +1,9 @@
 -- TouchOSC dB Value Label Display with Position Indicator
--- Version: 1.4.4
--- Changed: Trying textColor property for label text color
+-- Version: 1.5.0
+-- Final: Light green indicator when fader is not at 0dB
 
 -- Version constant
-local VERSION = "1.4.4"
+local VERSION = "1.5.0"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -11,9 +11,9 @@ local DEBUG = 0
 -- State variable (must be local, not on self)
 local lastDB = -math.huge
 
--- Color definitions - subtle difference between white and off-white
+-- Color definitions
 local COLOR_DEFAULT = Color(1, 1, 1, 1)           -- Pure white for exact 0dB
-local COLOR_MOVED = Color(0.9, 0.9, 0.85, 1)     -- Subtle cream/off-white when moved
+local COLOR_MOVED = Color(0.7, 1, 0.7, 1)         -- Light green when fader is moved from 0dB
 
 -- ===========================
 -- LOCAL LOGGING
@@ -135,9 +135,9 @@ function updateColorForDB(db_value)
         self.textColor = COLOR_DEFAULT
         log("At 0dB - using default white color")
     else
-        -- Not at 0dB - use subtle off-white indicator
+        -- Not at 0dB - use light green indicator
         self.textColor = COLOR_MOVED
-        log("Not at 0dB (" .. formatDB(db_value) .. ") - using off-white color")
+        log("Not at 0dB (" .. formatDB(db_value) .. ") - using light green color")
     end
 end
 
