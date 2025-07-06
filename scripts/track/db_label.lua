@@ -1,9 +1,9 @@
 -- TouchOSC dB Value Label Display with Position Indicator
--- Version: 1.4.3
--- Fixed: Color application using correct label.color property
+-- Version: 1.4.4
+-- Changed: Trying textColor property for label text color
 
 -- Version constant
-local VERSION = "1.4.3"
+local VERSION = "1.4.4"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -132,11 +132,11 @@ function updateColorForDB(db_value)
     
     if is_zero_db then
         -- At 0dB - use default white color
-        self.label.color = COLOR_DEFAULT
+        self.textColor = COLOR_DEFAULT
         log("At 0dB - using default white color")
     else
         -- Not at 0dB - use subtle off-white indicator
-        self.label.color = COLOR_MOVED
+        self.textColor = COLOR_MOVED
         log("Not at 0dB (" .. formatDB(db_value) .. ") - using off-white color")
     end
 end
@@ -203,13 +203,13 @@ function onReceiveNotify(key, value)
         self.values.text = "-inf"
         lastDB = -math.huge
         -- Reset to moved color since -inf is not 0dB
-        self.label.color = COLOR_MOVED
+        self.textColor = COLOR_MOVED
     elseif key == "track_unmapped" then
         -- Show dash when unmapped
         self.values.text = "-"
         lastDB = nil
         -- Reset to default color when unmapped
-        self.label.color = COLOR_DEFAULT
+        self.textColor = COLOR_DEFAULT
     elseif key == "control_enabled" then
         -- Show/hide based on track mapping status
         self.values.visible = value
@@ -228,10 +228,10 @@ function init()
     if isTrackMapped() then
         self.values.text = "-inf"
         -- Start with moved color since -inf is not 0dB
-        self.label.color = COLOR_MOVED
+        self.textColor = COLOR_MOVED
     else
         self.values.text = "-"
-        self.label.color = COLOR_DEFAULT
+        self.textColor = COLOR_DEFAULT
     end
 end
 
