@@ -41,7 +41,7 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 - Visual-only state indication (no text)
 - Touch detection for responsive control
 - Sends proper boolean values to AbletonOSC
-- **NEW**: Configurable double-click protection for critical tracks (v2.4.0)
+- **NEW**: Configurable double-click protection for critical tracks (v2.7.0)
 
 #### Pan Control
 - Smooth panning with visual feedback
@@ -90,8 +90,8 @@ unfold_master: 'Master' # Unfold 'Master' group in master instance
 
 # Double-click mute protection (optional)
 # IMPORTANT: Each group needs its own line!
-double_click_mute_band: 'Band Tracks'    # Require double-click for 'Band Tracks' group
-double_click_mute_master: 'Master Bus'   # Require double-click for 'Master Bus' group
+double_click_mute: 'band_Band Tracks'    # Require double-click for 'Band Tracks' group
+double_click_mute: 'master_Master Bus'   # Require double-click for 'Master Bus' group
 ```
 
 5. **Run the template** - tracks will be discovered automatically after 1 second!
@@ -109,21 +109,18 @@ Each track group contains:
 - **Mute Button**: Toggle track mute (with optional double-click protection)
 - **Pan Control**: Stereo positioning
 
-### Double-Click Mute Protection (NEW)
+### Double-Click Mute Protection (NEW in v2.7.0)
 
 For critical tracks where accidental muting could be disastrous (like master bus or live performance tracks), you can enable double-click protection:
 
 1. **Add configuration** for the groups that need protection:
    ```yaml
    # IMPORTANT: Each group needs its own line in the configuration!
-   # Each configuration is instance-specific
+   # NEW in v2.7.0: Use the full group name (including instance prefix)
    
-   # Band instance protection (one group per line)
-   double_click_mute_band: 'Band Tracks'      # Line 1: Band instance, 'Band Tracks' group
-   double_click_mute_band: 'Lead Vocals'      # Line 2: Band instance, 'Lead Vocals' group
-   
-   # Master instance protection
-   double_click_mute_master: 'Master Bus'     # Line 3: Master instance, 'Master Bus' group
+   double_click_mute: 'band_Band Tracks'      # Band instance, 'Band Tracks' group
+   double_click_mute: 'band_Lead Vocals'      # Band instance, 'Lead Vocals' group
+   double_click_mute: 'master_Master Bus'     # Master instance, 'Master Bus' group
    ```
 
 2. **Groups with double-click enabled** require two clicks within 500ms to toggle mute
@@ -170,7 +167,7 @@ The configuration text control accepts these parameters:
 | connection_[instance] | Map instance to connection number | `connection_band: 2` |
 | unfold_[instance] | Auto-unfold group name for instance | `unfold_band: 'Band'` |
 | unfold | Legacy: unfold on all connections | `unfold: 'Drums'` |
-| double_click_mute_[instance] | Require double-click for group (one per line) | `double_click_mute_band: 'Band Tracks'` |
+| double_click_mute | Require double-click for group (v2.7.0+) | `double_click_mute: 'band_Band Tracks'` |
 
 ### Configuration Format Rules
 
@@ -178,14 +175,14 @@ The configuration text control accepts these parameters:
 
 ✅ **CORRECT** - Each group on separate line:
 ```yaml
-double_click_mute_band: 'Drums'
-double_click_mute_band: 'Bass'
-double_click_mute_band: 'Lead Vocal'
+double_click_mute: 'band_Drums'
+double_click_mute: 'band_Bass'
+double_click_mute: 'band_Lead Vocal'
 ```
 
 ❌ **INCORRECT** - Multiple groups on one line (will NOT work):
 ```yaml
-double_click_mute_band: 'Drums', 'Bass', 'Lead Vocal'  # This won't work!
+double_click_mute: 'band_Drums', 'band_Bass', 'band_Lead Vocal'  # This won't work!
 ```
 
 ### Multi-Instance Example
@@ -201,11 +198,12 @@ unfold_master: 'Master'
 
 # Double-click protection for critical tracks
 # Each group needs its own line!
-double_click_mute_band: 'Band Tracks'    # Protect band master group
-double_click_mute_band: 'Drums'          # Protect drums
-double_click_mute_band: 'Lead Vocal'     # Protect lead vocals
-double_click_mute_master: 'Master Bus'   # Protect master bus
-double_click_mute_master: 'Limiter'      # Protect final limiter
+# NEW: Use full group names (with instance prefix)
+double_click_mute: 'band_Band Tracks'    # Protect band master group
+double_click_mute: 'band_Drums'          # Protect drums
+double_click_mute: 'band_Lead Vocal'     # Protect lead vocals
+double_click_mute: 'master_Master Bus'   # Protect master bus
+double_click_mute: 'master_Limiter'      # Protect final limiter
 ```
 
 ### Complete Multi-Instance Configuration Example
@@ -224,24 +222,21 @@ unfold_playback: 'Backing Tracks'
 unfold_fx: 'Send Effects'
 unfold_broadcast: 'Stream Mix'
 
-# Double-click protection - Band instance
-double_click_mute_band: 'Drums'
-double_click_mute_band: 'Bass'
-double_click_mute_band: 'Lead Vocal'
-double_click_mute_band: 'Click Track'
+# Double-click protection - v2.7.0 format (full group names)
+double_click_mute: 'band_Drums'
+double_click_mute: 'band_Bass'
+double_click_mute: 'band_Lead Vocal'
+double_click_mute: 'band_Click Track'
 
-# Double-click protection - Playback instance
-double_click_mute_playback: 'Main Playback'
-double_click_mute_playback: 'Timecode'
-double_click_mute_playback: 'Video Sync'
+double_click_mute: 'playback_Main Playback'
+double_click_mute: 'playback_Timecode'
+double_click_mute: 'playback_Video Sync'
 
-# Double-click protection - FX instance
-double_click_mute_fx: 'Reverb Send'
-double_click_mute_fx: 'Delay Send'
+double_click_mute: 'fx_Reverb Send'
+double_click_mute: 'fx_Delay Send'
 
-# Double-click protection - Broadcast instance
-double_click_mute_broadcast: 'Stream Master'
-double_click_mute_broadcast: 'Broadcast Limiter'
+double_click_mute: 'broadcast_Stream Master'
+double_click_mute: 'broadcast_Broadcast Limiter'
 ```
 
 Both regular tracks and return tracks use the same connection for each instance.
@@ -265,7 +260,7 @@ The system uses a unified script architecture:
 | group_init.lua | 1.16.2 | Track group with auto-detection and registration |
 | fader_script.lua | 2.5.4 | Volume control with feedback loop prevention |
 | meter_script.lua | 2.5.2 | Level metering with multi-connection support |
-| mute_button.lua | 2.4.0 | Mute control with instance-specific double-click |
+| mute_button.lua | 2.7.0 | Mute control with simplified double-click config |
 | pan_control.lua | 1.5.1 | Pan control unified |
 | db_label.lua | 1.5.0 | dB display with color indicator |
 | db_meter_label.lua | 2.6.2 | Peak meter with multi-connection support |
@@ -282,7 +277,7 @@ The system uses a unified script architecture:
 - **State Machine Design**: Robust state tracking for all controls
 - **Group Registration**: Groups self-register with document script for reliable refresh
 - **Feedback Prevention**: Controls won't echo back when updated from Ableton
-- **Double-Click Detection**: Instance-specific timing-based double-click for critical tracks
+- **Double-Click Detection**: Simplified configuration using full group names (v2.7.0)
 
 ## 🔧 Troubleshooting
 
@@ -304,8 +299,8 @@ The system uses a unified script architecture:
 
 **Double-click mute not working:**
 - Check each group is on its own line in configuration
-- Group name must match exactly (case-sensitive)
-- Must include instance name (e.g., `double_click_mute_band:` not just `double_click_mute:`)
+- Group name must match exactly (case-sensitive, including instance prefix)
+- NEW in v2.7.0: Use full group name like `double_click_mute: 'band_Drums'`
 - Enable DEBUG = 1 in mute_button.lua to see detection logs
 - Verify configuration format matches examples exactly
 
@@ -348,7 +343,7 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 ---
 
-**Current Version**: v1.4.0 - Added double-click mute protection for critical tracks.
+**Current Version**: v1.4.1 - Simplified double-click mute configuration format.
 
 For additional documentation:
 - [Technical Documentation](docs/TECHNICAL.md) - Detailed technical information
