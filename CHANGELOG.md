@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2025-07-06
+
 ### Added
 - Fader position color indicator for dB labels (v1.5.0)
   - White text when fader is exactly at 0dB (unity gain)
@@ -19,12 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CRITICAL: Restored multi-connection support to meter scripts (regression from v1.2.0)
   - meter_script.lua v2.5.2: Restored connection filtering with performance caching and consistent logging
   - db_meter_label.lua v2.6.2: Restored connection support (minimal changes only)
-  - db_label.lua v1.3.2: Restored connection support (minimal changes only)
+  - db_label.lua v1.3.2→v1.5.0: Restored connection support and added color indicator
   - Multi-instance routing now works correctly for all meter displays
   - Found that multi-connection support was accidentally removed after v1.2.0 release
 - Mute button now sends boolean values to AbletonOSC (v2.1.4)
   - Fixed "Python argument types did not match C++ signature" error
   - Changed from sending integers (0/1) to proper boolean values (true/false)
+- Feedback loop prevention when controlling faders from Ableton (v2.5.4)
+  - Fixed jumpy/laggy behavior when moving faders in Ableton
+  - Added updating_from_osc flag to prevent TouchOSC from echoing received values
+  - Bidirectional sync now works smoothly without feedback loops
 
 ## [1.2.0] - 2025-06-28
 
@@ -111,6 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Extensive debug logging capabilities
 - Modular script architecture for easy maintenance
 
+[1.3.0]: https://github.com/zbynekdrlik/abl-touchosc/releases/tag/v1.3.0
 [1.2.0]: https://github.com/zbynekdrlik/abl-touchosc/releases/tag/v1.2.0
 [1.1.0]: https://github.com/zbynekdrlik/abl-touchosc/releases/tag/v1.1.0
 [1.0.0]: https://github.com/zbynekdrlik/abl-touchosc/releases/tag/v1.0.0
