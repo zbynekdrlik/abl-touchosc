@@ -1,9 +1,9 @@
 -- TouchOSC Mute Button Script
--- Version: 2.4.0
--- Added: Minimal double-click protection for critical tracks
+-- Version: 2.4.1
+-- Fixed: Pattern matching for group names with special characters
 
 -- Version constant
-local VERSION = "2.4.0"
+local VERSION = "2.4.1"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0  -- Production mode
@@ -95,6 +95,12 @@ local function getTrackInfo()
     return nil, nil
 end
 
+-- ADDED: Escape special characters in Lua patterns
+local function escapePattern(str)
+    -- Escape all special pattern characters
+    return str:gsub("([%-%^%$%(%)%%%.%[%]%*%+%?])", "%%%1")
+end
+
 -- ADDED: Simple config check (minimal addition)
 local function updateDoubleClickConfig()
     if self.parent and self.parent.tag and self.parent.name then
@@ -102,7 +108,9 @@ local function updateDoubleClickConfig()
         if instance then
             local configObj = root:findByName("configuration", true)
             if configObj and configObj.values and configObj.values.text then
-                local searchPattern = "double_click_mute_" .. instance .. ":%s*['\"]?" .. self.parent.name .. "['\"]?"
+                -- Escape special characters in group name for pattern matching
+                local escapedName = escapePattern(self.parent.name)
+                local searchPattern = "double_click_mute_" .. instance .. ":%s*['\"]?" .. escapedName .. "['\"]?"
                 requiresDoubleClick = configObj.values.text:match(searchPattern) ~= nil
                 log("Double-click required: " .. tostring(requiresDoubleClick))
                 return
