@@ -1,9 +1,9 @@
 -- TouchOSC Interactive Mute Label Script
--- Version: 2.8.2
+-- Version: 2.8.3
 -- Combined mute button and label with visual indicator for double-click protection
 
 -- Version constant
-local VERSION = "2.8.2"
+local VERSION = "2.8.3"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 1  -- Enable debug to troubleshoot
@@ -224,7 +224,13 @@ end
 
 function onValueChanged(valueName)
     -- Debug: Log all value changes to see what's happening
-    log("onValueChanged called with valueName: " .. tostring(valueName) .. ", value: " .. tostring(self.values[valueName]))
+    log("onValueChanged called with valueName: " .. tostring(valueName))
+    
+    -- Try to log the actual value if we can access it
+    local success, value = pcall(function() return self.values[valueName] end)
+    if success then
+        log("  Value: " .. tostring(value))
+    end
     
     -- Interactive labels might use 'x' or 'touch' value for detection
     if valueName == "x" or valueName == "touch" then
@@ -373,12 +379,15 @@ function init()
     -- Debug: Log current state
     log("Label interactive: " .. tostring(self.interactive))
     log("Label background: " .. tostring(self.background))
+    log("Label type: " .. tostring(self.type))
     
-    -- Debug: Check what values exist
-    if self.values then
-        log("Available values:")
-        for k, v in pairs(self.values) do
-            log("  " .. tostring(k) .. " = " .. tostring(v))
+    -- Debug: Check specific values we know about
+    log("Checking known values:")
+    local checkValues = {"x", "y", "w", "h", "text", "touch", "z"}
+    for _, key in ipairs(checkValues) do
+        local success, value = pcall(function() return self.values[key] end)
+        if success and value ~= nil then
+            log("  values." .. key .. " = " .. tostring(value))
         end
     end
     
