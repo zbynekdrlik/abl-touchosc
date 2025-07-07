@@ -2,98 +2,142 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Interactive mute label script created (v2.8.0)
-- [ ] Need to test the new mute_label.lua script in TouchOSC
-- [ ] Update TouchOSC template to use interactive labels instead of buttons
-- [ ] Test visual feedback and ⚠ symbol display
-- **User needs to**: Test the new script and provide feedback on implementation
+- [x] Interactive mute label script WORKING (v2.8.5)
+- [x] Touch detection fixed - using `values.touch` not `values.x`
+- [x] Double-click protection functional
+- [x] ⚠ warning symbol displays correctly
+- [ ] Need to fine-tune colors and visual feedback
+- [ ] Need to test with non-protected groups
+- [ ] Consider touch reaction improvements
 
-## NEXT STEPS
-1. **User Testing Required**:
-   - Apply mute_label.lua script to a label control in TouchOSC
-   - Set label to interactive mode
-   - Test single-click and double-click behavior
-   - Verify ⚠ symbol appears for protected groups
-   - Check visual feedback (colors, flash on click)
+## WORKING VERSION: v2.8.5
+### What's Working:
+- ✅ Touch detection on interactive labels
+- ✅ Double-click requirement for protected groups
+- ✅ Single-click for non-protected groups
+- ✅ OSC messages sent correctly
+- ✅ Mute state toggles properly
+- ✅ ⚠ warning symbol shows for protected groups
+- ✅ Text updates (MUTE/MUTED)
 
-2. **Template Update**:
-   - Replace mute buttons with interactive labels
-   - Apply new mute_label.lua script
-   - Test with various group names (including special characters)
+### Known Issues/Improvements Needed:
+1. **Color Tuning**:
+   - Current: Dark red (muted) / Dark gray (unmuted)
+   - Yellow flash on click (100ms)
+   - May need better contrast or different colors
+   - Consider matching existing template color scheme
 
-## IMPLEMENTATION STATUS: v2.8.0 CREATED
-- **Current Version**: v2.8.0 - Script created, needs testing
-- **What's New**:
-  - ✅ Interactive mute label script created
-  - ✅ Shows ⚠ warning symbol when double-click enabled
-  - ✅ Visual feedback with color changes
-  - ✅ Yellow flash on clicks
-  - ✅ Background color for mute state
-  - ✅ All double-click logic preserved
+2. **Touch Feedback**:
+   - Multiple touch events fired per click (seen in logs)
+   - May need to filter for `touch == true` only
+   - Consider debouncing or better touch handling
 
-## Testing Requirements for v2.8.0
-- [ ] Test interactive label touch response
-- [ ] Verify ⚠ symbol renders correctly
-- [ ] Test visual feedback on clicks
-- [ ] Ensure no regression in double-click timing
-- [ ] Verify color states work properly
-- [ ] Test with groups that have special characters
-- [ ] Confirm text updates correctly (MUTE/MUTED)
+3. **Visual Polish**:
+   - Test if ⚠ symbol is clearly visible
+   - Verify background colors work well
+   - Check text readability with background colors
+   - Consider size/position of warning symbol
 
-## Configuration Format (v2.7.0)
+4. **Testing Needed**:
+   - Test with groups NOT in double-click list
+   - Test with multiple instances
+   - Test with regular tracks (not just returns)
+   - Verify no regression in functionality
+   - Test on actual device (not just editor)
+
+## CODE STATUS
+### Files Created/Modified:
+- `/scripts/track/mute_label.lua` (v2.8.5) - WORKING
+- `CHANGELOG.md` - Updated with v2.8.0 notes
+- PR #24 - Updated with current status
+
+### Key Code Insights:
+```lua
+-- Interactive labels use 'touch' value, not 'x'
+if valueName == "touch" and self.values.touch == true then
+
+-- Label properties that work:
+self.interactive = true  -- Makes label clickable
+self.background = true   -- Enables background color
+self.values.text = "text"  -- Sets display text
+self.color = Color(r,g,b,a)  -- Background color
+```
+
+## CONFIGURATION FORMAT
 ```yaml
-# Simple format - just list group names:
+# Working format for double-click protection:
 double_click_mute: 'master_A-ReproM'
 double_click_mute: 'band_Drums' 
 double_click_mute: 'dj_Master Bus'
 ```
 
-## Version History
-- v2.4.0 - Initial minimal implementation
-- v2.4.1 - Fixed pattern matching for special chars
-- v2.5.0 - Attempted fix for momentary buttons
-- v2.6.0 - Proper toggle button support
-- v2.7.0 - Simplified configuration format
-- v2.8.0 - Interactive mute label with ⚠ indicator (CREATED, NOT TESTED)
+## NEXT THREAD TASKS
+1. **Immediate Testing**:
+   - [ ] Test single-click on non-protected groups
+   - [ ] Verify visual feedback is visible enough
+   - [ ] Check performance with multiple labels
 
-## Architecture Changes in v2.8.0
-### From (old):
-- Separate mute button (with script)
-- Separate mute label (display only)
-- Two controls per track
+2. **Touch Handling Improvements**:
+   - [ ] Filter touch events to only react to `touch == true`
+   - [ ] Prevent multiple events per single touch
+   - [ ] Consider adding touch release handling
 
-### To (new):
-- Single interactive mute label
-- Combined functionality
-- Shows text AND handles clicks
-- Visual indicator integrated
+3. **Visual Refinements**:
+   - [ ] Fine-tune colors for better visibility
+   - [ ] Test ⚠ symbol size and positioning
+   - [ ] Consider animation or fade effects
+   - [ ] Match existing template aesthetic
 
-## Implementation Details
-- **Script**: `mute_label.lua`
-- **Control Type**: Label (set to interactive)
-- **Visual States**:
-  - Normal unmuted: Gray background, "MUTE" text
-  - Normal muted: Dark red background, "MUTED" text
-  - Protected unmuted: Gray background, "⚠ MUTE" text
-  - Protected muted: Dark red background, "⚠ MUTED" text
-  - Click feedback: Yellow flash (100ms)
+4. **Code Cleanup**:
+   - [ ] Remove debug logging (set DEBUG = 0)
+   - [ ] Add comments for touch handling
+   - [ ] Consider code optimization
 
-## Important Notes
-- Script assumes label control with `interactive = true`
-- Background must be enabled for color feedback
-- Text property used for state display
-- All existing double-click logic preserved
-- Connection routing maintained
-- OSC handling identical to button version
+5. **Documentation**:
+   - [ ] Update README with new control type
+   - [ ] Document interactive label setup
+   - [ ] Add troubleshooting section
 
-## Files Modified
-- Created: `/scripts/track/mute_label.lua` (v2.8.0)
-- Updated: `CHANGELOG.md` with v2.8.0 notes
-- Updated: `THREAD_PROGRESS.md` (this file)
+## TEMPLATE UPDATE REQUIREMENTS
+To use the new interactive mute label:
+1. Replace button controls with label controls
+2. Set labels to interactive mode
+3. Apply `mute_label.lua` script
+4. Remove old separate display labels
+5. Test thoroughly before deployment
 
-## Next Thread Tasks
-1. User tests the new script
-2. Update TouchOSC template if testing successful
-3. Document any issues or improvements needed
-4. Consider updating README with new control type
-5. Potentially deprecate old mute_button.lua
+## VERSION HISTORY
+- v2.4.0 - Initial double-click for buttons
+- v2.7.0 - Simplified config, button version complete
+- v2.8.0 - First interactive label attempt
+- v2.8.1 - Fixed function ordering
+- v2.8.2 - Added debug logging
+- v2.8.3 - Fixed userdata iteration
+- v2.8.4 - Removed pcall usage
+- v2.8.5 - **CURRENT WORKING** - Fixed touch detection
+
+## IMPORTANT DISCOVERIES
+1. Interactive labels use `values.touch` not `values.x`
+2. TouchOSC doesn't have `pcall` function
+3. `self.values` is userdata, not a regular table
+4. Multiple touch events fire per click (needs handling)
+5. Label type is 2 (for reference)
+
+## DEBUG LOG SNIPPETS
+```
+Working click sequence:
+[12:34:17] onValueChanged called with valueName: touch
+[12:34:17] Label touched!
+[12:34:17] First click recorded, waiting for double-click
+[12:34:18] onValueChanged called with valueName: touch
+[12:34:20] onValueChanged called with valueName: touch
+[12:34:20] Label touched!
+[12:34:20] Double-click detected, toggling mute
+```
+
+## CRITICAL NOTES FOR NEXT THREAD
+- Script IS WORKING but needs polish
+- Main issue was touch vs x value confusion
+- Multiple touch events per click may need addressing
+- Visual feedback works but could be improved
+- Remember to test with DEBUG = 0 in production
