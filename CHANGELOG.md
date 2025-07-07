@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2025-07-07
+
+### Added
+- Double-click mute protection for critical tracks (v2.7.0)
+  - Two-control approach: mute_button.lua + mute_display_label.lua
+  - Configurable per track group via configuration text
+  - Format: `double_click_mute: 'instance_Group Name'` (full group name with instance prefix)
+  - Prevents accidental muting on master bus or critical tracks
+  - Backward compatible - single-click behavior remains default
+  - 500ms double-click window for mute toggle
+  - Visual warning indicator (⚠) on display label for protected tracks
+  - Works with both regular and return tracks
+
+### Changed
+- mute_button.lua updated to v2.7.0 with simplified configuration
+  - Production-ready with solid color support in buttons
+  - Configuration uses full group names for clarity
+- document_script.lua updated to v2.9.0 to support new configuration format
+- README updated with comprehensive double-click mute documentation
+
+### Technical Details
+- Two-control approach chosen due to TouchOSC limitations:
+  - Labels cannot render solid background colors (appear semi-transparent)
+  - Buttons provide essential solid color feedback for mute states
+  - Display labels provide text and warning symbols
+- mute_display_label.lua v1.0.1 added for visual indicators
+- Removed experimental mute_label.lua (combined approach didn't work)
+
 ## [1.3.0] - 2025-07-06
 
 ### Added
@@ -117,6 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Extensive debug logging capabilities
 - Modular script architecture for easy maintenance
 
+[1.5.0]: https://github.com/zbynekdrlik/abl-touchosc/releases/tag/v1.5.0
 [1.3.0]: https://github.com/zbynekdrlik/abl-touchosc/releases/tag/v1.3.0
 [1.2.0]: https://github.com/zbynekdrlik/abl-touchosc/releases/tag/v1.2.0
 [1.1.0]: https://github.com/zbynekdrlik/abl-touchosc/releases/tag/v1.1.0

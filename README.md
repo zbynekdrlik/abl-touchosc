@@ -41,6 +41,7 @@ A professional TouchOSC control surface for Ableton Live with advanced multi-ins
 - Visual-only state indication (no text)
 - Touch detection for responsive control
 - Sends proper boolean values to AbletonOSC
+- **NEW**: Configurable double-click protection for critical tracks (v2.7.0)
 
 #### Pan Control
 - Smooth panning with visual feedback
@@ -86,6 +87,11 @@ connection_master: 3    # Master controls → Ableton instance on connection 3
 # Auto-unfold groups
 unfold_band: 'Band'     # Unfold 'Band' group in band instance
 unfold_master: 'Master' # Unfold 'Master' group in master instance
+
+# Double-click mute protection (optional)
+# IMPORTANT: Each group needs its own line!
+double_click_mute: 'band_Band Tracks'    # Require double-click for 'Band Tracks' group
+double_click_mute: 'master_Master Bus'   # Require double-click for 'Master Bus' group
 ```
 
 5. **Run the template** - tracks will be discovered automatically after 1 second!
@@ -100,8 +106,54 @@ Each track group contains:
 - **Volume Fader**: Professional fader with dB scaling
 - **dB Display**: Current volume in dB with color indication
 - **Level Meter**: Real-time level display with peak colors
-- **Mute Button**: Toggle track mute
+- **Mute Button**: Toggle track mute (with optional double-click protection)
 - **Pan Control**: Stereo positioning
+
+### Double-Click Mute Protection (NEW in v2.7.0)
+
+For critical tracks where accidental muting could be disastrous (like master bus or live performance tracks), you can enable double-click protection:
+
+#### Template Setup (Two-Control Approach)
+
+The double-click mute feature uses two separate controls for optimal visual feedback:
+
+1. **Mute Button Control**:
+   - Type: Button (Toggle mode)
+   - Script: `mute_button.lua` (v2.7.0)
+   - Colors: ON = Red (muted), OFF = Orange (unmuted)
+   - Handles the actual mute logic and double-click detection
+
+2. **Display Label Control**:
+   - Type: Label
+   - Script: `mute_display_label.lua` (v1.0.1)
+   - Position: On or near the button
+   - Shows "MUTE" text with warning symbol (⚠) for protected tracks
+   - Display-only (non-interactive)
+
+#### Configuration
+
+Add configuration for the groups that need protection:
+```yaml
+# IMPORTANT: Each group needs its own line in the configuration!
+# NEW in v2.7.0: Use the full group name (including instance prefix)
+
+double_click_mute: 'band_Band Tracks'      # Band instance, 'Band Tracks' group
+double_click_mute: 'band_Lead Vocals'      # Band instance, 'Lead Vocals' group
+double_click_mute: 'master_Master Bus'     # Master instance, 'Master Bus' group
+```
+
+#### How It Works
+
+- **Groups with double-click enabled** require two clicks within 500ms to toggle mute
+- **Protected tracks show ⚠MUTE⚠** on the display label (visual warning)
+- **Groups without configuration** maintain single-click behavior (backward compatible)
+- **Button provides solid color feedback** (red when muted, orange when unmuted)
+
+#### Why Two Controls?
+
+TouchOSC labels cannot render solid background colors (they appear semi-transparent), making it difficult to show clear mute states. The two-control approach provides:
+- Solid color feedback via button (essential for clear state indication)
+- Text display with warning symbols via label (better visibility)
 
 ### Return Track Setup
 
@@ -139,10 +191,27 @@ Return tracks use the exact same scripts and controls as regular tracks:
 The configuration text control accepts these parameters:
 
 | Parameter | Description | Example |
-|-----------|-------------|---------|
+|-----------|-------------|---------|  
 | connection_[instance] | Map instance to connection number | `connection_band: 2` |
 | unfold_[instance] | Auto-unfold group name for instance | `unfold_band: 'Band'` |
 | unfold | Legacy: unfold on all connections | `unfold: 'Drums'` |
+| double_click_mute | Require double-click for group (v2.7.0+) | `double_click_mute: 'band_Band Tracks'` |
+
+### Configuration Format Rules
+
+⚠️ **IMPORTANT**: Each configuration entry must be on its own line!
+
+✅ **CORRECT** - Each group on separate line:
+```yaml
+double_click_mute: 'band_Drums'
+double_click_mute: 'band_Bass'
+double_click_mute: 'band_Lead Vocal'
+```
+
+❌ **INCORRECT** - Multiple groups on one line (will NOT work):
+```yaml
+double_click_mute: 'band_Drums', 'band_Bass', 'band_Lead Vocal'  # This won't work!
+```
 
 ### Multi-Instance Example
 
@@ -154,6 +223,48 @@ connection_master: 3    # Master mix Ableton
 # Different unfold groups per instance  
 unfold_band: 'Band'
 unfold_master: 'Master'
+
+# Double-click protection for critical tracks
+# Each group needs its own line!
+# NEW: Use full group names (with instance prefix)
+double_click_mute: 'band_Band Tracks'    # Protect band master group
+double_click_mute: 'band_Drums'          # Protect drums
+double_click_mute: 'band_Lead Vocal'     # Protect lead vocals
+double_click_mute: 'master_Master Bus'   # Protect master bus
+double_click_mute: 'master_Limiter'      # Protect final limiter
+```
+
+### Complete Multi-Instance Configuration Example
+
+```yaml
+# Four Ableton instances for live show
+connection_band: 2
+connection_playback: 3
+connection_fx: 4
+connection_broadcast: 5
+
+# Auto-unfold groups
+unfold_band: 'Rhythm Section'
+unfold_band: 'Vocals'              # Yes, you can have multiple unfolds per instance
+unfold_playback: 'Backing Tracks'
+unfold_fx: 'Send Effects'
+unfold_broadcast: 'Stream Mix'
+
+# Double-click protection - v2.7.0 format (full group names)
+double_click_mute: 'band_Drums'
+double_click_mute: 'band_Bass'
+double_click_mute: 'band_Lead Vocal'
+double_click_mute: 'band_Click Track'
+
+double_click_mute: 'playback_Main Playback'
+double_click_mute: 'playback_Timecode'
+double_click_mute: 'playback_Video Sync'
+
+double_click_mute: 'fx_Reverb Send'
+double_click_mute: 'fx_Delay Send'
+
+double_click_mute: 'broadcast_Stream Master'
+double_click_mute: 'broadcast_Broadcast Limiter'
 ```
 
 Both regular tracks and return tracks use the same connection for each instance.
@@ -172,12 +283,13 @@ The system uses a unified script architecture:
 ### Script Versions
 
 | Script | Current Version | Purpose |
-|--------|-----------------|---------|
-| document_script.lua | 2.8.7 | Configuration, group registry, auto-refresh |
+|--------|-----------------|---------|  
+| document_script.lua | 2.9.0 | Configuration, group registry, auto-refresh |
 | group_init.lua | 1.16.2 | Track group with auto-detection and registration |
 | fader_script.lua | 2.5.4 | Volume control with feedback loop prevention |
 | meter_script.lua | 2.5.2 | Level metering with multi-connection support |
-| mute_button.lua | 2.1.4 | Mute control with boolean values |
+| mute_button.lua | 2.7.0 | Mute control with simplified double-click config |
+| mute_display_label.lua | 1.0.1 | Display label with warning symbol for protected tracks |
 | pan_control.lua | 1.5.1 | Pan control unified |
 | db_label.lua | 1.5.0 | dB display with color indicator |
 | db_meter_label.lua | 2.6.2 | Peak meter with multi-connection support |
@@ -194,6 +306,7 @@ The system uses a unified script architecture:
 - **State Machine Design**: Robust state tracking for all controls
 - **Group Registration**: Groups self-register with document script for reliable refresh
 - **Feedback Prevention**: Controls won't echo back when updated from Ableton
+- **Double-Click Detection**: Simplified configuration using full group names (v2.7.0)
 
 ## 🔧 Troubleshooting
 
@@ -212,6 +325,13 @@ The system uses a unified script architecture:
 - Install the [forked AbletonOSC](https://github.com/zbynekdrlik/AbletonOSC)
 - Check return track names match exactly (including "A-", "B-" prefixes)
 - Look for "Mapped to Return Track X" in logs
+
+**Double-click mute not working:**
+- Check each group is on its own line in configuration
+- Group name must match exactly (case-sensitive, including instance prefix)
+- NEW in v2.7.0: Use full group name like `double_click_mute: 'band_Drums'`
+- Enable DEBUG = 1 in mute_button.lua to see detection logs
+- Verify configuration format matches examples exactly
 
 **Controls not responding:**
 - Check connection numbers in configuration
@@ -252,7 +372,7 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 ---
 
-**Current Version**: v1.3.0 - Production ready with all features tested and working perfectly for both regular and return tracks.
+**Current Version**: v1.5.0 - Added double-click mute protection with two-control approach.
 
 For additional documentation:
 - [Technical Documentation](docs/TECHNICAL.md) - Detailed technical information

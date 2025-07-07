@@ -1,9 +1,9 @@
 -- TouchOSC Mute Button Script
--- Version: 2.1.4
--- Fixed: Send boolean values for AbletonOSC (not integers)
+-- Version: 2.7.0
+-- Simplified configuration format for double-click mute
 
 -- Version constant
-local VERSION = "2.1.4"
+local VERSION = "2.7.0"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0  -- Production mode
@@ -12,6 +12,11 @@ local DEBUG = 0  -- Production mode
 local trackNumber = nil
 local trackType = nil  -- "track" or "return"
 local isMuted = false
+
+-- ADDED: Double-click variables
+local lastClickTime = 0
+local requiresDoubleClick = false
+local pendingStateChange = nil  -- Store pending state for double-click
 
 -- ===========================
 -- LOCAL LOGGING
@@ -91,6 +96,29 @@ local function getTrackInfo()
     return nil, nil
 end
 
+-- ADDED: Escape special characters in Lua patterns
+local function escapePattern(str)
+    -- Escape all special pattern characters
+    return str:gsub("([%-%^%$%(%)%%%.%[%]%*%+%?])", "%%%1")
+end
+
+-- UPDATED: Simplified config check - just match the full group name
+local function updateDoubleClickConfig()
+    if self.parent and self.parent.name then
+        local configObj = root:findByName("configuration", true)
+        if configObj and configObj.values and configObj.values.text then
+            -- Escape special characters in group name for pattern matching
+            local escapedName = escapePattern(self.parent.name)
+            -- SIMPLIFIED: Just look for double_click_mute: 'GroupName' (no instance prefix)
+            local searchPattern = "double_click_mute:%s*['\"]?" .. escapedName .. "['\"]?"
+            requiresDoubleClick = configObj.values.text:match(searchPattern) ~= nil
+            log("Double-click required for '" .. self.parent.name .. "': " .. tostring(requiresDoubleClick))
+            return
+        end
+    end
+    requiresDoubleClick = false
+end
+
 -- ===========================
 -- VISUAL STATE MANAGEMENT
 -- ===========================
@@ -166,6 +194,47 @@ function onValueChanged(valueName)
             return
         end
         
+        -- For toggle buttons with double-click protection
+        if requiresDoubleClick then
+            local currentTime = getMillis()
+            
+            if pendingStateChange == nil then
+                -- First click - store the pending state and revert button
+                pendingStateChange = self.values.x
+                lastClickTime = currentTime
+                
+                -- Revert button to match actual mute state
+                self.values.x = isMuted and 0 or 1
+                
+                log("First click recorded, waiting for double-click")
+                return
+            else
+                -- Check if this is within double-click window
+                if currentTime - lastClickTime <= 500 then
+                    -- Double-click detected! Apply the change
+                    log("Double-click detected, toggling mute")
+                    
+                    -- Let the button state change go through
+                    -- (it already changed, we don't revert it)
+                    
+                    -- Clear pending state
+                    pendingStateChange = nil
+                    lastClickTime = 0
+                else
+                    -- Too slow - treat as new first click
+                    pendingStateChange = self.values.x
+                    lastClickTime = currentTime
+                    
+                    -- Revert button to match actual mute state
+                    self.values.x = isMuted and 0 or 1
+                    
+                    log("Too slow, treating as new first click")
+                    return
+                end
+            end
+        end
+        
+        -- Normal processing (single-click mode or double-click confirmed)
         -- Get connection configuration
         local connectionIndex = getConnectionIndex()
         local connections = buildConnectionTable(connectionIndex)
@@ -173,9 +242,7 @@ function onValueChanged(valueName)
         -- Determine OSC path based on track type
         local path = trackType == "return" and '/live/return/set/mute' or '/live/track/set/mute'
         
-        -- IMPORTANT: Send boolean value, not integer!
-        -- x=0 (pressed) -> send true (mute on)
-        -- x=1 (released) -> send false (mute off)
+        -- For toggle buttons, x=0 means muted, x=1 means unmuted
         local muteValue = (self.values.x == 0)
         
         -- Update internal state
@@ -200,6 +267,9 @@ function onReceiveNotify(key, value)
         -- Reset mute state when track changes
         isMuted = false
         updateVisualState()
+        updateDoubleClickConfig()  -- ADDED: Update config when track changes
+        pendingStateChange = nil  -- Reset double-click state
+        lastClickTime = 0
     elseif key == "track_type" then
         trackType = value
     elseif key == "track_unmapped" then
@@ -207,6 +277,9 @@ function onReceiveNotify(key, value)
         trackType = nil
         isMuted = false
         updateVisualState()
+        requiresDoubleClick = false  -- ADDED: Reset double-click
+        pendingStateChange = nil
+        lastClickTime = 0
     end
 end
 
@@ -225,6 +298,8 @@ function init()
     else
         log("No track assigned at init")
     end
+    
+    updateDoubleClickConfig()  -- ADDED: Check config at init
     
     -- Set initial visual state
     updateVisualState()
