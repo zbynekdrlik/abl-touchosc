@@ -113,19 +113,47 @@ Each track group contains:
 
 For critical tracks where accidental muting could be disastrous (like master bus or live performance tracks), you can enable double-click protection:
 
-1. **Add configuration** for the groups that need protection:
-   ```yaml
-   # IMPORTANT: Each group needs its own line in the configuration!
-   # NEW in v2.7.0: Use the full group name (including instance prefix)
-   
-   double_click_mute: 'band_Band Tracks'      # Band instance, 'Band Tracks' group
-   double_click_mute: 'band_Lead Vocals'      # Band instance, 'Lead Vocals' group
-   double_click_mute: 'master_Master Bus'     # Master instance, 'Master Bus' group
-   ```
+#### Template Setup (Two-Control Approach)
 
-2. **Groups with double-click enabled** require two clicks within 500ms to toggle mute
+The double-click mute feature uses two separate controls for optimal visual feedback:
 
-3. **Groups without configuration** maintain single-click behavior (backward compatible)
+1. **Mute Button Control**:
+   - Type: Button (Toggle mode)
+   - Script: `mute_button.lua` (v2.7.0)
+   - Colors: ON = Red (muted), OFF = Orange (unmuted)
+   - Handles the actual mute logic and double-click detection
+
+2. **Display Label Control**:
+   - Type: Label
+   - Script: `mute_display_label.lua` (v1.0.1)
+   - Position: On or near the button
+   - Shows "MUTE" text with warning symbol (⚠) for protected tracks
+   - Display-only (non-interactive)
+
+#### Configuration
+
+Add configuration for the groups that need protection:
+```yaml
+# IMPORTANT: Each group needs its own line in the configuration!
+# NEW in v2.7.0: Use the full group name (including instance prefix)
+
+double_click_mute: 'band_Band Tracks'      # Band instance, 'Band Tracks' group
+double_click_mute: 'band_Lead Vocals'      # Band instance, 'Lead Vocals' group
+double_click_mute: 'master_Master Bus'     # Master instance, 'Master Bus' group
+```
+
+#### How It Works
+
+- **Groups with double-click enabled** require two clicks within 500ms to toggle mute
+- **Protected tracks show ⚠MUTE⚠** on the display label (visual warning)
+- **Groups without configuration** maintain single-click behavior (backward compatible)
+- **Button provides solid color feedback** (red when muted, orange when unmuted)
+
+#### Why Two Controls?
+
+TouchOSC labels cannot render solid background colors (they appear semi-transparent), making it difficult to show clear mute states. The two-control approach provides:
+- Solid color feedback via button (essential for clear state indication)
+- Text display with warning symbols via label (better visibility)
 
 ### Return Track Setup
 
@@ -163,7 +191,7 @@ Return tracks use the exact same scripts and controls as regular tracks:
 The configuration text control accepts these parameters:
 
 | Parameter | Description | Example |
-|-----------|-------------|---------|
+|-----------|-------------|---------|  
 | connection_[instance] | Map instance to connection number | `connection_band: 2` |
 | unfold_[instance] | Auto-unfold group name for instance | `unfold_band: 'Band'` |
 | unfold | Legacy: unfold on all connections | `unfold: 'Drums'` |
@@ -255,12 +283,13 @@ The system uses a unified script architecture:
 ### Script Versions
 
 | Script | Current Version | Purpose |
-|--------|-----------------|---------|
+|--------|-----------------|---------|  
 | document_script.lua | 2.9.0 | Configuration, group registry, auto-refresh |
 | group_init.lua | 1.16.2 | Track group with auto-detection and registration |
 | fader_script.lua | 2.5.4 | Volume control with feedback loop prevention |
 | meter_script.lua | 2.5.2 | Level metering with multi-connection support |
 | mute_button.lua | 2.7.0 | Mute control with simplified double-click config |
+| mute_display_label.lua | 1.0.1 | Display label with warning symbol for protected tracks |
 | pan_control.lua | 1.5.1 | Pan control unified |
 | db_label.lua | 1.5.0 | dB display with color indicator |
 | db_meter_label.lua | 2.6.2 | Peak meter with multi-connection support |
@@ -343,7 +372,7 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file for
 
 ---
 
-**Current Version**: v1.4.1 - Simplified double-click mute configuration format.
+**Current Version**: v1.5.0 - Added double-click mute protection with two-control approach.
 
 For additional documentation:
 - [Technical Documentation](docs/TECHNICAL.md) - Detailed technical information
