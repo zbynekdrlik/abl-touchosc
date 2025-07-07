@@ -1,9 +1,9 @@
 -- TouchOSC Interactive Mute Label Script
--- Version: 2.8.0
+-- Version: 2.8.1
 -- Combined mute button and label with visual indicator for double-click protection
 
 -- Version constant
-local VERSION = "2.8.0"
+local VERSION = "2.8.1"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0  -- Production mode
@@ -36,6 +36,12 @@ local function log(message)
         print("[" .. os.date("%H:%M:%S") .. "] " .. context .. ": " .. message)
     end
 end
+
+-- ===========================
+-- FORWARD DECLARATIONS
+-- ===========================
+
+local updateLabelText  -- Forward declaration to avoid ordering issues
 
 -- ===========================
 -- CONNECTION HELPERS
@@ -132,7 +138,8 @@ end
 -- VISUAL STATE MANAGEMENT
 -- ===========================
 
-local function updateLabelText()
+-- Update label text based on state
+updateLabelText = function()
     -- Update text with optional warning symbol
     local prefix = requiresDoubleClick and "⚠ " or ""
     local state = isMuted and "MUTED" or "MUTE"
