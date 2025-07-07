@@ -394,9 +394,6 @@ end
 function onReceiveNotify(action)
     if action == "refresh" or action == "refresh_tracks" then
         refreshTrackMapping()
-    elseif action == "prepare_refresh" then
-        -- Just set the flag - document script will send track names
-        needsRefresh = true
     elseif action == "clear_mapping" then
         -- Clear listeners
         clearListeners()

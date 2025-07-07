@@ -182,11 +182,12 @@ function completeRefreshSequence()
         status.values.text = "Refreshing..."
     end
     
-    -- First, notify all groups to prepare for refresh (sets needsRefresh flag)
+    -- Notify all groups to prepare for refresh
+    -- This sets their needsRefresh flag so they'll process incoming track names
     for name, group in pairs(trackGroups) do
         -- Verify group still exists and is valid
         if group and group.notify then
-            group:notify("prepare_refresh")
+            group:notify("refresh_tracks")
         end
     end
     
