@@ -22,21 +22,15 @@ local configText = nil
 -- Store track group references
 local trackGroups = {}
 
--- Track names cache per connection
-local trackNamesCache = {}  -- [connectionIndex] = {regular = {...}, returns = {...}}
-
 -- Startup tracking
 local startupRefreshTime = nil
 local frameCount = 0
 local STARTUP_DELAY_FRAMES = 60  -- Wait 1 second (60 frames at 60fps)
 
 -- Refresh state tracking
-local refreshState = "idle"  -- idle, clearing, waiting, querying, distributing
+local refreshState = "idle"  -- idle, clearing, waiting, refreshing
 local refreshWaitStart = 0
 local REFRESH_WAIT_TIME = 100  -- 100ms delay between clear and refresh
-local queriedConnections = {}  -- Track which connections we've queried
-local receivedTrackNames = {}  -- Track which connections have responded
-local receivedReturnNames = {}  -- Track which connections have responded for returns
 
 -- === LOCAL LOGGING FUNCTION ===
 local function log(message)
@@ -178,23 +172,25 @@ function startRefreshSequence()
     end
 end
 
--- === QUERY TRACK NAMES FROM ALL CONNECTIONS ===
-function queryTrackNames()
-    log("=== QUERYING TRACK NAMES ===")
+-- === COMPLETE REFRESH AFTER DELAY ===
+function completeRefreshSequence()
+    log("=== COMPLETING REFRESH ===")
     
     -- Update status
     local status = root:findByName("global_status")
     if status then
-        status.values.text = "Querying..."
+        status.values.text = "Refreshing..."
     end
     
-    -- Clear tracking tables
-    queriedConnections = {}
-    receivedTrackNames = {}
-    receivedReturnNames = {}
-    trackNamesCache = {}
+    -- First, notify all groups to prepare for refresh (sets needsRefresh flag)
+    for name, group in pairs(trackGroups) do
+        -- Verify group still exists and is valid
+        if group and group.notify then
+            group:notify("prepare_refresh")
+        end
+    end
     
-    -- Query each unique connection
+    -- Query track names once per connection
     local uniqueConnections = {}
     for instance, connIndex in pairs(config.connections) do
         if not uniqueConnections[connIndex] then
@@ -210,7 +206,6 @@ function queryTrackNames()
             sendOSC('/live/song/get/track_names', connections)
             sendOSC('/live/song/get/return_track_names', connections)
             
-            queriedConnections[connIndex] = true
             log("Queried connection " .. connIndex)
         end
     end
@@ -220,49 +215,8 @@ function queryTrackNames()
         local connections = {true, false, false, false, false, false, false, false, false, false}
         sendOSC('/live/song/get/track_names', connections)
         sendOSC('/live/song/get/return_track_names', connections)
-        queriedConnections[1] = true
         log("Queried default connection 1")
     end
-    
-    -- Set state to wait for responses
-    refreshState = "querying"
-end
-
--- === CHECK IF ALL QUERIES COMPLETE ===
-function checkQueriesComplete()
-    -- Check if we've received both regular and return names for all queried connections
-    for connIndex, _ in pairs(queriedConnections) do
-        if not receivedTrackNames[connIndex] or not receivedReturnNames[connIndex] then
-            return false
-        end
-    end
-    return true
-end
-
--- === DISTRIBUTE TRACK NAMES TO GROUPS ===
-function distributeTrackNames()
-    log("=== DISTRIBUTING TRACK NAMES ===")
-    
-    -- Update status
-    local status = root:findByName("global_status")
-    if status then
-        status.values.text = "Distributing..."
-    end
-    
-    -- Distribute to all groups
-    local groupCount = 0
-    for name, group in pairs(trackGroups) do
-        -- Verify group still exists and is valid
-        if group and group.notify then
-            group:notify("track_names_available", trackNamesCache)
-            groupCount = groupCount + 1
-        else
-            -- Remove invalid reference
-            trackGroups[name] = nil
-        end
-    end
-    
-    log("Distributed to " .. groupCount .. " groups")
     
     -- Update status
     if status then
@@ -271,14 +225,6 @@ function distributeTrackNames()
     
     -- Reset state
     refreshState = "idle"
-end
-
--- === COMPLETE REFRESH AFTER DELAY ===
-function completeRefreshSequence()
-    log("=== COMPLETING REFRESH ===")
-    
-    -- Instead of telling groups to refresh individually, query track names centrally
-    queryTrackNames()
 end
 
 -- === GLOBAL HELPER FUNCTIONS ===
@@ -309,12 +255,6 @@ function update()
             refreshState = "refreshing"
             completeRefreshSequence()
         end
-    elseif refreshState == "querying" then
-        -- Check if all queries are complete
-        if checkQueriesComplete() then
-            refreshState = "distributing"
-            distributeTrackNames()
-        end
     end
     
     -- Count frames since startup
@@ -336,9 +276,6 @@ function init()
     -- Clear track groups table
     trackGroups = {}
     
-    -- Clear caches
-    trackNamesCache = {}
-    
     -- Try to parse configuration
     parseConfiguration()
     
@@ -356,10 +293,9 @@ end
 -- === OSC RECEIVE HANDLER ===
 function onReceiveOSC(message, connections)
     local arguments = message[2]
-    local path = message[1]
     
-    -- Handle track names for caching and unfolding
-    if path == '/live/song/get/track_names' then
+    -- Handle track names for unfolding
+    if message[1] == '/live/song/get/track_names' then
         -- Determine which connection this came from
         local sourceConnection = nil
         for i = 1, #connections do
@@ -367,24 +303,6 @@ function onReceiveOSC(message, connections)
                 sourceConnection = i
                 break
             end
-        end
-        
-        if sourceConnection then
-            -- Cache the track names
-            if not trackNamesCache[sourceConnection] then
-                trackNamesCache[sourceConnection] = {}
-            end
-            
-            trackNamesCache[sourceConnection].regular = {}
-            if arguments then
-                for i = 1, #arguments do
-                    trackNamesCache[sourceConnection].regular[i-1] = arguments[i].value
-                end
-            end
-            
-            -- Mark as received
-            receivedTrackNames[sourceConnection] = true
-            log("Cached regular track names from connection " .. sourceConnection)
         end
         
         -- Find which instance this connection belongs to
@@ -399,22 +317,20 @@ function onReceiveOSC(message, connections)
         -- Count unfolds for this instance
         local unfoldedCount = 0
         
-        if arguments then
-            for i = 1, #arguments do
-                local track_index = i - 1
-                local track_name = arguments[i].value
-                
-                -- Check against configured unfold groups
-                for _, unfold_config in ipairs(config.unfold_groups) do
-                    if track_name == unfold_config.group_name then
-                        -- Check if this unfold should apply to this instance
-                        if unfold_config.instance == "all" or unfold_config.instance == sourceInstance then
-                            -- Only send unfold if we have a known source
-                            if sourceConnection and sourceInstance then
-                                local targetConnections = createConnectionTable(sourceConnection)
-                                sendOSC('/live/track/set/fold_state', track_index, false, targetConnections)
-                                unfoldedCount = unfoldedCount + 1
-                            end
+        for i = 1, #arguments do
+            local track_index = i - 1
+            local track_name = arguments[i].value
+            
+            -- Check against configured unfold groups
+            for _, unfold_config in ipairs(config.unfold_groups) do
+                if track_name == unfold_config.group_name then
+                    -- Check if this unfold should apply to this instance
+                    if unfold_config.instance == "all" or unfold_config.instance == sourceInstance then
+                        -- Only send unfold if we have a known source
+                        if sourceConnection and sourceInstance then
+                            local targetConnections = createConnectionTable(sourceConnection)
+                            sendOSC('/live/track/set/fold_state', track_index, false, targetConnections)
+                            unfoldedCount = unfoldedCount + 1
                         end
                     end
                 end
@@ -424,35 +340,6 @@ function onReceiveOSC(message, connections)
         -- Log summary instead of details
         if unfoldedCount > 0 then
             log("Unfolded " .. unfoldedCount .. " groups on " .. (sourceInstance or "unknown"))
-        end
-    
-    -- Handle return track names for caching
-    elseif path == '/live/song/get/return_track_names' then
-        -- Determine which connection this came from
-        local sourceConnection = nil
-        for i = 1, #connections do
-            if connections[i] then
-                sourceConnection = i
-                break
-            end
-        end
-        
-        if sourceConnection then
-            -- Cache the return track names
-            if not trackNamesCache[sourceConnection] then
-                trackNamesCache[sourceConnection] = {}
-            end
-            
-            trackNamesCache[sourceConnection].returns = {}
-            if arguments then
-                for i = 1, #arguments do
-                    trackNamesCache[sourceConnection].returns[i-1] = arguments[i].value
-                end
-            end
-            
-            -- Mark as received
-            receivedReturnNames[sourceConnection] = true
-            log("Cached return track names from connection " .. sourceConnection)
         end
     end
     
