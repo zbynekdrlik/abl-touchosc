@@ -1,12 +1,12 @@
 -- TouchOSC Interactive Mute Label Script
--- Version: 2.8.1
+-- Version: 2.8.2
 -- Combined mute button and label with visual indicator for double-click protection
 
 -- Version constant
-local VERSION = "2.8.1"
+local VERSION = "2.8.2"
 
 -- Debug flag - set to 1 to enable logging
-local DEBUG = 0  -- Production mode
+local DEBUG = 1  -- Enable debug to troubleshoot
 
 -- State variables
 local trackNumber = nil
@@ -223,9 +223,12 @@ end
 -- ===========================
 
 function onValueChanged(valueName)
-    -- Interactive labels use 'x' value for touch detection
-    if valueName == "x" then
-        log("Label touched")
+    -- Debug: Log all value changes to see what's happening
+    log("onValueChanged called with valueName: " .. tostring(valueName) .. ", value: " .. tostring(self.values[valueName]))
+    
+    -- Interactive labels might use 'x' or 'touch' value for detection
+    if valueName == "x" or valueName == "touch" then
+        log("Label touched! valueName: " .. valueName)
         
         -- Check if track is mapped
         if not trackNumber or not trackType then
@@ -366,6 +369,18 @@ function init()
     -- Set label properties
     self.interactive = true  -- Make label clickable
     self.background = true   -- Enable background
+    
+    -- Debug: Log current state
+    log("Label interactive: " .. tostring(self.interactive))
+    log("Label background: " .. tostring(self.background))
+    
+    -- Debug: Check what values exist
+    if self.values then
+        log("Available values:")
+        for k, v in pairs(self.values) do
+            log("  " .. tostring(k) .. " = " .. tostring(v))
+        end
+    end
     
     updateDoubleClickConfig()
     
