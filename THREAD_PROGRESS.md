@@ -2,49 +2,43 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Double-click feature WORKING with v2.7.0
-- [x] Simplified configuration format implemented
-- [ ] Need to add visual indicator for double-click mode
-- [ ] Planning to convert mute button to interactive label
-- **User wants**: ⚠ symbol and single interactive label instead of button+label
+- [x] Interactive mute label script created (v2.8.0)
+- [ ] Need to test the new mute_label.lua script in TouchOSC
+- [ ] Update TouchOSC template to use interactive labels instead of buttons
+- [ ] Test visual feedback and ⚠ symbol display
+- **User needs to**: Test the new script and provide feedback on implementation
 
-## NEXT IMPLEMENTATION PLAN: v2.8.0
-### Goal: Visual Indicator + Interactive Label
-1. **Visual Indicator**: Use ⚠ warning symbol for double-click protected buttons
-2. **Architecture Change**: Convert from button + label to single interactive label
-   - Current: Separate mute button + mute label
-   - New: Single interactive label that acts as button
-   - Benefits: Simpler, one object instead of two
+## NEXT STEPS
+1. **User Testing Required**:
+   - Apply mute_label.lua script to a label control in TouchOSC
+   - Set label to interactive mode
+   - Test single-click and double-click behavior
+   - Verify ⚠ symbol appears for protected groups
+   - Check visual feedback (colors, flash on click)
 
-### Implementation Steps for v2.8.0:
-1. Create new `mute_label.lua` script that combines functionality:
-   - Interactive label with button behavior
-   - Shows mute state visually (color/background)
-   - Displays ⚠ symbol when double-click enabled
-   - Handles all click detection and state management
+2. **Template Update**:
+   - Replace mute buttons with interactive labels
+   - Apply new mute_label.lua script
+   - Test with various group names (including special characters)
 
-2. Update group template:
-   - Remove separate mute button
-   - Convert mute label to interactive
-   - Apply new script
+## IMPLEMENTATION STATUS: v2.8.0 CREATED
+- **Current Version**: v2.8.0 - Script created, needs testing
+- **What's New**:
+  - ✅ Interactive mute label script created
+  - ✅ Shows ⚠ warning symbol when double-click enabled
+  - ✅ Visual feedback with color changes
+  - ✅ Yellow flash on clicks
+  - ✅ Background color for mute state
+  - ✅ All double-click logic preserved
 
-3. Visual Design:
-   ```
-   Normal mode:        [  MUTE  ]  (no symbol)
-   Double-click mode:  [ ⚠ MUTE ]  (with warning)
-   
-   When muted:         Background color change
-   First click:        Brief flash/feedback
-   ```
-
-## FEATURE STATUS: v2.7.0 COMPLETE
-- **Current Version**: v2.7.0 - FULLY FUNCTIONAL
-- **What Works**:
-  - ✅ Double-click detection and blocking
-  - ✅ Pattern matching with special characters
-  - ✅ Toggle button behavior correct
-  - ✅ Simplified configuration format
-  - ✅ Multi-instance support
+## Testing Requirements for v2.8.0
+- [ ] Test interactive label touch response
+- [ ] Verify ⚠ symbol renders correctly
+- [ ] Test visual feedback on clicks
+- [ ] Ensure no regression in double-click timing
+- [ ] Verify color states work properly
+- [ ] Test with groups that have special characters
+- [ ] Confirm text updates correctly (MUTE/MUTED)
 
 ## Configuration Format (v2.7.0)
 ```yaml
@@ -59,44 +53,47 @@ double_click_mute: 'dj_Master Bus'
 - v2.4.1 - Fixed pattern matching for special chars
 - v2.5.0 - Attempted fix for momentary buttons
 - v2.6.0 - Proper toggle button support
-- v2.7.0 - Simplified configuration format (CURRENT)
-- v2.8.0 - (PLANNED) Visual indicator + interactive label
+- v2.7.0 - Simplified configuration format
+- v2.8.0 - Interactive mute label with ⚠ indicator (CREATED, NOT TESTED)
 
-## Testing Requirements for v2.8.0
-- Test interactive label touch response
-- Verify ⚠ symbol renders correctly
-- Test visual feedback on clicks
-- Ensure no regression in double-click timing
-- Verify color states work properly
+## Architecture Changes in v2.8.0
+### From (old):
+- Separate mute button (with script)
+- Separate mute label (display only)
+- Two controls per track
 
-## Architecture Benefits of Interactive Label
-1. **Simpler**: One object instead of two
-2. **Cleaner**: No alignment issues between button and label
-3. **More Space**: Can show both text and symbol
-4. **Better Visual**: Can use background color for state
+### To (new):
+- Single interactive mute label
+- Combined functionality
+- Shows text AND handles clicks
+- Visual indicator integrated
 
-## Implementation Notes
-- Label needs touch handling
-- Must preserve all current functionality
-- Color feedback for mute state
-- ⚠ symbol positioning (prefix or suffix)
-- Consider font size for symbol visibility
-
-## Current Working Example
-```lua
--- Current search pattern in v2.7.0:
-local searchPattern = "double_click_mute:%s*['\"]?" .. escapedName .. "['\"]?"
-```
-
-## Next Thread Tasks
-1. Implement interactive mute label with ⚠ indicator
-2. Test thoroughly
-3. Update all groups to use new control
-4. Update documentation
-5. Release as v2.8.0
+## Implementation Details
+- **Script**: `mute_label.lua`
+- **Control Type**: Label (set to interactive)
+- **Visual States**:
+  - Normal unmuted: Gray background, "MUTE" text
+  - Normal muted: Dark red background, "MUTED" text
+  - Protected unmuted: Gray background, "⚠ MUTE" text
+  - Protected muted: Dark red background, "⚠ MUTED" text
+  - Click feedback: Yellow flash (100ms)
 
 ## Important Notes
-- Feature is FULLY WORKING in v2.7.0
-- Next step is visual improvement only
-- No functional changes to double-click logic
-- Will improve user experience with clear visual indicator
+- Script assumes label control with `interactive = true`
+- Background must be enabled for color feedback
+- Text property used for state display
+- All existing double-click logic preserved
+- Connection routing maintained
+- OSC handling identical to button version
+
+## Files Modified
+- Created: `/scripts/track/mute_label.lua` (v2.8.0)
+- Updated: `CHANGELOG.md` with v2.8.0 notes
+- Updated: `THREAD_PROGRESS.md` (this file)
+
+## Next Thread Tasks
+1. User tests the new script
+2. Update TouchOSC template if testing successful
+3. Document any issues or improvements needed
+4. Consider updating README with new control type
+5. Potentially deprecate old mute_button.lua
