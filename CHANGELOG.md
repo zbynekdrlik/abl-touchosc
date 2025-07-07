@@ -8,18 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Double-click mute protection for critical tracks (v2.4.0)
+- Interactive mute label with visual warning indicator (v2.8.0)
+  - New `mute_label.lua` script combining button and label functionality
+  - Shows ⚠ warning symbol when double-click protection is enabled
+  - Single interactive control instead of separate button+label
+  - Visual feedback with color changes for mute state
+  - Yellow flash feedback on clicks for better user experience
+  - Background color indicates mute state (dark red = muted, gray = unmuted)
+  - Maintains all existing double-click protection functionality
+
+### Changed
+- Double-click mute protection for critical tracks (v2.4.0-v2.7.0)
   - Configurable per track group via configuration text
-  - Format: `double_click_mute_[instance]: 'Group Name'` (instance-specific only)
+  - Simplified format: `double_click_mute: 'Group Name'` (v2.7.0)
   - Prevents accidental muting on master bus or critical tracks
   - Backward compatible - single-click behavior remains default
   - 500ms double-click window for mute toggle
   - Works with both regular and return tracks
-  - Minimal implementation - only 15 lines added to preserve original behavior
-
-### Changed
-- mute_button.lua updated to v2.4.0 with minimal double-click detection
-- Configuration checked and cached for performance
+- mute_button.lua updated through v2.7.0 with simplified configuration
+- Configuration checked with proper pattern escaping for special characters
 - document_script.lua updated to v2.9.0 to support new configuration format
 - README updated with double-click mute documentation
 
