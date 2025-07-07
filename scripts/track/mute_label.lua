@@ -1,12 +1,12 @@
 -- TouchOSC Interactive Mute Label Script
--- Version: 2.8.4
+-- Version: 2.8.5
 -- Combined mute button and label with visual indicator for double-click protection
 
 -- Version constant
-local VERSION = "2.8.4"
+local VERSION = "2.8.5"
 
 -- Debug flag - set to 1 to enable logging
-local DEBUG = 1  -- Enable debug to troubleshoot
+local DEBUG = 0  -- Production mode
 
 -- State variables
 local trackNumber = nil
@@ -223,17 +223,12 @@ end
 -- ===========================
 
 function onValueChanged(valueName)
-    -- Debug: Log all value changes to see what's happening
+    -- Debug: Log all value changes
     log("onValueChanged called with valueName: " .. tostring(valueName))
     
-    -- Try to log the actual value if accessible
-    if self.values and self.values[valueName] ~= nil then
-        log("  Value: " .. tostring(self.values[valueName]))
-    end
-    
-    -- Interactive labels might use 'x' or 'touch' value for detection
-    if valueName == "x" or valueName == "touch" then
-        log("Label touched! valueName: " .. valueName)
+    -- CRITICAL FIX: Interactive labels use 'touch' value, not 'x'!
+    if valueName == "touch" and self.values.touch == true then
+        log("Label touched!")
         
         -- Check if track is mapped
         if not trackNumber or not trackType then
@@ -374,28 +369,6 @@ function init()
     -- Set label properties
     self.interactive = true  -- Make label clickable
     self.background = true   -- Enable background
-    
-    -- Debug: Log current state
-    log("Label interactive: " .. tostring(self.interactive))
-    log("Label background: " .. tostring(self.background))
-    log("Label type: " .. tostring(self.type))
-    
-    -- Debug: Check specific values we know about
-    log("Checking known values:")
-    if self.values then
-        -- Check text value
-        if self.values.text ~= nil then
-            log("  values.text = " .. tostring(self.values.text))
-        end
-        -- Check x value
-        if self.values.x ~= nil then
-            log("  values.x = " .. tostring(self.values.x))
-        end
-        -- Check touch value  
-        if self.values.touch ~= nil then
-            log("  values.touch = " .. tostring(self.values.touch))
-        end
-    end
     
     updateDoubleClickConfig()
     
