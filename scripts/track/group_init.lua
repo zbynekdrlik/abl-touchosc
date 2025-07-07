@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.16.4
--- Changed: Simplified interactivity - only set fader, mute, pan as interactive
+-- Version: 1.17.0
+-- Changed: Receive track names from document script to prevent duplicate queries
 
 -- Version constant
-local SCRIPT_VERSION = "1.16.4"
+local SCRIPT_VERSION = "1.17.0"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -176,6 +176,106 @@ local function notifyChildren(event, value)
     end
 end
 
+-- Process track names received from document script
+local function processTrackNames(trackNamesCache)
+    if not trackNamesCache or not trackNamesCache[connectionIndex] then
+        log("No track names for connection " .. connectionIndex)
+        setGroupEnabled(false)
+        trackNumber = nil
+        trackType = nil
+        needsRefresh = false
+        return
+    end
+    
+    local connectionData = trackNamesCache[connectionIndex]
+    
+    -- Check regular tracks first
+    if connectionData.regular then
+        for trackIndex, trackNameValue in pairs(connectionData.regular) do
+            if trackNameValue == trackName then
+                -- Found our track as a regular track
+                trackNumber = trackIndex
+                trackType = "track"
+                lastVerified = getMillis()
+                trackMapped = true
+                needsRefresh = false
+                
+                log("Mapped to track " .. trackNumber)
+                
+                setGroupEnabled(true)
+                
+                -- Store combined info in tag
+                self.tag = instance .. ":" .. trackNumber .. ":track"
+                
+                -- Notify children
+                notifyChildren("track_changed", trackNumber)
+                notifyChildren("track_type", trackType)
+                
+                -- Build connection table for our specific connection
+                local targetConnections = buildConnectionTable(connectionIndex)
+                
+                -- Start listeners for regular track
+                sendOSC('/live/track/start_listen/volume', trackNumber, targetConnections)
+                sendOSC('/live/track/start_listen/output_meter_level', trackNumber, targetConnections)
+                sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
+                sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
+                
+                listenersActive = true
+                
+                return
+            end
+        end
+    end
+    
+    -- Check return tracks if not found in regular tracks
+    if connectionData.returns then
+        for returnIndex, returnNameValue in pairs(connectionData.returns) do
+            if returnNameValue == trackName then
+                -- Found our track as a return track
+                trackNumber = returnIndex
+                trackType = "return"
+                lastVerified = getMillis()
+                trackMapped = true
+                needsRefresh = false
+                
+                log("Mapped to return " .. trackNumber)
+                
+                setGroupEnabled(true)
+                
+                -- Store combined info in tag
+                self.tag = instance .. ":" .. trackNumber .. ":return"
+                
+                -- Notify children
+                notifyChildren("track_changed", trackNumber)
+                notifyChildren("track_type", trackType)
+                
+                -- Build connection table for our specific connection
+                local targetConnections = buildConnectionTable(connectionIndex)
+                
+                -- Start listeners for return track
+                sendOSC('/live/return/start_listen/volume', trackNumber, targetConnections)
+                sendOSC('/live/return/start_listen/output_meter_level', trackNumber, targetConnections)
+                sendOSC('/live/return/start_listen/mute', trackNumber, targetConnections)
+                sendOSC('/live/return/start_listen/panning', trackNumber, targetConnections)
+                
+                listenersActive = true
+                
+                return
+            end
+        end
+    end
+    
+    -- Track not found
+    log("Track not found: " .. trackName)
+    setGroupEnabled(false)
+    trackNumber = nil
+    trackType = nil
+    needsRefresh = false
+    
+    -- Notify children
+    notifyChildren("track_unmapped", nil)
+end
+
 function init()
     -- Set tag programmatically
     self.tag = "trackGroup"
@@ -240,12 +340,8 @@ function refreshTrackMapping()
     trackNumber = nil
     trackType = nil
     
-    -- Build connection table for our specific connection
-    local connections = buildConnectionTable(connectionIndex)
-    
-    -- Query both regular tracks and return tracks
-    sendOSC('/live/song/get/track_names', connections)
-    sendOSC('/live/song/get/return_track_names', connections)
+    -- No longer query directly - wait for track names from document script
+    log("Waiting for track names from document script")
 end
 
 function onReceiveOSC(message, connections)
@@ -272,132 +368,18 @@ function onReceiveOSC(message, connections)
         end
     end
     
-    -- Check if this is track names response (regular tracks)
-    if path == '/live/song/get/track_names' then
-        -- Only process if it's from our configured connection
-        if not connections[connectionIndex] then 
-            return true
-        end
-        
-        if needsRefresh then
-            local arguments = message[2]
-            
-            if arguments then
-                for i = 1, #arguments do
-                    if arguments[i] and arguments[i].value then
-                        local trackNameValue = arguments[i].value
-                        
-                        -- EXACT match only for safety
-                        if trackNameValue == trackName then
-                            -- Found our track as a regular track
-                            trackNumber = i - 1
-                            trackType = "track"
-                            lastVerified = getMillis()
-                            trackMapped = true
-                            needsRefresh = false  -- Found it, stop searching
-                            
-                            log("Mapped to track " .. trackNumber)
-                            
-                            setGroupEnabled(true)
-                            
-                            -- Store combined info in tag
-                            self.tag = instance .. ":" .. trackNumber .. ":track"
-                            
-                            -- Notify children
-                            notifyChildren("track_changed", trackNumber)
-                            notifyChildren("track_type", trackType)
-                            
-                            -- Build connection table for our specific connection
-                            local targetConnections = buildConnectionTable(connectionIndex)
-                            
-                            -- Start listeners for regular track
-                            sendOSC('/live/track/start_listen/volume', trackNumber, targetConnections)
-                            sendOSC('/live/track/start_listen/output_meter_level', trackNumber, targetConnections)
-                            sendOSC('/live/track/start_listen/mute', trackNumber, targetConnections)
-                            sendOSC('/live/track/start_listen/panning', trackNumber, targetConnections)
-                            
-                            listenersActive = true
-                            
-                            return true
-                        end
-                    end
-                end
-            end
-        end
-    end
-    
-    -- Check if this is return track names response
-    if path == '/live/song/get/return_track_names' then
-        -- Only process if it's from our configured connection
-        if not connections[connectionIndex] then 
-            return true
-        end
-        
-        if needsRefresh then
-            local arguments = message[2]
-            
-            if arguments then
-                for i = 1, #arguments do
-                    if arguments[i] and arguments[i].value then
-                        local returnNameValue = arguments[i].value
-                        
-                        -- EXACT match only for safety
-                        if returnNameValue == trackName then
-                            -- Found our track as a return track
-                            trackNumber = i - 1
-                            trackType = "return"
-                            lastVerified = getMillis()
-                            trackMapped = true
-                            needsRefresh = false
-                            
-                            log("Mapped to return " .. trackNumber)
-                            
-                            setGroupEnabled(true)
-                            
-                            -- Store combined info in tag
-                            self.tag = instance .. ":" .. trackNumber .. ":return"
-                            
-                            -- Notify children
-                            notifyChildren("track_changed", trackNumber)
-                            notifyChildren("track_type", trackType)
-                            
-                            -- Build connection table for our specific connection
-                            local targetConnections = buildConnectionTable(connectionIndex)
-                            
-                            -- Start listeners for return track
-                            sendOSC('/live/return/start_listen/volume', trackNumber, targetConnections)
-                            sendOSC('/live/return/start_listen/output_meter_level', trackNumber, targetConnections)
-                            sendOSC('/live/return/start_listen/mute', trackNumber, targetConnections)
-                            sendOSC('/live/return/start_listen/panning', trackNumber, targetConnections)
-                            
-                            listenersActive = true
-                            
-                            return true
-                        end
-                    end
-                end
-            end
-            
-            -- If we've checked both regular and return tracks and didn't find it
-            if needsRefresh then
-                log("Track not found: " .. trackName)
-                setGroupEnabled(false)
-                trackNumber = nil
-                trackType = nil
-                needsRefresh = false
-                
-                -- Notify children
-                notifyChildren("track_unmapped", nil)
-            end
-        end
-    end
-    
+    -- No longer handle track names here - they come via notification
     return false
 end
 
-function onReceiveNotify(action)
+function onReceiveNotify(action, value)
     if action == "refresh" or action == "refresh_tracks" then
         refreshTrackMapping()
+    elseif action == "track_names_available" then
+        -- Track names received from document script
+        if needsRefresh then
+            processTrackNames(value)
+        end
     elseif action == "clear_mapping" then
         -- Clear listeners
         clearListeners()
