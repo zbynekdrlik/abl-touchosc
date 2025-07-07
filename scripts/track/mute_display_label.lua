@@ -1,9 +1,9 @@
 -- TouchOSC Mute Display Label Script
--- Version: 1.0.0
+-- Version: 1.0.1
 -- Display-only label showing MUTE with warning symbol for double-click protection
 
 -- Version constant
-local VERSION = "1.0.0"
+local VERSION = "1.0.1"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0  -- Production mode
@@ -62,9 +62,9 @@ end
 
 -- Update label text based on protection state
 function updateLabelText()
-    -- Always show MUTE, add warning symbol if protected
+    -- Always show MUTE, add warning symbols on both sides if protected
     if requiresDoubleClick then
-        self.values.text = "MUTE⚠"
+        self.values.text = "⚠MUTE⚠"
     else
         self.values.text = "MUTE"
     end
