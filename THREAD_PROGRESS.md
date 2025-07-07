@@ -6,7 +6,7 @@
 - [x] Label version attempted but labels don't support solid colors
 - [x] **DECISION: Use buttons, not labels** - TouchOSC limitation
 - [x] Double-click protection fully functional
-- [x] Created display label script for warning symbol (v1.0.0)
+- [x] Created display label script for warning symbol (v1.0.1)
 - [ ] Need to update template with both button and display label
 - [ ] Test complete setup
 
@@ -17,9 +17,9 @@
    - Supports solid colors (red/orange)
    - Handles double-click protection logic
    
-2. **Display Label** (`mute_display_label.lua` v1.0.0)
+2. **Display Label** (`mute_display_label.lua` v1.0.1)
    - Shows "MUTE" normally
-   - Shows "MUTE⚠" when double-click protected
+   - Shows "⚠MUTE⚠" when double-click protected
    - Display-only (non-interactive)
    - No background color needed
 
@@ -44,7 +44,7 @@
 - ✅ OSC messages sent correctly
 - ✅ Mute state toggles properly
 - ✅ Visual feedback with button colors
-- ✅ Warning symbol (⚠) shows on protected groups
+- ✅ Warning symbols (⚠) on both sides for protected groups
 - ✅ Text always says "MUTE" (never "MUTED")
 
 ## CONFIGURATION FORMAT
@@ -58,7 +58,7 @@ double_click_mute: 'dj_Master Bus'
 ## VERSION HISTORY
 ### Production Scripts:
 - `mute_button.lua` v2.7.0 - Button control with double-click
-- `mute_display_label.lua` v1.0.0 - Display label with warning
+- `mute_display_label.lua` v1.0.1 - Display label with double warning symbols
 
 ### Experimental (Abandoned):
 - `mute_label.lua` v2.8.0-2.8.6 - Combined label (transparency issues)
@@ -75,7 +75,7 @@ double_click_mute: 'dj_Master Bus'
 
 3. **Double-click Protection**:
    - Works perfectly with 500ms window
-   - Clear visual warning with ⚠ symbol
+   - Clear visual warning with ⚠ symbols on both sides
    - No accidental mutes on critical tracks
 
 ## NEXT STEPS
@@ -87,7 +87,7 @@ double_click_mute: 'dj_Master Bus'
    - [ ] Position label appropriately
 
 2. **Testing**:
-   - [ ] Test with protected groups (shows MUTE⚠)
+   - [ ] Test with protected groups (shows ⚠MUTE⚠)
    - [ ] Test with non-protected groups (shows MUTE)
    - [ ] Verify double-click timing
    - [ ] Check visual clarity
@@ -100,6 +100,6 @@ double_click_mute: 'dj_Master Bus'
 ## CRITICAL NOTES
 - **USE TWO CONTROLS**: Button for function, Label for text
 - Both scripts are production-ready
-- Warning symbol appears automatically based on config
+- Warning symbols appear on BOTH sides when protected
 - No text changes needed (always "MUTE")
 - Colors configured in TouchOSC button properties
