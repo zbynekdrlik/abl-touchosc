@@ -2,67 +2,36 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Interactive mute label script WORKING (v2.8.6)
-- [x] Touch detection fixed - using `values.touch` not `values.x`
-- [x] Double-click protection functional
-- [x] ⚠ warning symbol displays correctly
-- [x] Unmuted color changed to orange (#F39420) - v2.8.6
-- [ ] Need to test with non-protected groups
-- [ ] Consider touch reaction improvements
+- [x] Button version WORKING PERFECTLY (v2.7.0)
+- [x] Label version attempted but labels don't support solid colors
+- [x] **DECISION: Use buttons, not labels** - TouchOSC limitation
+- [x] Double-click protection fully functional
+- [ ] Need to update template to use buttons instead of labels
+- [ ] Test button colors (can customize in TouchOSC)
 
-## WORKING VERSION: v2.8.6
+## WORKING VERSION: mute_button.lua v2.7.0
 ### What's Working:
-- ✅ Touch detection on interactive labels
+- ✅ Touch detection on buttons
 - ✅ Double-click requirement for protected groups
 - ✅ Single-click for non-protected groups
 - ✅ OSC messages sent correctly
 - ✅ Mute state toggles properly
-- ✅ ⚠ warning symbol shows for protected groups
-- ✅ Text updates (MUTE/MUTED)
-- ✅ Orange background (#F39420) when unmuted
+- ✅ Visual feedback with button states
+- ✅ Solid colors supported by buttons
 
-### Known Issues/Improvements Needed:
-1. **Color Scheme**:
-   - Current: Dark red (muted) / Orange (unmuted)
-   - Yellow flash on click (100ms)
-   - Test visibility and contrast
-   - Verify colors work well in different lighting
+### Button vs Label Comparison:
+| Feature | Buttons | Labels |
+|---------|---------|--------|
+| Solid colors | ✅ Yes | ❌ Semi-transparent |
+| Touch detection | ✅ values.x | ✅ values.touch |
+| Double-click | ✅ Working | ✅ Working |
+| Visual states | ✅ On/Off colors | ❌ Blended colors |
 
-2. **Touch Feedback**:
-   - Multiple touch events fired per click (seen in logs)
-   - May need to filter for `touch == true` only
-   - Consider debouncing or better touch handling
-
-3. **Visual Polish**:
-   - Test if ⚠ symbol is clearly visible
-   - Verify background colors work well
-   - Check text readability with background colors
-   - Consider size/position of warning symbol
-
-4. **Testing Needed**:
-   - Test with groups NOT in double-click list
-   - Test with multiple instances
-   - Test with regular tracks (not just returns)
-   - Verify no regression in functionality
-   - Test on actual device (not just editor)
-
-## CODE STATUS
-### Files Created/Modified:
-- `/scripts/track/mute_label.lua` (v2.8.6) - WORKING
-- `CHANGELOG.md` - Updated with v2.8.0 notes
-- PR #24 - Updated with current status
-
-### Key Code Insights:
-```lua
--- Interactive labels use 'touch' value, not 'x'
-if valueName == "touch" and self.values.touch == true then
-
--- Label properties that work:
-self.interactive = true  -- Makes label clickable
-self.background = true   -- Enables background color
-self.values.text = "text"  -- Sets display text
-self.color = Color(r,g,b,a)  -- Background color
-```
+### Why Reverting to Buttons:
+- TouchOSC labels render background colors as semi-transparent
+- Cannot achieve solid orange (#F39420) on labels
+- Buttons provide reliable solid color rendering
+- Button on/off states map perfectly to mute/unmute
 
 ## CONFIGURATION FORMAT
 ```yaml
@@ -72,75 +41,65 @@ double_click_mute: 'band_Drums'
 double_click_mute: 'dj_Master Bus'
 ```
 
-## NEXT THREAD TASKS
-1. **Immediate Testing**:
-   - [ ] Test single-click on non-protected groups
-   - [ ] Verify visual feedback is visible enough
-   - [ ] Check performance with multiple labels
+## TEMPLATE REQUIREMENTS
+### For Buttons (RECOMMENDED):
+1. Use button control type
+2. Set to Toggle mode
+3. Apply `mute_button.lua` script
+4. Customize colors in TouchOSC:
+   - ON state (muted): Dark red
+   - OFF state (unmuted): Orange (#F39420)
+5. Text can be set via script or TouchOSC
 
-2. **Touch Handling Improvements**:
-   - [ ] Filter touch events to only react to `touch == true`
-   - [ ] Prevent multiple events per single touch
-   - [ ] Consider adding touch release handling
-
-3. **Visual Refinements**:
-   - [ ] Test orange/red color scheme visibility
-   - [ ] Test ⚠ symbol size and positioning
-   - [ ] Consider animation or fade effects
-   - [ ] Match existing template aesthetic
-
-4. **Code Cleanup**:
-   - [ ] Remove debug logging (set DEBUG = 0)
-   - [ ] Add comments for touch handling
-   - [ ] Consider code optimization
-
-5. **Documentation**:
-   - [ ] Update README with new control type
-   - [ ] Document interactive label setup
-   - [ ] Add troubleshooting section
-
-## TEMPLATE UPDATE REQUIREMENTS
-To use the new interactive mute label:
-1. Replace button controls with label controls
-2. Set labels to interactive mode
-3. Apply `mute_label.lua` script
-4. Remove old separate display labels
-5. Test thoroughly before deployment
+### Button Color Setup in TouchOSC:
+- Select button control
+- Style tab → Colors
+- ON Color: Dark red for muted state
+- OFF Color: Orange (#F39420) for unmuted state
+- Text shows state dynamically
 
 ## VERSION HISTORY
-- v2.4.0 - Initial double-click for buttons
-- v2.7.0 - Simplified config, button version complete
-- v2.8.0 - First interactive label attempt
-- v2.8.1 - Fixed function ordering
-- v2.8.2 - Added debug logging
-- v2.8.3 - Fixed userdata iteration
-- v2.8.4 - Removed pcall usage
-- v2.8.5 - Fixed touch detection
-- v2.8.6 - **CURRENT** - Changed unmuted color to orange (#F39420)
+- v2.4.0 - Initial double-click implementation
+- v2.7.0 - **PRODUCTION** - Simplified config, button version complete
+- v2.8.0-2.8.6 - Label experiments (abandoned due to transparency)
 
-## IMPORTANT DISCOVERIES
-1. Interactive labels use `values.touch` not `values.x`
-2. TouchOSC doesn't have `pcall` function
-3. `self.values` is userdata, not a regular table
-4. Multiple touch events fire per click (needs handling)
-5. Label type is 2 (for reference)
+## KEY FINDINGS
+1. **Buttons are superior for this use case**
+   - Solid color support
+   - Native toggle behavior
+   - Better visual feedback
+   
+2. **Label limitations discovered**:
+   - Background colors render semi-transparent
+   - Not suitable for clear visual states
+   - Better for display-only elements
 
-## DEBUG LOG SNIPPETS
-```
-Working click sequence:
-[12:34:17] onValueChanged called with valueName: touch
-[12:34:17] Label touched!
-[12:34:17] First click recorded, waiting for double-click
-[12:34:18] onValueChanged called with valueName: touch
-[12:34:20] onValueChanged called with valueName: touch
-[12:34:20] Label touched!
-[12:34:20] Double-click detected, toggling mute
-```
+3. **Double-click protection works perfectly**
+   - 500ms window for double-click
+   - Visual feedback maintained
+   - No accidental mutes
 
-## CRITICAL NOTES FOR NEXT THREAD
-- Script IS WORKING but needs polish
-- Main issue was touch vs x value confusion
-- Multiple touch events per click may need addressing
-- Visual feedback works but could be improved
-- Remember to test with DEBUG = 0 in production
-- Orange color (#F39420) now used for unmuted state
+## NEXT STEPS
+1. **Update TouchOSC Template**:
+   - [ ] Replace any label controls with button controls
+   - [ ] Set buttons to toggle mode
+   - [ ] Apply mute_button.lua script
+   - [ ] Configure button colors
+
+2. **Testing**:
+   - [ ] Test with protected groups (double-click)
+   - [ ] Test with non-protected groups (single-click)
+   - [ ] Verify colors display correctly
+   - [ ] Test multiple instances
+
+3. **Documentation**:
+   - [ ] Update README with button requirement
+   - [ ] Document color configuration
+   - [ ] Add template setup guide
+
+## CRITICAL NOTES
+- **USE BUTTONS, NOT LABELS** for mute controls
+- Button script (v2.7.0) is production-ready
+- Label experiments proved labels unsuitable for this use
+- Colors must be configured in TouchOSC button properties
+- Double-click protection fully functional
