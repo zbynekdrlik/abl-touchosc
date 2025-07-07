@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.16.4
--- Changed: Simplified interactivity - only set fader, mute, pan as interactive
+-- Version: 1.16.5
+-- Changed: Removed redundant track name requests - now handled centrally by document script
 
 -- Version constant
-local SCRIPT_VERSION = "1.16.4"
+local SCRIPT_VERSION = "1.16.5"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -240,12 +240,9 @@ function refreshTrackMapping()
     trackNumber = nil
     trackType = nil
     
-    -- Build connection table for our specific connection
-    local connections = buildConnectionTable(connectionIndex)
-    
-    -- Query both regular tracks and return tracks
-    sendOSC('/live/song/get/track_names', connections)
-    sendOSC('/live/song/get/return_track_names', connections)
+    -- Track names are now requested once by document script
+    -- Just wait for the response
+    log("Waiting for track names...")
 end
 
 function onReceiveOSC(message, connections)
