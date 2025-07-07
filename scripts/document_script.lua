@@ -1,9 +1,9 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.9.0
+-- Version: 2.9.1
 -- Purpose: Main document script with configuration and track management
--- Changed: Added support for double-click mute configuration parsing
+-- Changed: Fixed redundant track name requests - now sent once per connection during refresh
 
-local VERSION = "2.9.0"
+local VERSION = "2.9.1"
 local SCRIPT_NAME = "Document Script"
 
 -- Debug flag - set to 1 to enable logging
@@ -180,6 +180,14 @@ function completeRefreshSequence()
     local status = root:findByName("global_status")
     if status then
         status.values.text = "Refreshing..."
+    end
+    
+    -- Request track names once for all connections
+    for instance, connIndex in pairs(config.connections) do
+        local connections = createConnectionTable(connIndex)
+        sendOSC('/live/song/get/track_names', connections)
+        sendOSC('/live/song/get/return_track_names', connections)
+        log("Requested track names for " .. instance .. " (connection " .. connIndex .. ")")
     end
     
     -- Count groups
