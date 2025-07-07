@@ -211,14 +211,6 @@ function completeRefreshSequence()
         end
     end
     
-    -- If no connections configured, query connection 1
-    if next(uniqueConnections) == nil then
-        local connections = {true, false, false, false, false, false, false, false, false, false}
-        sendOSC('/live/song/get/track_names', connections)
-        sendOSC('/live/song/get/return_track_names', connections)
-        log("Queried default connection 1")
-    end
-    
     -- Update status
     if status then
         status.values.text = "Ready"
