@@ -2,65 +2,57 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Double-click feature WORKING with v2.6.0
-- [x] Pattern matching works with special characters
-- [x] Toggle button behavior correct
-- [x] Configuration format SIMPLIFIED in v2.7.0
-- [ ] Need to test simplified configuration
-- [ ] Need to update documentation
+- [x] Double-click feature WORKING with v2.7.0
+- [x] Simplified configuration format implemented
+- [ ] Need to add visual indicator for double-click mode
+- [ ] Planning to convert mute button to interactive label
+- **User wants**: ⚠ symbol and single interactive label instead of button+label
 
-## FEATURE STATUS: v2.7.0 IMPLEMENTED
-- **Current Version**: v2.7.0 - SIMPLIFIED CONFIGURATION
-- **Change Made**: Configuration no longer requires instance-specific keys
-- **Testing Required**: Need to verify the simplified format works
+## NEXT IMPLEMENTATION PLAN: v2.8.0
+### Goal: Visual Indicator + Interactive Label
+1. **Visual Indicator**: Use ⚠ warning symbol for double-click protected buttons
+2. **Architecture Change**: Convert from button + label to single interactive label
+   - Current: Separate mute button + mute label
+   - New: Single interactive label that acts as button
+   - Benefits: Simpler, one object instead of two
 
-## Configuration Format Change
-### OLD Format (v2.6.0 and earlier)
+### Implementation Steps for v2.8.0:
+1. Create new `mute_label.lua` script that combines functionality:
+   - Interactive label with button behavior
+   - Shows mute state visually (color/background)
+   - Displays ⚠ symbol when double-click enabled
+   - Handles all click detection and state management
+
+2. Update group template:
+   - Remove separate mute button
+   - Convert mute label to interactive
+   - Apply new script
+
+3. Visual Design:
+   ```
+   Normal mode:        [  MUTE  ]  (no symbol)
+   Double-click mode:  [ ⚠ MUTE ]  (with warning)
+   
+   When muted:         Background color change
+   First click:        Brief flash/feedback
+   ```
+
+## FEATURE STATUS: v2.7.0 COMPLETE
+- **Current Version**: v2.7.0 - FULLY FUNCTIONAL
+- **What Works**:
+  - ✅ Double-click detection and blocking
+  - ✅ Pattern matching with special characters
+  - ✅ Toggle button behavior correct
+  - ✅ Simplified configuration format
+  - ✅ Multi-instance support
+
+## Configuration Format (v2.7.0)
 ```yaml
-# Required instance-specific keys:
-double_click_mute_master: 'master_A-ReproM'
-double_click_mute_band: 'band_Drums'
-double_click_mute_dj: 'dj_Master Bus'
-```
-
-### NEW Format (v2.7.0)
-```yaml
-# Simplified - just list group names:
+# Simple format - just list group names:
 double_click_mute: 'master_A-ReproM'
 double_click_mute: 'band_Drums' 
 double_click_mute: 'dj_Master Bus'
 ```
-
-## What Changed in v2.7.0
-1. **mute_button.lua**:
-   - Updated `updateDoubleClickConfig()` function
-   - Changed search pattern from `double_click_mute_[instance]:` to `double_click_mute:`
-   - Now matches against full group name without instance prefix
-   - Version incremented to 2.7.0
-
-## What Works Currently
-- ✅ Double-click detection and blocking
-- ✅ Pattern matching with special characters (hyphens, etc.)
-- ✅ Toggle button support
-- ✅ Visual state sync
-- ✅ Multi-instance support
-- ✅ Simplified configuration format (IMPLEMENTED)
-
-## Next Steps
-1. **Testing**:
-   - Test with new configuration format
-   - Verify multiple groups work correctly
-   - Test with group names containing instance prefixes
-   - Ensure no regression in functionality
-
-2. **Documentation Updates**:
-   - Update README.md configuration examples
-   - Update any other documentation mentioning double-click config
-   - Update changelog
-
-3. **PR Update**:
-   - Update PR description with v2.7.0 changes
-   - Add testing instructions for new format
 
 ## Version History
 - v2.4.0 - Initial minimal implementation
@@ -68,22 +60,43 @@ double_click_mute: 'dj_Master Bus'
 - v2.5.0 - Attempted fix for momentary buttons
 - v2.6.0 - Proper toggle button support
 - v2.7.0 - Simplified configuration format (CURRENT)
+- v2.8.0 - (PLANNED) Visual indicator + interactive label
 
-## Testing Example
-```yaml
-# configuration.txt should now contain:
-connection_master: 1
-connection_band: 2
-connection_dj: 3
+## Testing Requirements for v2.8.0
+- Test interactive label touch response
+- Verify ⚠ symbol renders correctly
+- Test visual feedback on clicks
+- Ensure no regression in double-click timing
+- Verify color states work properly
 
-# Double-click protection (NEW FORMAT):
-double_click_mute: 'master_A-ReproM'
-double_click_mute: 'band_Drums'
-double_click_mute: 'dj_Master Bus'
+## Architecture Benefits of Interactive Label
+1. **Simpler**: One object instead of two
+2. **Cleaner**: No alignment issues between button and label
+3. **More Space**: Can show both text and symbol
+4. **Better Visual**: Can use background color for state
+
+## Implementation Notes
+- Label needs touch handling
+- Must preserve all current functionality
+- Color feedback for mute state
+- ⚠ symbol positioning (prefix or suffix)
+- Consider font size for symbol visibility
+
+## Current Working Example
+```lua
+-- Current search pattern in v2.7.0:
+local searchPattern = "double_click_mute:%s*['\"]?" .. escapedName .. "['\"]?"
 ```
 
+## Next Thread Tasks
+1. Implement interactive mute label with ⚠ indicator
+2. Test thoroughly
+3. Update all groups to use new control
+4. Update documentation
+5. Release as v2.8.0
+
 ## Important Notes
-- Feature is FULLY WORKING in v2.6.0
-- Configuration format simplified in v2.7.0
-- No functional changes, only config parsing simplified
-- Backward compatibility NOT maintained (all configs need updating)
+- Feature is FULLY WORKING in v2.7.0
+- Next step is visual improvement only
+- No functional changes to double-click logic
+- Will improve user experience with clear visual indicator
