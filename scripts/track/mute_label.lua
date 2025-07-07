@@ -1,9 +1,9 @@
 -- TouchOSC Interactive Mute Label Script
--- Version: 2.8.5
+-- Version: 2.8.6
 -- Combined mute button and label with visual indicator for double-click protection
 
 -- Version constant
-local VERSION = "2.8.5"
+local VERSION = "2.8.6"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0  -- Production mode
@@ -153,9 +153,9 @@ local function updateVisualState()
         self.background = true
         self.color = Color(0.5, 0, 0, 1)  -- Dark red
     else
-        -- Unmuted: Default gray
+        -- Unmuted: Orange background (F39420FF)
         self.background = true
-        self.color = Color(0.3, 0.3, 0.3, 1)  -- Dark gray
+        self.color = Color(0.953, 0.580, 0.125, 1)  -- Orange (#F39420)
     end
     
     -- Update text
