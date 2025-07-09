@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.17.0
--- Changed: Don't send track name queries during refresh - document script handles it
+-- Version: 1.18.0
+-- Changed: Notify document script when group successfully maps for verification
 
 -- Version constant
-local SCRIPT_VERSION = "1.17.0"
+local SCRIPT_VERSION = "1.18.0"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -314,6 +314,9 @@ function onReceiveOSC(message, connections)
                             
                             listenersActive = true
                             
+                            -- Notify document script that we've mapped successfully
+                            root:notify("group_mapped", self.name)
+                            
                             return true
                         end
                     end
@@ -367,6 +370,9 @@ function onReceiveOSC(message, connections)
                             sendOSC('/live/return/start_listen/panning', trackNumber, targetConnections)
                             
                             listenersActive = true
+                            
+                            -- Notify document script that we've mapped successfully
+                            root:notify("group_mapped", self.name)
                             
                             return true
                         end
