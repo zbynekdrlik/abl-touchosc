@@ -1,9 +1,9 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.10.0
+-- Version: 2.11.0
 -- Purpose: Main document script with configuration and track management
--- Changed: Centralized track names retrieval to prevent duplicate OSC calls
+-- Changed: Improved refresh timing for slower devices (Android tablets) with retry mechanism
 
-local VERSION = "2.10.0"
+local VERSION = "2.11.0"
 local SCRIPT_NAME = "Document Script"
 
 -- Debug flag - set to 1 to enable logging
@@ -28,9 +28,20 @@ local frameCount = 0
 local STARTUP_DELAY_FRAMES = 60  -- Wait 1 second (60 frames at 60fps)
 
 -- Refresh state tracking
-local refreshState = "idle"  -- idle, clearing, waiting, refreshing
+local refreshState = "idle"  -- idle, clearing, waiting, refreshing, verifying, retrying
 local refreshWaitStart = 0
-local REFRESH_WAIT_TIME = 100  -- 100ms delay between clear and refresh
+local REFRESH_WAIT_TIME = 300  -- Increased from 100ms to 300ms for slower devices
+local verifyStartTime = 0
+local VERIFY_WAIT_TIME = 500  -- Wait 500ms after refresh to verify
+
+-- Retry mechanism for track name queries
+local retryCount = 0
+local MAX_RETRIES = 3
+local RETRY_DELAY = 1000  -- 1 second between retries
+local lastRetryTime = 0
+
+-- Track which groups have been mapped
+local unmappedGroups = {}
 
 -- === LOCAL LOGGING FUNCTION ===
 local function log(message)
@@ -128,6 +139,12 @@ function onReceiveNotify(action, value)
             trackGroups[value.name] = value
             log("Registered track group: " .. value.name)
         end
+    elseif action == "group_mapped" then
+        -- A group has successfully mapped
+        if value and unmappedGroups[value] then
+            unmappedGroups[value] = nil
+            log("Group mapped: " .. value)
+        end
     end
     -- Note: Removed "configuration_updated" handler - config text is read-only at runtime
     -- Note: Removed "log_message" handler - each script logs independently now
@@ -137,16 +154,27 @@ end
 function startRefreshSequence()
     log("=== STARTING REFRESH SEQUENCE ===")
     
+    -- Reset retry counter
+    retryCount = 0
+    
     -- Update status
     local status = root:findByName("global_status")
     if status then
         status.values.text = "Clearing..."
     end
     
-    -- Count groups
+    -- Count groups and track unmapped ones
     local groupCount = 0
-    for name, _ in pairs(trackGroups) do
-        groupCount = groupCount + 1
+    unmappedGroups = {}
+    
+    for name, group in pairs(trackGroups) do
+        if group and group.notify then
+            groupCount = groupCount + 1
+            unmappedGroups[name] = true  -- Track all groups as unmapped initially
+        else
+            -- Remove invalid reference
+            trackGroups[name] = nil
+        end
     end
     
     -- Clear all track mappings first
@@ -154,9 +182,6 @@ function startRefreshSequence()
         -- Verify group still exists and is valid
         if group and group.notify then
             group:notify("clear_mapping")
-        else
-            -- Remove invalid reference
-            trackGroups[name] = nil
         end
     end
     
@@ -174,12 +199,12 @@ end
 
 -- === COMPLETE REFRESH AFTER DELAY ===
 function completeRefreshSequence()
-    log("=== COMPLETING REFRESH ===")
+    log("=== COMPLETING REFRESH (Attempt " .. (retryCount + 1) .. "/" .. MAX_RETRIES .. ") ===")
     
     -- Update status
     local status = root:findByName("global_status")
     if status then
-        status.values.text = "Refreshing..."
+        status.values.text = "Refreshing... (" .. (retryCount + 1) .. "/" .. MAX_RETRIES .. ")"
     end
     
     -- Notify all groups to prepare for refresh
@@ -191,6 +216,14 @@ function completeRefreshSequence()
         end
     end
     
+    -- Small delay to ensure all groups are ready (frame-based)
+    -- This helps on slower devices
+    refreshState = "pre_query"
+    verifyStartTime = getMillis()
+end
+
+-- === SEND TRACK NAME QUERIES ===
+function sendTrackNameQueries()
     -- Query track names once per connection
     local uniqueConnections = {}
     for instance, connIndex in pairs(config.connections) do
@@ -211,13 +244,54 @@ function completeRefreshSequence()
         end
     end
     
-    -- Update status
-    if status then
-        status.values.text = "Ready"
+    -- Move to verification state
+    refreshState = "verifying"
+    verifyStartTime = getMillis()
+end
+
+-- === VERIFY ALL GROUPS ARE MAPPED ===
+function verifyMapping()
+    local unmappedCount = 0
+    for name, _ in pairs(unmappedGroups) do
+        unmappedCount = unmappedCount + 1
     end
     
-    -- Reset state
-    refreshState = "idle"
+    if unmappedCount == 0 then
+        -- All groups mapped successfully
+        log("All groups mapped successfully")
+        
+        local status = root:findByName("global_status")
+        if status then
+            status.values.text = "Ready"
+        end
+        
+        refreshState = "idle"
+    else
+        -- Some groups still unmapped
+        log("Still unmapped: " .. unmappedCount .. " groups")
+        
+        -- Check if we should retry
+        if retryCount < MAX_RETRIES then
+            retryCount = retryCount + 1
+            refreshState = "retrying"
+            lastRetryTime = getMillis()
+            
+            local status = root:findByName("global_status")
+            if status then
+                status.values.text = "Retrying... (" .. retryCount .. "/" .. MAX_RETRIES .. ")"
+            end
+        else
+            -- Max retries reached
+            log("Max retries reached. " .. unmappedCount .. " groups remain unmapped")
+            
+            local status = root:findByName("global_status")
+            if status then
+                status.values.text = "Partial (" .. unmappedCount .. " unmapped)"
+            end
+            
+            refreshState = "idle"
+        end
+    end
 end
 
 -- === GLOBAL HELPER FUNCTIONS ===
@@ -246,6 +320,23 @@ function update()
         local elapsed = getMillis() - refreshWaitStart
         if elapsed >= REFRESH_WAIT_TIME then
             refreshState = "refreshing"
+            completeRefreshSequence()
+        end
+    elseif refreshState == "pre_query" then
+        -- Small delay before sending queries to ensure groups are ready
+        local elapsed = getMillis() - verifyStartTime
+        if elapsed >= 50 then  -- 50ms delay
+            sendTrackNameQueries()
+        end
+    elseif refreshState == "verifying" then
+        local elapsed = getMillis() - verifyStartTime
+        if elapsed >= VERIFY_WAIT_TIME then
+            verifyMapping()
+        end
+    elseif refreshState == "retrying" then
+        local elapsed = getMillis() - lastRetryTime
+        if elapsed >= RETRY_DELAY then
+            -- Retry the refresh
             completeRefreshSequence()
         end
     end
