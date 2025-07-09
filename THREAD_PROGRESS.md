@@ -1,32 +1,35 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**⚠️ PR #26 IN PROGRESS:**
-- [ ] Currently working on: Fix duplicate track names calls during refresh
-- [ ] Waiting for: User testing of centralized track names retrieval
+**⚠️ PR #28 IN PROGRESS:**
+- [ ] Currently working on: Fix Android tablet refresh timing issue
+- [ ] Waiting for: User testing on Android tablet with 200 tracks
 - [ ] Blocked by: None
 
-## ACTIVE WORK: DUPLICATE TRACK NAMES FIX
+## ACTIVE WORK: ANDROID TABLET REFRESH TIMING FIX
 ### Problem Identified:
-- Each track group independently calls `/live/song/get/track_names`
-- Causes duplicate OSC packets during refresh
-- Creates unnecessary network traffic
+- On slower Android tablets with 200 tracks, faders sometimes not mapped during refresh
+- Track name responses arrive before groups process refresh notification
+- Timing issue between refresh button and group receive
 
 ### Solution Implemented:
-1. **Centralized Queries**: ✅
-   - Document script queries track names once per connection
-   - Caches results in `trackNamesCache`
-   - Distributes to all groups via notification
+1. **Added delay between notify and query**: ✅
+   - 50ms delay after notifying groups before querying track names
+   - Gives slower devices time to set needsRefresh flag
 
 2. **Updated Scripts**: ✅
-   - `document_script.lua` v2.10.0 - Centralized querying
-   - `group_init.lua` v1.17.0 - Receives names via notification
+   - `document_script.lua` v2.11.0 - Added notifying state with delay
 
 3. **Testing Required**: ❌
-   - [ ] Verify only one track names query per connection
-   - [ ] Test all track groups map correctly
-   - [ ] Test with multiple connections
-   - [ ] Test with both regular and return tracks
+   - [ ] Test on Windows TouchOSC (should work normally)
+   - [ ] Test on slower Android tablet with 200 tracks
+   - [ ] Verify all faders map correctly on both platforms
+
+## COMPLETED WORK: PR #26 MERGED
+### Duplicate Track Names Fix: COMPLETE
+- [x] Centralized track names retrieval MERGED
+- [x] Prevents duplicate OSC calls during refresh
+- [x] Version 2.10.0 released
 
 ## COMPLETED WORK: DOUBLE-CLICK MUTE (PR #24)
 ### Final Status: READY FOR MERGE
@@ -40,21 +43,21 @@
 ## Testing Status Matrix
 | Component | Implemented | Unit Tested | Integration Tested | Multi-Instance Tested | 
 |-----------|------------|-------------|--------------------|-----------------------|
-| document_script v2.10.0 | ✅ | ❌ | ❌ | ❌ |
-| group_init v1.17.0 | ✅ | ❌ | ❌ | ❌ |
+| document_script v2.11.0 | ✅ | ❌ | ❌ | ❌ |
+| group_init v1.17.0 | ✅ | ✅ | ✅ | ✅ |
 | mute_button v2.7.0 | ✅ | ✅ | ✅ | ✅ |
 | mute_display_label v1.0.1 | ✅ | ✅ | ✅ | ✅ |
 
 ## Last User Action
-- Date/Time: 2025-07-07 12:58
-- Action: Reported duplicate track names calls issue
-- Result: Created PR #26 with centralized solution
-- Next Required: Test the fix and provide logs
+- Date/Time: 2025-07-09 09:30
+- Action: Reported Android tablet refresh issue
+- Result: Created PR #28 with timing fix
+- Next Required: Test the fix on Android tablet
 
 ## NEXT STEPS
-1. User tests PR #26 branch
-2. Verify OSC log shows single track names query
-3. Confirm all track groups still map correctly
-4. If working, merge PR #26
+1. User tests PR #28 branch on Android tablet
+2. Verify refresh works correctly with 200 tracks
+3. Confirm Windows TouchOSC still works normally
+4. If working, merge PR #28
 5. Then merge PR #24 (double-click mute)
 6. Create v1.5.0 release
