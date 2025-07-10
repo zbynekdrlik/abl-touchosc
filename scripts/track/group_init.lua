@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.17.5
--- Changed: Add connection source info to track list debug output
+-- Version: 1.17.7
+-- Changed: Log track names immediately upon receipt from expected connection
 
 -- Version constant
-local SCRIPT_VERSION = "1.17.5"
+local SCRIPT_VERSION = "1.17.7"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 1  -- ENABLED FOR TROUBLESHOOTING
@@ -23,15 +23,11 @@ local listenersActive = false  -- Track if listeners are active
 -- Activity tracking - simplified to only track receiving
 local lastReceiveTime = 0
 
--- Store received track names for debugging - now with connection info
+-- Store received track names for debugging
 local receivedTrackNames = {}
 local receivedReturnNames = {}
 local processedRegularTracks = false
 local processedReturnTracks = false
-
--- Store track names from ALL connections for debugging
-local allTrackNames = {}  -- [connection][index] = name
-local allReturnNames = {} -- [connection][index] = name
 
 -- Local logging function
 local function log(message)
@@ -206,29 +202,6 @@ local function tableCount(tbl)
     return count
 end
 
--- Helper to find track in any connection
-local function findTrackInAllConnections(trackNameToFind)
-    -- Check regular tracks
-    for conn, tracks in pairs(allTrackNames) do
-        for idx, name in pairs(tracks) do
-            if name == trackNameToFind then
-                return "Found in regular tracks on connection " .. conn .. " at index " .. idx
-            end
-        end
-    end
-    
-    -- Check return tracks
-    for conn, tracks in pairs(allReturnNames) do
-        for idx, name in pairs(tracks) do
-            if name == trackNameToFind then
-                return "Found in return tracks on connection " .. conn .. " at index " .. idx
-            end
-        end
-    end
-    
-    return "Not found in any connection"
-end
-
 function init()
     -- Set tag programmatically
     self.tag = "trackGroup"
@@ -300,8 +273,6 @@ function refreshTrackMapping()
     receivedReturnNames = {}
     processedRegularTracks = false
     processedReturnTracks = false
-    allTrackNames = {}
-    allReturnNames = {}
     
     -- Don't query track names - document script will do it centrally
     -- Group will process the response when it arrives via onReceiveOSC
@@ -337,32 +308,31 @@ function onReceiveOSC(message, connections)
         local activeConns = getActiveConnections(connections)
         log("Received track names from connection(s): " .. activeConns .. " (expecting: " .. connectionIndex .. ")")
         
+        -- Only process if it's from our configured connection
+        if not connections[connectionIndex] then 
+            log("Ignoring - not from my connection")
+            return true
+        end
+        
         if needsRefresh then
+            log("Processing track names for refresh")
             local arguments = message[2]
             
-            -- Store track names from ALL connections for debugging
             if arguments then
-                for conn = 1, #connections do
-                    if connections[conn] then
-                        allTrackNames[conn] = allTrackNames[conn] or {}
-                        for i = 1, #arguments do
-                            if arguments[i] and arguments[i].value then
-                                allTrackNames[conn][i-1] = arguments[i].value
-                            end
-                        end
+                -- IMMEDIATELY LOG ALL TRACK NAMES
+                log("=== TRACK NAMES RECEIVED FROM CONNECTION " .. connectionIndex .. " ===")
+                log("Total tracks: " .. #arguments)
+                for i = 1, math.min(10, #arguments) do
+                    if arguments[i] and arguments[i].value then
+                        local tname = arguments[i].value
+                        log("Track[" .. (i-1) .. "]: '" .. tname .. "' (len=" .. #tname .. ")")
                     end
                 end
-            end
-            
-            -- Only process if it's from our configured connection
-            if not connections[connectionIndex] then 
-                log("Ignoring - not from my connection")
-                return true
-            end
-            
-            log("Processing track names for refresh")
-            
-            if arguments then
+                if #arguments > 10 then
+                    log("... and " .. (#arguments - 10) .. " more tracks")
+                end
+                log("=== END TRACK LIST ===")
+                
                 -- Store all track names
                 receivedTrackNames = {}
                 for i = 1, #arguments do
@@ -409,6 +379,8 @@ function onReceiveOSC(message, connections)
                 -- Mark that we've processed regular tracks
                 processedRegularTracks = true
                 log("Processed " .. tableCount(receivedTrackNames) .. " regular tracks, no match found")
+            else
+                log("WARNING: No arguments in track names message!")
             end
         end
     end
@@ -419,32 +391,31 @@ function onReceiveOSC(message, connections)
         local activeConns = getActiveConnections(connections)
         log("Received return track names from connection(s): " .. activeConns .. " (expecting: " .. connectionIndex .. ")")
         
+        -- Only process if it's from our configured connection
+        if not connections[connectionIndex] then 
+            log("Ignoring - not from my connection")
+            return true
+        end
+        
         if needsRefresh then
+            log("Processing return track names for refresh")
             local arguments = message[2]
             
-            -- Store return track names from ALL connections for debugging
             if arguments then
-                for conn = 1, #connections do
-                    if connections[conn] then
-                        allReturnNames[conn] = allReturnNames[conn] or {}
-                        for i = 1, #arguments do
-                            if arguments[i] and arguments[i].value then
-                                allReturnNames[conn][i-1] = arguments[i].value
-                            end
-                        end
+                -- IMMEDIATELY LOG ALL RETURN TRACK NAMES
+                log("=== RETURN TRACK NAMES RECEIVED FROM CONNECTION " .. connectionIndex .. " ===")
+                log("Total return tracks: " .. #arguments)
+                for i = 1, math.min(10, #arguments) do
+                    if arguments[i] and arguments[i].value then
+                        local tname = arguments[i].value
+                        log("Return[" .. (i-1) .. "]: '" .. tname .. "' (len=" .. #tname .. ")")
                     end
                 end
-            end
-            
-            -- Only process if it's from our configured connection
-            if not connections[connectionIndex] then 
-                log("Ignoring - not from my connection")
-                return true
-            end
-            
-            log("Processing return track names for refresh")
-            
-            if arguments then
+                if #arguments > 10 then
+                    log("... and " .. (#arguments - 10) .. " more return tracks")
+                end
+                log("=== END RETURN LIST ===")
+                
                 -- Store all return track names
                 receivedReturnNames = {}
                 for i = 1, #arguments do
@@ -491,43 +462,13 @@ function onReceiveOSC(message, connections)
                 -- Mark that we've processed return tracks
                 processedReturnTracks = true
                 log("Processed " .. tableCount(receivedReturnNames) .. " return tracks")
+            else
+                log("WARNING: No arguments in return track names message!")
             end
             
-            -- If we've processed both regular and return tracks and didn't find it
+            -- If we've checked both regular and return tracks and didn't find it
             if needsRefresh and processedRegularTracks and processedReturnTracks then
-                -- Build track list summary for debugging
-                local trackList = "TRACKS[conn" .. connectionIndex .. "]: "
-                local count = 0
-                for i, name in pairs(receivedTrackNames) do
-                    if count < 3 then  -- Show first 3 tracks
-                        trackList = trackList .. i .. "='" .. name .. "', "
-                        count = count + 1
-                    end
-                end
-                if tableCount(receivedTrackNames) > 3 then
-                    trackList = trackList .. "... (total: " .. tableCount(receivedTrackNames) .. ")"
-                elseif tableCount(receivedTrackNames) == 0 then
-                    trackList = trackList .. "(NONE)"
-                end
-                
-                trackList = trackList .. " | RETURNS[conn" .. connectionIndex .. "]: "
-                count = 0
-                for i, name in pairs(receivedReturnNames) do
-                    if count < 3 then  -- Show first 3 returns
-                        trackList = trackList .. i .. "='" .. name .. "', "
-                        count = count + 1
-                    end
-                end
-                if tableCount(receivedReturnNames) > 3 then
-                    trackList = trackList .. "... (total: " .. tableCount(receivedReturnNames) .. ")"
-                elseif tableCount(receivedReturnNames) == 0 then
-                    trackList = trackList .. "(NONE)"
-                end
-                
-                -- Find where the track actually is
-                local whereFound = findTrackInAllConnections(trackName)
-                
-                log("Track not found: '" .. trackName .. "'. " .. trackList .. " | ACTUAL LOCATION: " .. whereFound)
+                log("Track not found: '" .. trackName .. "'")
                 
                 setGroupEnabled(false)
                 trackNumber = nil
