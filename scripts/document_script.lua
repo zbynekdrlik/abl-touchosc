@@ -1,13 +1,13 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.13.1
+-- Version: 2.13.2
 -- Purpose: Main document script with configuration and track management
--- Changed: Set delay to 500ms for Android tablet refresh timing
+-- Changed: Enable debug logging to troubleshoot connection routing
 
-local VERSION = "2.13.1"
+local VERSION = "2.13.2"
 local SCRIPT_NAME = "Document Script"
 
 -- Debug flag - set to 1 to enable logging
-local DEBUG = 0
+local DEBUG = 1  -- ENABLED FOR TROUBLESHOOTING
 
 -- Configuration storage
 local config = {
@@ -250,7 +250,7 @@ end
 function createConnectionTable(connectionIndex)
     local connections = {}
     for i = 1, 10 do
-        connections[i] = (i == connectionIndex)
+        connections[i] = (i == connIndex)
     end
     return connections
 end
