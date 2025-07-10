@@ -1,12 +1,12 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.17.0
--- Changed: Don't send track name queries during refresh - document script handles it
+-- Version: 1.17.1
+-- Changed: Added connection logging to debug routing issue
 
 -- Version constant
-local SCRIPT_VERSION = "1.17.0"
+local SCRIPT_VERSION = "1.17.1"
 
 -- Debug flag - set to 1 to enable logging
-local DEBUG = 0
+local DEBUG = 1  -- ENABLED FOR TROUBLESHOOTING
 
 -- Script-level variables to store group data
 local instance = nil
@@ -176,6 +176,17 @@ local function notifyChildren(event, value)
     end
 end
 
+-- Helper to show which connections are active in OSC message
+local function getActiveConnections(connections)
+    local active = {}
+    for i = 1, #connections do
+        if connections[i] then
+            table.insert(active, i)
+        end
+    end
+    return table.concat(active, ",")
+end
+
 function init()
     -- Set tag programmatically
     self.tag = "trackGroup"
@@ -186,6 +197,7 @@ function init()
     
     -- Log initialization
     log("Script v" .. SCRIPT_VERSION .. " loaded")
+    log("Instance: " .. instance .. ", Expected connection: " .. connectionIndex)
     
     -- Register this group with the document script
     root:notify("register_track_group", self)
@@ -270,12 +282,18 @@ function onReceiveOSC(message, connections)
     
     -- Check if this is track names response (regular tracks)
     if path == '/live/song/get/track_names' then
+        -- Log which connections this message came from
+        local activeConns = getActiveConnections(connections)
+        log("Received track names from connection(s): " .. activeConns .. " (expecting: " .. connectionIndex .. ")")
+        
         -- Only process if it's from our configured connection
         if not connections[connectionIndex] then 
+            log("Ignoring - not from my connection")
             return true
         end
         
         if needsRefresh then
+            log("Processing track names for refresh")
             local arguments = message[2]
             
             if arguments then
@@ -324,12 +342,18 @@ function onReceiveOSC(message, connections)
     
     -- Check if this is return track names response
     if path == '/live/song/get/return_track_names' then
+        -- Log which connections this message came from
+        local activeConns = getActiveConnections(connections)
+        log("Received return track names from connection(s): " .. activeConns .. " (expecting: " .. connectionIndex .. ")")
+        
         -- Only process if it's from our configured connection
         if not connections[connectionIndex] then 
+            log("Ignoring - not from my connection")
             return true
         end
         
         if needsRefresh then
+            log("Processing return track names for refresh")
             local arguments = message[2]
             
             if arguments then
