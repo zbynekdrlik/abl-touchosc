@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.17.0
--- Changed: Don't send track name queries during refresh - document script handles it
+-- Version: 1.17.1
+-- Changed: Fix race condition where track names were cleared between processing regular and return tracks
 
 -- Version constant
-local SCRIPT_VERSION = "1.17.0"
+local SCRIPT_VERSION = "1.17.1"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -22,6 +22,10 @@ local listenersActive = false  -- Track if listeners are active
 
 -- Activity tracking - simplified to only track receiving
 local lastReceiveTime = 0
+
+-- Track processing flags to prevent race condition
+local processedRegularTracks = false
+local processedReturnTracks = false
 
 -- Local logging function
 local function log(message)
@@ -240,6 +244,10 @@ function refreshTrackMapping()
     trackNumber = nil
     trackType = nil
     
+    -- Clear processing flags
+    processedRegularTracks = false
+    processedReturnTracks = false
+    
     -- Don't query track names - document script will do it centrally
     -- Group will process the response when it arrives via onReceiveOSC
 end
@@ -318,6 +326,9 @@ function onReceiveOSC(message, connections)
                         end
                     end
                 end
+                
+                -- Mark that we've processed regular tracks
+                processedRegularTracks = true
             end
         end
     end
@@ -372,10 +383,13 @@ function onReceiveOSC(message, connections)
                         end
                     end
                 end
+                
+                -- Mark that we've processed return tracks
+                processedReturnTracks = true
             end
             
-            -- If we've checked both regular and return tracks and didn't find it
-            if needsRefresh then
+            -- Only report "not found" if we've checked BOTH regular and return tracks
+            if needsRefresh and processedRegularTracks and processedReturnTracks then
                 log("Track not found: " .. trackName)
                 setGroupEnabled(false)
                 trackNumber = nil
