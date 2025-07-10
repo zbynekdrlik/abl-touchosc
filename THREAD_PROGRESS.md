@@ -1,64 +1,60 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**⚠️ PR #28 IN PROGRESS:**
-- [ ] Currently working on: Waiting for user to test with detailed logging v1.17.2
-- [ ] Waiting for: User to run refresh and provide logs showing track names received vs expected
-- [ ] Blocked by: Need diagnostic logs to identify track name mismatch
+**⚠️ PR #28 - ISSUE SOLVED BUT CLEANUP NEEDED:**
+- [x] Currently working on: Issue SOLVED - was timing bug in group_init.lua
+- [ ] Waiting for: New thread to revert unnecessary changes
+- [ ] Blocked by: None
 
-## ACTIVE WORK: ANDROID TABLET REFRESH ISSUE - DIAGNOSTICS ADDED
-### Problem Evolution:
-1. Initially thought it was timing issue on slower tablets
-2. Tried various delays (50ms, 150ms, 500ms, 2s)
-3. User discovered the real issue: Groups can't find matching track names in received list
-4. Example: Group "band_STEVO repro#" looking for track "STEVO repro#" - not found
+## SOLUTION FOUND: ANDROID TABLET REFRESH ISSUE
+### Root Cause Identified:
+The issue was in `group_init.lua` - track names were being cleared between processing regular tracks and return tracks. On slower Android tablets, this timing issue caused tracks to appear as "not found" even though they were received.
 
-### Solution Implemented:
-1. **500ms delay**: ✅ (but doesn't fix the real issue)
-   - `document_script.lua` v2.13.1 - Simple timing approach
-2. **Detailed logging**: ✅ NEW
-   - `group_init.lua` v1.17.2 - Logs all track names received with lengths
-   - Will show exact mismatch between expected vs received names
+### Fix Applied (v1.17.4):
+- Added `processedRegularTracks` and `processedReturnTracks` flags
+- Preserved track names between OSC messages
+- Only report "Track not found" after BOTH types processed
+- This ensures regular track names are still in memory when return tracks arrive
 
-### Next Steps:
-1. User needs to test with v1.17.2 and provide logs
-2. Analyze logs to see track name differences (extra spaces, special chars, etc.)
-3. Implement fix based on findings
+### Why It Happened on Android:
+- Slower tablets have longer delays between OSC messages
+- Regular tracks from conn2 were received, then cleared before return tracks arrived
+- Windows TouchOSC processes faster, masking the issue
 
-## COMPLETED WORK: PR #26 MERGED
-### Duplicate Track Names Fix: COMPLETE
-- [x] Centralized track names retrieval MERGED
-- [x] Prevents duplicate OSC calls during refresh
-- [x] Version 2.10.0 released
+### What WASN'T the Problem:
+- The 500ms delay in document_script.lua (v2.13.1) - NOT NEEDED
+- All the timing experiments - NOT NEEDED
+- These changes should be reverted
 
-## COMPLETED WORK: DOUBLE-CLICK MUTE (PR #24)
-### Final Status: READY FOR MERGE
-- [x] Double-click mute protection COMPLETE AND WORKING
-- [x] Documentation cleanup COMPLETE
-- [x] Experimental files removed
-- [x] README fully documented with two-control approach
-- [x] CHANGELOG finalized for v1.5.0
-- [x] Ready for merge
+## NEXT STEPS FOR NEW THREAD
+1. **Revert unnecessary changes:**
+   - Remove 500ms delay from document_script.lua
+   - Keep only the group_init.lua fix (v1.17.4+)
+   - Clean up PR #28 description
+
+2. **Update all groups:**
+   - All group controls need the fixed group_init.lua script
+   - Version 1.17.4 or higher has the fix
+
+3. **Test and merge:**
+   - Verify fix works without the delays
+   - Merge cleaned-up PR #28
+   - Then merge PR #24 (double-click mute)
+   - Create v1.5.0 release
 
 ## Testing Status Matrix
 | Component | Implemented | Unit Tested | Integration Tested | Multi-Instance Tested | 
 |-----------|------------|-------------|--------------------|-----------------------|
 | document_script v2.13.1 | ✅ | ❌ | ❌ | ❌ |
-| group_init v1.17.2 | ✅ | ❌ | ❌ | ❌ |
+| group_init v1.17.7 | ✅ | ✅ WORKING | ✅ WORKING | ❌ |
 | mute_button v2.7.0 | ✅ | ✅ | ✅ | ✅ |
 | mute_display_label v1.0.1 | ✅ | ✅ | ✅ | ✅ |
 
 ## Last User Action
-- Date/Time: 2025-07-10 13:45
-- Action: Added detailed logging to group_init.lua v1.17.2
-- Result: Ready for user to test and provide diagnostic logs
-- Next Required: User to run refresh and share logs showing track names
+- Date/Time: 2025-07-10 14:55
+- Action: Confirmed v1.17.7 fixes the issue - track now maps correctly
+- Result: Issue SOLVED - was timing bug in group_init.lua
+- Next Required: New thread to revert unnecessary timing delays
 
-## NEXT STEPS
-1. Wait for user to test with new logging
-2. Analyze logs to identify track name mismatch
-3. Fix based on findings (trim spaces, handle special chars, etc.)
-4. Test on Android tablet again
-5. If working, merge PR #28
-6. Then merge PR #24 (double-click mute)
-7. Create v1.5.0 release
+## Key Learning
+The issue wasn't about slow refresh or timing delays. It was a race condition where track names were being cleared between receiving regular and return track lists. The fix was to preserve the data until both lists were processed.
