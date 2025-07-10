@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.17.2
--- Changed: Added detailed track name logging to diagnose matching issues
+-- Version: 1.17.3
+-- Changed: Include all track names in "Track not found" message for Android debugging
 
 -- Version constant
-local SCRIPT_VERSION = "1.17.2"
+local SCRIPT_VERSION = "1.17.3"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 1  -- ENABLED FOR TROUBLESHOOTING
@@ -22,6 +22,10 @@ local listenersActive = false  -- Track if listeners are active
 
 -- Activity tracking - simplified to only track receiving
 local lastReceiveTime = 0
+
+-- Store received track names for debugging
+local receivedTrackNames = {}
+local receivedReturnNames = {}
 
 -- Local logging function
 local function log(message)
@@ -253,6 +257,10 @@ function refreshTrackMapping()
     trackNumber = nil
     trackType = nil
     
+    -- Clear stored track names
+    receivedTrackNames = {}
+    receivedReturnNames = {}
+    
     -- Don't query track names - document script will do it centrally
     -- Group will process the response when it arrives via onReceiveOSC
 end
@@ -298,12 +306,12 @@ function onReceiveOSC(message, connections)
             local arguments = message[2]
             
             if arguments then
-                -- Log all track names received
-                log("Received " .. #arguments .. " track names:")
+                -- Store all track names
+                receivedTrackNames = {}
                 for i = 1, #arguments do
                     if arguments[i] and arguments[i].value then
                         local trackNameValue = arguments[i].value
-                        log("  Track " .. (i-1) .. ": '" .. trackNameValue .. "' (length: " .. #trackNameValue .. ")")
+                        receivedTrackNames[i-1] = trackNameValue
                         
                         -- EXACT match only for safety
                         if trackNameValue == trackName then
@@ -340,7 +348,6 @@ function onReceiveOSC(message, connections)
                         end
                     end
                 end
-                log("Track '" .. trackName .. "' not found in regular tracks")
             end
         end
     end
@@ -362,12 +369,12 @@ function onReceiveOSC(message, connections)
             local arguments = message[2]
             
             if arguments then
-                -- Log all return track names received
-                log("Received " .. #arguments .. " return track names:")
+                -- Store all return track names
+                receivedReturnNames = {}
                 for i = 1, #arguments do
                     if arguments[i] and arguments[i].value then
                         local returnNameValue = arguments[i].value
-                        log("  Return " .. (i-1) .. ": '" .. returnNameValue .. "' (length: " .. #returnNameValue .. ")")
+                        receivedReturnNames[i-1] = returnNameValue
                         
                         -- EXACT match only for safety
                         if returnNameValue == trackName then
@@ -404,12 +411,37 @@ function onReceiveOSC(message, connections)
                         end
                     end
                 end
-                log("Track '" .. trackName .. "' not found in return tracks")
             end
             
             -- If we've checked both regular and return tracks and didn't find it
             if needsRefresh then
-                log("Track not found: " .. trackName)
+                -- Build track list summary for debugging
+                local trackList = "TRACKS: "
+                local count = 0
+                for i, name in pairs(receivedTrackNames) do
+                    if count < 5 then  -- Show first 5 tracks
+                        trackList = trackList .. i .. "='" .. name .. "', "
+                        count = count + 1
+                    end
+                end
+                if count >= 5 then
+                    trackList = trackList .. "... (total: " .. tostring(#receivedTrackNames) .. ")"
+                end
+                
+                trackList = trackList .. " | RETURNS: "
+                count = 0
+                for i, name in pairs(receivedReturnNames) do
+                    if count < 5 then  -- Show first 5 returns
+                        trackList = trackList .. i .. "='" .. name .. "', "
+                        count = count + 1
+                    end
+                end
+                if count >= 5 then
+                    trackList = trackList .. "... (total: " .. tostring(#receivedReturnNames) .. ")"
+                end
+                
+                log("Track not found: '" .. trackName .. "'. " .. trackList)
+                
                 setGroupEnabled(false)
                 trackNumber = nil
                 trackType = nil
