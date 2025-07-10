@@ -1,9 +1,9 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.13.0
+-- Version: 2.13.1
 -- Purpose: Main document script with configuration and track management
--- Changed: Simple 2-second delay to ensure groups are ready on slower devices
+-- Changed: Set delay to 500ms for Android tablet refresh timing
 
-local VERSION = "2.13.0"
+local VERSION = "2.13.1"
 local SCRIPT_NAME = "Document Script"
 
 -- Debug flag - set to 1 to enable logging
@@ -31,7 +31,7 @@ local STARTUP_DELAY_FRAMES = 120  -- Wait 2 seconds (120 frames at 60fps)
 local refreshState = "idle"  -- idle, clearing, waiting, notifying, refreshing
 local refreshWaitStart = 0
 local REFRESH_WAIT_TIME = 100  -- 100ms delay between clear and notify
-local NOTIFY_WAIT_TIME = 2000  -- 2 SECONDS delay after notifying groups before querying
+local NOTIFY_WAIT_TIME = 500   -- 500ms delay after notifying groups before querying
 
 -- === LOCAL LOGGING FUNCTION ===
 local function log(message)
@@ -180,7 +180,7 @@ function notifyGroupsForRefresh()
     -- Update status
     local status = root:findByName("global_status")
     if status then
-        status.values.text = "Preparing (2s)..."
+        status.values.text = "Preparing..."
     end
     
     -- Notify all groups to prepare for refresh
@@ -192,7 +192,7 @@ function notifyGroupsForRefresh()
         end
     end
     
-    -- Set state to wait 2 seconds before querying
+    -- Set state to wait 500ms before querying
     refreshState = "notifying"
     refreshWaitStart = getMillis()
 end
