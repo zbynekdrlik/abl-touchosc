@@ -1,13 +1,13 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.12.0
+-- Version: 2.13.0
 -- Purpose: Main document script with configuration and track management
--- Changed: Increased delays and added verification for slower Android tablets
+-- Changed: Simple 2-second delay to ensure groups are ready on slower devices
 
-local VERSION = "2.12.0"
+local VERSION = "2.13.0"
 local SCRIPT_NAME = "Document Script"
 
 -- Debug flag - set to 1 to enable logging
-local DEBUG = 1  -- Enabled for troubleshooting
+local DEBUG = 0
 
 -- Configuration storage
 local config = {
@@ -25,17 +25,13 @@ local trackGroups = {}
 -- Startup tracking
 local startupRefreshTime = nil
 local frameCount = 0
-local STARTUP_DELAY_FRAMES = 120  -- Wait 2 seconds (120 frames at 60fps) for slower devices
+local STARTUP_DELAY_FRAMES = 120  -- Wait 2 seconds (120 frames at 60fps)
 
 -- Refresh state tracking
 local refreshState = "idle"  -- idle, clearing, waiting, notifying, refreshing
 local refreshWaitStart = 0
-local REFRESH_WAIT_TIME = 200  -- 200ms delay between clear and refresh (increased from 100ms)
-local NOTIFY_WAIT_TIME = 150   -- 150ms delay after notifying groups before querying (increased from 50ms)
-
--- Track readiness
-local groupsNotified = 0
-local groupsToNotify = 0
+local REFRESH_WAIT_TIME = 100  -- 100ms delay between clear and notify
+local NOTIFY_WAIT_TIME = 2000  -- 2 SECONDS delay after notifying groups before querying
 
 -- === LOCAL LOGGING FUNCTION ===
 local function log(message)
@@ -133,10 +129,6 @@ function onReceiveNotify(action, value)
             trackGroups[value.name] = value
             log("Registered track group: " .. value.name)
         end
-    elseif action == "group_refresh_ready" then
-        -- Group has confirmed it's ready for refresh
-        groupsNotified = groupsNotified + 1
-        log("Group ready: " .. groupsNotified .. "/" .. groupsToNotify)
     end
     -- Note: Removed "configuration_updated" handler - config text is read-only at runtime
     -- Note: Removed "log_message" handler - each script logs independently now
@@ -152,27 +144,24 @@ function startRefreshSequence()
         status.values.text = "Clearing..."
     end
     
-    -- Count and validate groups
+    -- Count groups
     local groupCount = 0
-    local validGroups = 0
-    for name, group in pairs(trackGroups) do
+    for name, _ in pairs(trackGroups) do
         groupCount = groupCount + 1
+    end
+    
+    -- Clear all track mappings first
+    for name, group in pairs(trackGroups) do
         -- Verify group still exists and is valid
         if group and group.notify then
             group:notify("clear_mapping")
-            validGroups = validGroups + 1
         else
             -- Remove invalid reference
             trackGroups[name] = nil
-            log("Removed invalid group: " .. name)
         end
     end
     
-    log("Cleared " .. validGroups .. " valid groups (out of " .. groupCount .. " total)")
-    
-    -- Reset notification tracking
-    groupsNotified = 0
-    groupsToNotify = validGroups
+    log("Cleared " .. groupCount .. " groups")
     
     -- Set state to wait before refreshing
     refreshState = "waiting"
@@ -191,11 +180,8 @@ function notifyGroupsForRefresh()
     -- Update status
     local status = root:findByName("global_status")
     if status then
-        status.values.text = "Preparing..."
+        status.values.text = "Preparing (2s)..."
     end
-    
-    -- Count groups to notify
-    local notifiedCount = 0
     
     -- Notify all groups to prepare for refresh
     -- This sets their needsRefresh flag so they'll process incoming track names
@@ -203,13 +189,10 @@ function notifyGroupsForRefresh()
         -- Verify group still exists and is valid
         if group and group.notify then
             group:notify("refresh_tracks")
-            notifiedCount = notifiedCount + 1
         end
     end
     
-    log("Notified " .. notifiedCount .. " groups to prepare")
-    
-    -- Set state to wait before querying
+    -- Set state to wait 2 seconds before querying
     refreshState = "notifying"
     refreshWaitStart = getMillis()
 end
@@ -224,17 +207,8 @@ function completeRefreshSequence()
         status.values.text = "Refreshing..."
     end
     
-    -- Add a small extra delay for very slow devices
-    local extraDelay = 50
-    local currentTime = getMillis()
-    while (getMillis() - currentTime) < extraDelay do
-        -- Wait
-    end
-    
     -- Query track names once per connection
     local uniqueConnections = {}
-    local queriedConnections = 0
-    
     for instance, connIndex in pairs(config.connections) do
         if not uniqueConnections[connIndex] then
             uniqueConnections[connIndex] = true
@@ -249,12 +223,9 @@ function completeRefreshSequence()
             sendOSC('/live/song/get/track_names', connections)
             sendOSC('/live/song/get/return_track_names', connections)
             
-            queriedConnections = queriedConnections + 1
             log("Queried connection " .. connIndex)
         end
     end
-    
-    log("Sent track name queries to " .. queriedConnections .. " connections")
     
     -- Update status
     if status then
