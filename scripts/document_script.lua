@@ -1,13 +1,13 @@
 -- TouchOSC Document Script (formerly helper_script.lua)
--- Version: 2.10.0
+-- Version: 2.13.2
 -- Purpose: Main document script with configuration and track management
--- Changed: Centralized track names retrieval to prevent duplicate OSC calls
+-- Changed: Enable debug logging to troubleshoot connection routing
 
-local VERSION = "2.10.0"
+local VERSION = "2.13.2"
 local SCRIPT_NAME = "Document Script"
 
 -- Debug flag - set to 1 to enable logging
-local DEBUG = 0
+local DEBUG = 1  -- ENABLED FOR TROUBLESHOOTING
 
 -- Configuration storage
 local config = {
@@ -25,12 +25,13 @@ local trackGroups = {}
 -- Startup tracking
 local startupRefreshTime = nil
 local frameCount = 0
-local STARTUP_DELAY_FRAMES = 60  -- Wait 1 second (60 frames at 60fps)
+local STARTUP_DELAY_FRAMES = 120  -- Wait 2 seconds (120 frames at 60fps)
 
 -- Refresh state tracking
-local refreshState = "idle"  -- idle, clearing, waiting, refreshing
+local refreshState = "idle"  -- idle, clearing, waiting, notifying, refreshing
 local refreshWaitStart = 0
-local REFRESH_WAIT_TIME = 100  -- 100ms delay between clear and refresh
+local REFRESH_WAIT_TIME = 100  -- 100ms delay between clear and notify
+local NOTIFY_WAIT_TIME = 500   -- 500ms delay after notifying groups before querying
 
 -- === LOCAL LOGGING FUNCTION ===
 local function log(message)
@@ -172,14 +173,14 @@ function startRefreshSequence()
     end
 end
 
--- === COMPLETE REFRESH AFTER DELAY ===
-function completeRefreshSequence()
-    log("=== COMPLETING REFRESH ===")
+-- === NOTIFY GROUPS TO PREPARE FOR REFRESH ===
+function notifyGroupsForRefresh()
+    log("=== NOTIFYING GROUPS ===")
     
     -- Update status
     local status = root:findByName("global_status")
     if status then
-        status.values.text = "Refreshing..."
+        status.values.text = "Preparing..."
     end
     
     -- Notify all groups to prepare for refresh
@@ -189,6 +190,21 @@ function completeRefreshSequence()
         if group and group.notify then
             group:notify("refresh_tracks")
         end
+    end
+    
+    -- Set state to wait 500ms before querying
+    refreshState = "notifying"
+    refreshWaitStart = getMillis()
+end
+
+-- === COMPLETE REFRESH AFTER DELAY ===
+function completeRefreshSequence()
+    log("=== QUERYING TRACK NAMES ===")
+    
+    -- Update status
+    local status = root:findByName("global_status")
+    if status then
+        status.values.text = "Refreshing..."
     end
     
     -- Query track names once per connection
@@ -234,7 +250,7 @@ end
 function createConnectionTable(connectionIndex)
     local connections = {}
     for i = 1, 10 do
-        connections[i] = (i == connectionIndex)
+        connections[i] = (i == connIndex)
     end
     return connections
 end
@@ -245,6 +261,12 @@ function update()
     if refreshState == "waiting" then
         local elapsed = getMillis() - refreshWaitStart
         if elapsed >= REFRESH_WAIT_TIME then
+            refreshState = "notifying"
+            notifyGroupsForRefresh()
+        end
+    elseif refreshState == "notifying" then
+        local elapsed = getMillis() - refreshWaitStart
+        if elapsed >= NOTIFY_WAIT_TIME then
             refreshState = "refreshing"
             completeRefreshSequence()
         end

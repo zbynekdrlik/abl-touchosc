@@ -1,32 +1,37 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**⚠️ PR #26 IN PROGRESS:**
-- [ ] Currently working on: Fix duplicate track names calls during refresh
-- [ ] Waiting for: User testing of centralized track names retrieval
+**⚠️ PR #28 IN PROGRESS:**
+- [ ] Currently working on: Investigating wrong connection issue for band groups
+- [ ] Waiting for: Analysis of OSC message routing
 - [ ] Blocked by: None
 
-## ACTIVE WORK: DUPLICATE TRACK NAMES FIX
-### Problem Identified:
-- Each track group independently calls `/live/song/get/track_names`
-- Causes duplicate OSC packets during refresh
-- Creates unnecessary network traffic
+## ACTIVE WORK: ANDROID TABLET REFRESH ISSUE - NEW DISCOVERY
+### Problem Evolution:
+1. Initially thought it was timing issue on slower tablets
+2. Tried various delays (50ms, 150ms, 500ms, 2s)
+3. User discovered the real issue: Groups are processing OSC messages from wrong connection
 
-### Solution Implemented:
-1. **Centralized Queries**: ✅
-   - Document script queries track names once per connection
-   - Caches results in `trackNamesCache`
-   - Distributes to all groups via notification
+### Current Investigation:
+- Log shows "GROUP(band_STEVO repro#): Track not found: STEVO repro#"
+- This group should process band connection messages
+- Appears to be processing master connection messages instead
+- Need to add logging to see which connection's OSC message is being processed
 
-2. **Updated Scripts**: ✅
-   - `document_script.lua` v2.10.0 - Centralized querying
-   - `group_init.lua` v1.17.0 - Receives names via notification
+### Solution Implemented So Far:
+1. **500ms delay**: ✅ (but doesn't fix the real issue)
+   - `document_script.lua` v2.13.1 - Simple timing approach
 
-3. **Testing Required**: ❌
-   - [ ] Verify only one track names query per connection
-   - [ ] Test all track groups map correctly
-   - [ ] Test with multiple connections
-   - [ ] Test with both regular and return tracks
+### Next Steps:
+1. Add logging to show which connection's OSC message groups are processing
+2. Verify connection filtering in group_init.lua
+3. Fix connection routing issue
+
+## COMPLETED WORK: PR #26 MERGED
+### Duplicate Track Names Fix: COMPLETE
+- [x] Centralized track names retrieval MERGED
+- [x] Prevents duplicate OSC calls during refresh
+- [x] Version 2.10.0 released
 
 ## COMPLETED WORK: DOUBLE-CLICK MUTE (PR #24)
 ### Final Status: READY FOR MERGE
@@ -40,21 +45,21 @@
 ## Testing Status Matrix
 | Component | Implemented | Unit Tested | Integration Tested | Multi-Instance Tested | 
 |-----------|------------|-------------|--------------------|-----------------------|
-| document_script v2.10.0 | ✅ | ❌ | ❌ | ❌ |
+| document_script v2.13.1 | ✅ | ❌ | ❌ | ❌ |
 | group_init v1.17.0 | ✅ | ❌ | ❌ | ❌ |
 | mute_button v2.7.0 | ✅ | ✅ | ✅ | ✅ |
 | mute_display_label v1.0.1 | ✅ | ✅ | ✅ | ✅ |
 
 ## Last User Action
-- Date/Time: 2025-07-07 12:58
-- Action: Reported duplicate track names calls issue
-- Result: Created PR #26 with centralized solution
-- Next Required: Test the fix and provide logs
+- Date/Time: 2025-07-10 12:55
+- Action: Discovered groups processing wrong connection's OSC messages
+- Result: Need to investigate connection filtering
+- Next Required: Add logging to identify connection source
 
 ## NEXT STEPS
-1. User tests PR #26 branch
-2. Verify OSC log shows single track names query
-3. Confirm all track groups still map correctly
-4. If working, merge PR #26
+1. Add logging to show which connection OSC messages come from
+2. Fix connection filtering in group_init.lua
+3. Test on Android tablet again
+4. If working, merge PR #28
 5. Then merge PR #24 (double-click mute)
 6. Create v1.5.0 release
