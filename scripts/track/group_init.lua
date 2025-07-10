@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.17.3
--- Changed: Include all track names in "Track not found" message for Android debugging
+-- Version: 1.17.4
+-- Changed: Fix track names being cleared between regular and return track processing
 
 -- Version constant
-local SCRIPT_VERSION = "1.17.3"
+local SCRIPT_VERSION = "1.17.4"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 1  -- ENABLED FOR TROUBLESHOOTING
@@ -26,6 +26,8 @@ local lastReceiveTime = 0
 -- Store received track names for debugging
 local receivedTrackNames = {}
 local receivedReturnNames = {}
+local processedRegularTracks = false
+local processedReturnTracks = false
 
 -- Local logging function
 local function log(message)
@@ -191,6 +193,15 @@ local function getActiveConnections(connections)
     return table.concat(active, ",")
 end
 
+-- Helper to count table entries
+local function tableCount(tbl)
+    local count = 0
+    for _ in pairs(tbl) do
+        count = count + 1
+    end
+    return count
+end
+
 function init()
     -- Set tag programmatically
     self.tag = "trackGroup"
@@ -257,9 +268,11 @@ function refreshTrackMapping()
     trackNumber = nil
     trackType = nil
     
-    -- Clear stored track names
+    -- Clear stored track names and processing flags
     receivedTrackNames = {}
     receivedReturnNames = {}
+    processedRegularTracks = false
+    processedReturnTracks = false
     
     -- Don't query track names - document script will do it centrally
     -- Group will process the response when it arrives via onReceiveOSC
@@ -348,6 +361,10 @@ function onReceiveOSC(message, connections)
                         end
                     end
                 end
+                
+                -- Mark that we've processed regular tracks
+                processedRegularTracks = true
+                log("Processed " .. tableCount(receivedTrackNames) .. " regular tracks, no match found")
             end
         end
     end
@@ -411,10 +428,14 @@ function onReceiveOSC(message, connections)
                         end
                     end
                 end
+                
+                -- Mark that we've processed return tracks
+                processedReturnTracks = true
+                log("Processed " .. tableCount(receivedReturnNames) .. " return tracks")
             end
             
-            -- If we've checked both regular and return tracks and didn't find it
-            if needsRefresh then
+            -- If we've processed both regular and return tracks and didn't find it
+            if needsRefresh and processedRegularTracks and processedReturnTracks then
                 -- Build track list summary for debugging
                 local trackList = "TRACKS: "
                 local count = 0
@@ -424,8 +445,8 @@ function onReceiveOSC(message, connections)
                         count = count + 1
                     end
                 end
-                if count >= 5 then
-                    trackList = trackList .. "... (total: " .. tostring(#receivedTrackNames) .. ")"
+                if tableCount(receivedTrackNames) > 5 then
+                    trackList = trackList .. "... (total: " .. tableCount(receivedTrackNames) .. ")"
                 end
                 
                 trackList = trackList .. " | RETURNS: "
@@ -436,8 +457,8 @@ function onReceiveOSC(message, connections)
                         count = count + 1
                     end
                 end
-                if count >= 5 then
-                    trackList = trackList .. "... (total: " .. tostring(#receivedReturnNames) .. ")"
+                if tableCount(receivedReturnNames) > 5 then
+                    trackList = trackList .. "... (total: " .. tableCount(receivedReturnNames) .. ")"
                 end
                 
                 log("Track not found: '" .. trackName .. "'. " .. trackList)
