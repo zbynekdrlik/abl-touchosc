@@ -1,60 +1,51 @@
 # Thread Progress Tracking
 
 ## CRITICAL CURRENT STATE
-**⚠️ PR #26 IN PROGRESS:**
-- [ ] Currently working on: Fix duplicate track names calls during refresh
-- [ ] Waiting for: User testing of centralized track names retrieval
+**⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
+- [x] Currently working on: Clean minimal fix branch created from main
+- [ ] Waiting for: User to test the minimal fix on Android tablet
 - [ ] Blocked by: None
 
-## ACTIVE WORK: DUPLICATE TRACK NAMES FIX
-### Problem Identified:
-- Each track group independently calls `/live/song/get/track_names`
-- Causes duplicate OSC packets during refresh
-- Creates unnecessary network traffic
+## Implementation Status
+- Phase: Android tablet fix - MINIMAL VERSION
+- Step: Applied only the race condition fix to group_init.lua
+- Status: IMPLEMENTED - NEEDS TESTING
 
-### Solution Implemented:
-1. **Centralized Queries**: ✅
-   - Document script queries track names once per connection
-   - Caches results in `trackNamesCache`
-   - Distributes to all groups via notification
+## The Fix
+Created a clean branch with ONLY the essential fix:
+- `group_init.lua` v1.17.1 - Added processedRegularTracks and processedReturnTracks flags
+- This prevents "Track not found" errors when track names arrive at different times
+- No delays, no timing changes, just the race condition fix
 
-2. **Updated Scripts**: ✅
-   - `document_script.lua` v2.10.0 - Centralized querying
-   - `group_init.lua` v1.17.0 - Receives names via notification
+## Testing Required
+1. Test on Android tablet with return tracks visible
+2. Verify tracks map correctly (green indicators)
+3. Confirm no "not found" errors in logs
+4. Test refresh button works reliably
 
-3. **Testing Required**: ❌
-   - [ ] Verify only one track names query per connection
-   - [ ] Test all track groups map correctly
-   - [ ] Test with multiple connections
-   - [ ] Test with both regular and return tracks
+## Next Steps After Testing
+If this minimal fix works:
+1. Merge PR #29 (this minimal fix)
+2. Close PR #28 (contains unnecessary changes)
+3. Merge PR #24 (double-click mute feature)
+4. Create v1.5.0 release
 
-## COMPLETED WORK: DOUBLE-CLICK MUTE (PR #24)
-### Final Status: READY FOR MERGE
-- [x] Double-click mute protection COMPLETE AND WORKING
-- [x] Documentation cleanup COMPLETE
-- [x] Experimental files removed
-- [x] README fully documented with two-control approach
-- [x] CHANGELOG finalized for v1.5.0
-- [x] Ready for merge
+If issues persist:
+- Use the backup branch (fix/android-tablet-refresh-timing) for deeper analysis
+- The backup branch has extensive logging enabled
 
 ## Testing Status Matrix
 | Component | Implemented | Unit Tested | Integration Tested | Multi-Instance Tested | 
 |-----------|------------|-------------|--------------------|-----------------------|
-| document_script v2.10.0 | ✅ | ❌ | ❌ | ❌ |
-| group_init v1.17.0 | ✅ | ❌ | ❌ | ❌ |
-| mute_button v2.7.0 | ✅ | ✅ | ✅ | ✅ |
-| mute_display_label v1.0.1 | ✅ | ✅ | ✅ | ✅ |
+| group_init v1.17.1 | ✅ | ❌ | ❌ | ❌ |
 
 ## Last User Action
-- Date/Time: 2025-07-07 12:58
-- Action: Reported duplicate track names calls issue
-- Result: Created PR #26 with centralized solution
-- Next Required: Test the fix and provide logs
+- Date/Time: 2025-07-10 20:55
+- Action: Requested clean minimal fix branch
+- Result: Created fix/android-track-clearing with only the essential changes
+- Next Required: Test on Android tablet with return tracks
 
-## NEXT STEPS
-1. User tests PR #26 branch
-2. Verify OSC log shows single track names query
-3. Confirm all track groups still map correctly
-4. If working, merge PR #26
-5. Then merge PR #24 (double-click mute)
-6. Create v1.5.0 release
+## Branch Summary
+- `main` - stable baseline (v1.17.0)
+- `fix/android-track-clearing` - THIS BRANCH - minimal fix only (v1.17.1)
+- `fix/android-tablet-refresh-timing` - backup branch with all debugging/experiments
