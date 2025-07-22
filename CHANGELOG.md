@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Android tablet refresh issues (critical fixes for stability)
+  - Fixed race condition causing tracks to appear as "not found" on slower devices (group_init v1.17.2)
+    - Added processing flags to ensure both track types complete before reporting unmapped tracks
+  - Fixed mute button state reset during refresh (mute_button v2.7.2)
+    - Prevented sending commands during initialization
+    - Eliminated visual blink/flicker during refresh
+    - Mute state now properly preserved across refreshes
+  - State queries now work correctly to maintain control positions
+
 ## [1.5.0] - 2025-07-07
 
 ### Added
