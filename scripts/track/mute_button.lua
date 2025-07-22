@@ -1,9 +1,9 @@
 -- TouchOSC Mute Button Script
--- Version: 2.7.1
--- Fixed: Prevent sending commands during initialization/refresh
+-- Version: 2.7.2
+-- Fixed: Prevent visual state changes during refresh until actual state is received
 
 -- Version constant
-local VERSION = "2.7.1"
+local VERSION = "2.7.2"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0  -- Production mode
@@ -278,9 +278,8 @@ function onReceiveNotify(key, value)
     
     if key == "track_changed" then
         trackNumber = value
-        -- Reset mute state when track changes
-        isMuted = false
-        updateVisualState()
+        -- CRITICAL: Don't change visual state during refresh
+        -- The actual state will come from the OSC query response
         updateDoubleClickConfig()  -- ADDED: Update config when track changes
         pendingStateChange = nil  -- Reset double-click state
         lastClickTime = 0
@@ -289,6 +288,7 @@ function onReceiveNotify(key, value)
     elseif key == "track_unmapped" then
         trackNumber = nil
         trackType = nil
+        -- Only reset visual state when actually unmapped
         isMuted = false
         updateVisualState()
         requiresDoubleClick = false  -- ADDED: Reset double-click
