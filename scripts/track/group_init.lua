@@ -1,9 +1,9 @@
 -- TouchOSC Group Initialization Script with Auto Track Type Detection
--- Version: 1.17.1
--- Changed: Fix race condition where track names were cleared between processing regular and return tracks
+-- Version: 1.17.2
+-- Changed: Add state queries after successful mapping to prevent mute/volume/pan reset
 
 -- Version constant
-local SCRIPT_VERSION = "1.17.1"
+local SCRIPT_VERSION = "1.17.2"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0
@@ -322,6 +322,11 @@ function onReceiveOSC(message, connections)
                             
                             listenersActive = true
                             
+                            -- CRITICAL FIX: Query current state after starting listeners
+                            sendOSC('/live/track/get/volume', trackNumber, targetConnections)
+                            sendOSC('/live/track/get/mute', trackNumber, targetConnections)
+                            sendOSC('/live/track/get/panning', trackNumber, targetConnections)
+                            
                             return true
                         end
                     end
@@ -378,6 +383,11 @@ function onReceiveOSC(message, connections)
                             sendOSC('/live/return/start_listen/panning', trackNumber, targetConnections)
                             
                             listenersActive = true
+                            
+                            -- CRITICAL FIX: Query current state after starting listeners
+                            sendOSC('/live/return/get/volume', trackNumber, targetConnections)
+                            sendOSC('/live/return/get/mute', trackNumber, targetConnections)
+                            sendOSC('/live/return/get/panning', trackNumber, targetConnections)
                             
                             return true
                         end
