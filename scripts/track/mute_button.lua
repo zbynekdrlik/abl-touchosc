@@ -1,9 +1,9 @@
 -- TouchOSC Mute Button Script
--- Version: 2.7.0
--- Simplified configuration format for double-click mute
+-- Version: 2.7.1
+-- Fixed: Prevent sending commands during initialization/refresh
 
 -- Version constant
-local VERSION = "2.7.0"
+local VERSION = "2.7.1"
 
 -- Debug flag - set to 1 to enable logging
 local DEBUG = 0  -- Production mode
@@ -12,6 +12,7 @@ local DEBUG = 0  -- Production mode
 local trackNumber = nil
 local trackType = nil  -- "track" or "return"
 local isMuted = false
+local isUserInteraction = false  -- ADDED: Track if change is from user
 
 -- ADDED: Double-click variables
 local lastClickTime = 0
@@ -184,9 +185,22 @@ end
 -- ===========================
 
 function onValueChanged(valueName)
+    -- Handle touch state changes
+    if valueName == "touch" then
+        isUserInteraction = self.values.touch
+        log("Touch state: " .. tostring(isUserInteraction))
+        return
+    end
+    
     -- Handle x value changes (button press/release)
     if valueName == "x" then
-        log("X value changed to: " .. self.values.x)
+        log("X value changed to: " .. self.values.x .. ", user interaction: " .. tostring(isUserInteraction))
+        
+        -- CRITICAL: Only send commands if this is a user interaction
+        if not isUserInteraction then
+            log("Ignoring programmatic value change")
+            return
+        end
         
         -- Check if track is mapped
         if not trackNumber or not trackType then
