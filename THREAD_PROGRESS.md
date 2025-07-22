@@ -2,80 +2,54 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Currently working on: State reset issue STILL NOT FIXED - mute buttons still resetting
-- [ ] Waiting for: Debug logs from user to understand why state queries aren't working
-- [ ] Blocked by: Need diagnostic information
+- [x] Currently working on: Fixed mute button sending commands during init
+- [ ] Waiting for: User to test mute button fix (v2.7.1)
+- [ ] Blocked by: Need test confirmation
 
-## CRITICAL BUG STILL ACTIVE
-**Mute buttons are still resetting after refresh despite adding state queries!**
+## CRITICAL BUG FIXED IN v2.7.1
+**Mute button was sending commands during refresh!**
 
-User reports that mute buttons are still switching state after "refresh all". This means our fix in v1.17.2 where we added:
-```lua
--- CRITICAL FIX: Query current state after starting listeners
-sendOSC('/live/track/get/volume', trackNumber, targetConnections)
-sendOSC('/live/track/get/mute', trackNumber, targetConnections)
-sendOSC('/live/track/get/panning', trackNumber, targetConnections)
-```
+Found the root cause: The mute button's `updateVisualState()` was changing `self.values.x` during init/refresh, which triggered `onValueChanged()` and sent unwanted `/live/track/set/mute` commands to Ableton.
 
-...is NOT working as expected.
+## The Fix Applied
+Added `isUserInteraction` flag to distinguish between:
+- User clicks (should send commands)
+- Programmatic changes (should NOT send commands)
 
-## Debugging Focus for Next Thread
-1. **Verify state queries are being sent**
-   - Add logging to confirm queries are sent
-   - Check if queries are sent to correct connection
+Now the mute button only sends commands when:
+1. User physically touches the button (`touch` = true)
+2. The value changes while touching
 
-2. **Check if state responses are received**
-   - Log all incoming OSC messages after mapping
-   - Verify mute_button.lua is handling the responses
-
-3. **Timing issues**
-   - State queries might be sent too early
-   - Responses might arrive before children are ready
-
-4. **Child script issues**
-   - Check mute_button.lua onReceiveOSC handler
-   - Verify it processes /live/track/get/mute responses
+This matches how pan control already works correctly.
 
 ## Implementation Status
-- Phase: Android tablet fix - DEBUGGING NEEDED
-- Step: State queries added but NOT WORKING
-- Status: BUG STILL ACTIVE
-
-## The Fixes Applied (But Not Working Fully)
-1. **Race Condition Fix (v1.17.1)**: ✅ WORKING
-   - Added `processedRegularTracks` and `processedReturnTracks` flags
-   - Prevents "Track not found" errors - THIS PART WORKS
-
-2. **State Reset Fix (v1.17.2)** - ❌ NOT WORKING
-   - Added state queries after successful mapping
-   - Queries volume, mute, and panning after starting listeners
-   - BUT mute buttons still reset!
-
-## Next Thread Requirements
-1. User will provide logs showing:
-   - Mute button state before refresh
-   - What happens during refresh
-   - Final state after refresh
-   
-2. Need to add debug logging to:
-   - group_init.lua - log when state queries are sent
-   - mute_button.lua - log all OSC messages received
-   - Track the exact sequence of events
+- Phase: Android tablet fix - TESTING NEEDED
+- Step: Mute button fix implemented (v2.7.1)
+- Status: AWAITING TEST CONFIRMATION
 
 ## Testing Status Matrix
 | Component | Implemented | Unit Tested | Integration Tested | Multi-Instance Tested | 
 |-----------|------------|-------------|--------------------|-----------------------|
-| group_init v1.17.2 | ✅ | ❌ | ❌ BUG FOUND | ❌ |
+| group_init v1.17.2 | ✅ | ❌ | ❌ | ❌ |
+| mute_button v2.7.1 | ✅ | ❌ | ❌ | ❌ |
 
 ## Last User Action
 - Date/Time: 2025-07-22
-- Action: Tested PR #29 - race condition fixed but mute still resets
-- Result: Need to debug why state queries aren't preventing reset
-- Next Required: Will provide logs for debugging
+- Action: Provided logs showing mute button sending commands during refresh
+- Result: Fixed the issue in mute_button.lua
+- Next Required: Test the fix and provide logs
+
+## What User Should Test
+1. Set a track to muted state
+2. Hit "refresh all" 
+3. Check if mute state is preserved
+4. Provide logs showing:
+   - No `/live/track/set/mute` during refresh
+   - State queries working correctly
+   - Mute state preserved
 
 ## Branch Summary
 - `main` - stable baseline (v1.17.0)
-- `fix/android-track-clearing` - THIS BRANCH - race condition fixed, state query NOT working (v1.17.2)
-- `fix/android-tablet-refresh-timing` - backup branch with all debugging/experiments
+- `fix/android-track-clearing` - THIS BRANCH - race condition fixed, mute button fixed (v2.7.1)
 
-## DO NOT MERGE PR #29 YET - STILL HAS BUGS!
+## DO NOT MERGE PR #29 YET - NEEDS TESTING!
