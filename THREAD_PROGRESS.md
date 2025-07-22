@@ -2,54 +2,48 @@
 
 ## CRITICAL CURRENT STATE
 **⚠️ EXACTLY WHERE WE ARE RIGHT NOW:**
-- [x] Currently working on: Fixed mute button sending commands during init
-- [ ] Waiting for: User to test mute button fix (v2.7.1)
+- [x] Currently working on: Fixed mute button visual blink during refresh
+- [ ] Waiting for: User to test complete fix (v2.7.2)
 - [ ] Blocked by: Need test confirmation
 
-## CRITICAL BUG FIXED IN v2.7.1
-**Mute button was sending commands during refresh!**
+## FIXES COMPLETED
+1. **Race Condition** (v1.17.1) - ✅ FIXED
+   - Tracks no longer show as "not found" after refresh
 
-Found the root cause: The mute button's `updateVisualState()` was changing `self.values.x` during init/refresh, which triggered `onValueChanged()` and sent unwanted `/live/track/set/mute` commands to Ableton.
+2. **Mute Commands During Refresh** (v2.7.1) - ✅ FIXED
+   - No more `/live/track/set/mute` commands sent during init/refresh
 
-## The Fix Applied
-Added `isUserInteraction` flag to distinguish between:
-- User clicks (should send commands)
-- Programmatic changes (should NOT send commands)
-
-Now the mute button only sends commands when:
-1. User physically touches the button (`touch` = true)
-2. The value changes while touching
-
-This matches how pan control already works correctly.
+3. **Visual Blink** (v2.7.2) - ✅ FIXED
+   - Removed visual state changes during track change notifications
+   - Button waits for actual state from OSC response
 
 ## Implementation Status
-- Phase: Android tablet fix - TESTING NEEDED
-- Step: Mute button fix implemented (v2.7.1)
-- Status: AWAITING TEST CONFIRMATION
+- Phase: Android tablet fix - COMPLETE, AWAITING TEST
+- Step: All issues addressed
+- Status: TESTING NEEDED
 
 ## Testing Status Matrix
 | Component | Implemented | Unit Tested | Integration Tested | Multi-Instance Tested | 
 |-----------|------------|-------------|--------------------|-----------------------|
-| group_init v1.17.2 | ✅ | ❌ | ❌ | ❌ |
-| mute_button v2.7.1 | ✅ | ❌ | ❌ | ❌ |
+| group_init v1.17.2 | ✅ | ✅ | ❌ | ❌ |
+| mute_button v2.7.2 | ✅ | ❌ | ❌ | ❌ |
 
 ## Last User Action
 - Date/Time: 2025-07-22
-- Action: Provided logs showing mute button sending commands during refresh
-- Result: Fixed the issue in mute_button.lua
-- Next Required: Test the fix and provide logs
+- Action: Reported visual blink during refresh
+- Result: Fixed by not updating visual state until OSC response
+- Next Required: Test complete solution
 
 ## What User Should Test
 1. Set a track to muted state
 2. Hit "refresh all" 
-3. Check if mute state is preserved
-4. Provide logs showing:
-   - No `/live/track/set/mute` during refresh
-   - State queries working correctly
+3. Verify:
+   - No visual blink/flicker
    - Mute state preserved
+   - No unwanted commands in logs
 
 ## Branch Summary
 - `main` - stable baseline (v1.17.0)
-- `fix/android-track-clearing` - THIS BRANCH - race condition fixed, mute button fixed (v2.7.1)
+- `fix/android-track-clearing` - THIS BRANCH - all issues fixed (v2.7.2)
 
-## DO NOT MERGE PR #29 YET - NEEDS TESTING!
+## READY FOR FINAL TEST BEFORE MERGE!
